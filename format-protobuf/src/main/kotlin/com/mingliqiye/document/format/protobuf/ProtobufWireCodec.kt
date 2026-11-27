@@ -62,13 +62,18 @@ internal object ProtobufWireCodec {
      * @return 对象节点
      * @throws ProtobufParseException 二进制内容非法、缺少必填字段或未知字段策略为 FAIL 时抛出
      */
-    fun decode(descriptor: Descriptor, source: ByteArray, unknownFieldPolicy: ProtobufUnknownFieldPolicy): Node {
+    fun decode(
+        descriptor: Descriptor,
+        source: ByteArray,
+        unknownFieldPolicy: ProtobufUnknownFieldPolicy,
+        maxDepth: Int = 0,
+    ): Node {
         val message = try {
             DynamicMessage.parseFrom(descriptor, source)
         } catch (e: InvalidProtocolBufferException) {
             throw ProtobufParseException("解析 Protobuf 消息 ${descriptor.fullName} 失败: ${e.message}", e)
         }
-        return decodeMessage(descriptor, message, unknownFieldPolicy, descriptor.fullName)
+        return decodeMessage(descriptor, message, unknownFieldPolicy, descriptor.fullName, 1, maxDepth)
     }
 
     private fun encodeMessage(descriptor: Descriptor, node: Node, path: String): DynamicMessage {
@@ -309,16 +314,25 @@ internal object ProtobufWireCodec {
             ?: throw ProtobufException("$path 的枚举值 '$name' 不存在于枚举 ${enumType.fullName}")
     }
 
+    private fun checkDepth(depth: Int, maxDepth: Int, path: String) {
+        if (maxDepth > 0 && depth > maxDepth) {
+            throw ProtobufParseException("$path 的嵌套深度 $depth 超过 maxDepth $maxDepth")
+        }
+    }
+
     private fun decodeMessage(
         descriptor: Descriptor,
         message: DynamicMessage,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         path: String,
+        depth: Int,
+        maxDepth: Int,
     ): ObjectNode {
+        checkDepth(depth, maxDepth, path)
         checkUnknownFields(descriptor, message, unknownFieldPolicy, path)
         val fieldNodes = LinkedHashMap<String, Node>()
         for (field in descriptor.fields) {
-            decodeField(field, message, unknownFieldPolicy, path)?.let { fieldNodes[field.name] = it }
+            decodeField(field, message, unknownFieldPolicy, path, depth, maxDepth)?.let { fieldNodes[field.name] = it }
         }
         return ObjectNode.from(fieldNodes)
     }
@@ -328,13 +342,15 @@ internal object ProtobufWireCodec {
         message: DynamicMessage,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         path: String,
+        depth: Int,
+        maxDepth: Int,
     ): Node? {
         if (field.type == FieldDescriptor.Type.GROUP) {
             throw ProtobufParseException("$path.${field.name} 为 group 字段，暂不支持")
         }
         val fieldPath = "$path.${field.name}"
         if (field.isMapField) {
-            return decodeMapField(field, message, unknownFieldPolicy, fieldPath)
+            return decodeMapField(field, message, unknownFieldPolicy, fieldPath, depth, maxDepth)
         }
         if (field.isRepeated) {
             val values = message.getField(field) as List<*>
@@ -344,7 +360,7 @@ internal object ProtobufWireCodec {
             val elements = values.mapIndexed { index, element ->
                 val value = element
                     ?: throw ProtobufParseException("$fieldPath[$index] 的 repeated 元素为 null")
-                decodeValue(field, value, unknownFieldPolicy, "$fieldPath[$index]")
+                decodeValue(field, value, unknownFieldPolicy, "$fieldPath[$index]", depth, maxDepth)
             }
             return ArrayNode.from(elements)
         }
@@ -352,13 +368,13 @@ internal object ProtobufWireCodec {
             if (!message.hasField(field)) {
                 return null
             }
-            return decodeValue(field, message.getField(field), unknownFieldPolicy, fieldPath)
+            return decodeValue(field, message.getField(field), unknownFieldPolicy, fieldPath, depth, maxDepth)
         }
         val value = message.getField(field)
         if (isDefaultValue(field, value)) {
             return null
         }
-        return decodeValue(field, value, unknownFieldPolicy, fieldPath)
+        return decodeValue(field, value, unknownFieldPolicy, fieldPath, depth, maxDepth)
     }
 
     private fun decodeMapField(
@@ -366,6 +382,8 @@ internal object ProtobufWireCodec {
         message: DynamicMessage,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         path: String,
+        depth: Int,
+        maxDepth: Int,
     ): Node? {
         val entries = message.getField(field) as List<*>
         if (entries.isEmpty()) {
@@ -382,7 +400,14 @@ internal object ProtobufWireCodec {
                 ?: throw ProtobufParseException("$path 的 map entry 不是动态消息")
             checkUnknownFields(entryDescriptor, entryMessage, unknownFieldPolicy, path)
             val key = mapKeyToString(keyField, entryMessage.getField(keyField), path)
-            mapNodes[key] = decodeValue(valueField, entryMessage.getField(valueField), unknownFieldPolicy, "$path[$key]")
+            mapNodes[key] = decodeValue(
+                valueField,
+                entryMessage.getField(valueField),
+                unknownFieldPolicy,
+                "$path[$key]",
+                depth,
+                maxDepth,
+            )
         }
         return ObjectNode.from(mapNodes)
     }
@@ -416,6 +441,8 @@ internal object ProtobufWireCodec {
         value: Any,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         path: String,
+        depth: Int,
+        maxDepth: Int,
     ): Node = when (field.type) {
         FieldDescriptor.Type.DOUBLE -> {
             val doubleValue = value as Double
@@ -455,7 +482,14 @@ internal object ProtobufWireCodec {
         FieldDescriptor.Type.STRING -> StringNode.of(value as String)
         FieldDescriptor.Type.BYTES -> BinaryNode.of((value as ByteString).toByteArray())
         FieldDescriptor.Type.ENUM -> enumNode(value as EnumValueDescriptor)
-        FieldDescriptor.Type.MESSAGE -> decodeMessage(field.messageType, value as DynamicMessage, unknownFieldPolicy, path)
+        FieldDescriptor.Type.MESSAGE -> decodeMessage(
+            field.messageType,
+            value as DynamicMessage,
+            unknownFieldPolicy,
+            path,
+            depth + 1,
+            maxDepth,
+        )
         FieldDescriptor.Type.GROUP -> throw ProtobufParseException("$path 为 group 字段，暂不支持")
         else -> throw ProtobufParseException("$path 的类型 ${field.type} 不受支持")
     }
