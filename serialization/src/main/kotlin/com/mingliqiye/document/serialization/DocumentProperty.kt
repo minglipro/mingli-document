@@ -2,6 +2,7 @@ package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.annotation.DocumentIgnore
 import com.mingliqiye.document.annotation.DocumentName
+import com.mingliqiye.utils.aliasfor.AnnotationGetter
 import java.lang.reflect.AnnotatedElement
 import java.lang.reflect.Type
 
@@ -26,7 +27,7 @@ interface DocumentProperty {
     val annotations: List<Annotation>
 
     /**
-     * 获取指定注解。
+     * 获取指定注解，支持 `@AliasFor` 别名解析。
      *
      * @param annotationClass 注解类型
      * @return 注解实例；不存在时返回 `null`
@@ -67,9 +68,9 @@ internal class DefaultDocumentProperty(
     override val documentName: String =
         getAnnotation(DocumentName::class.java)?.value ?: name
 
-    override fun <A : Annotation> getAnnotation(annotationClass: Class<A>): A? = elements.firstNotNullOfOrNull { it.getAnnotation(annotationClass) }
+    override fun <A : Annotation> getAnnotation(annotationClass: Class<A>): A? = elements.firstNotNullOfOrNull { AnnotationGetter.getAnnotation(it, annotationClass) }
 
-    override fun hasAnnotation(annotationClass: Class<out Annotation>): Boolean = elements.any { it.isAnnotationPresent(annotationClass) }
+    override fun hasAnnotation(annotationClass: Class<out Annotation>): Boolean = elements.any { AnnotationGetter.getAnnotation(it, annotationClass) != null }
 
     override fun getRawType(): Class<*> {
         val rawType = if (type is java.lang.reflect.ParameterizedType) type.rawType else type
