@@ -1,5 +1,6 @@
 package com.mingliqiye.document.format.xml
 
+import com.mingliqiye.document.annotation.DocumentRootName
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -44,12 +45,32 @@ class XmlMapperTest {
     }
 
     @Test
+    fun documentRootNameAnnotationSetsRootElement() {
+        val mapper = XmlMapper()
+
+        assertTrue(mapper.format(NamedRootPerson().apply { name = "小于" }).startsWith("<person type=\"object\">"))
+        assertTrue(mapper.formatPretty(NamedRootPerson()).startsWith("<person type=\"object\">"))
+    }
+
+    @Test
+    fun documentRootNameAnnotationOverridesConfiguredRootName() {
+        val mapper = XmlMapper(XmlConfig.builder().rootName("configured").build())
+
+        assertTrue(mapper.format(NamedRootPerson()).startsWith("<person type=\"object\">"))
+    }
+
+    @Test
     fun builderAcceptsXmlConfig() {
         val mapper = XmlMapper.builder()
             .config(XmlConfig.builder().rootName("bean").build())
             .build()
 
         assertTrue(mapper.format(Person()).startsWith("<bean type=\"object\">"))
+    }
+
+    @DocumentRootName("person")
+    private class NamedRootPerson {
+        var name: String? = null
     }
 
     private class Person {

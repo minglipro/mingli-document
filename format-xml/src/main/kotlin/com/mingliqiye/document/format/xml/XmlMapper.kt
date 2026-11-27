@@ -1,5 +1,6 @@
 package com.mingliqiye.document.format.xml
 
+import com.mingliqiye.document.annotation.DocumentRootName
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonDeserializer
@@ -33,6 +34,8 @@ public open class XmlMapper internal constructor(
     config,
 ) {
 
+    private val xmlConfig: XmlConfig? = config as? XmlConfig
+
     /**
      * 创建默认 XML 映射器。
      */
@@ -57,6 +60,17 @@ public open class XmlMapper internal constructor(
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
+
+    override fun format(value: Any?): String = writeXml(value, pretty = false)
+
+    override fun formatPretty(value: Any?): String = writeXml(value, pretty = true)
+
+    private fun writeXml(value: Any?, pretty: Boolean): String {
+        val rootName = value?.javaClass?.getAnnotation(DocumentRootName::class.java)?.value
+            ?: xmlConfig?.rootName
+            ?: "root"
+        return XmlWriter(rootName).write(toNode(value), pretty)
+    }
 
     public companion object {
 

@@ -12,6 +12,7 @@ dependencies {
     api(project(":core"))
     api(project(":exception"))
     api(project(":serialization"))
+    implementation(project(":annotation"))
     testImplementation(kotlin("test"))
 }
 

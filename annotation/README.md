@@ -2,4 +2,11 @@
 
 文档库的注解模块。
 
-这里预留给后续的格式无关注解，例如字段名映射、序列化选项、格式提示等。
+'当前注解：
+
+- `@DocumentName`
+- `@DocumentIgnore`
+- `@DocumentConverter`
+- `@DocumentDateTimeFormat`
+- `@DocumentNumberFormat`
+- `@DocumentRootName`（XML 根元素名）'

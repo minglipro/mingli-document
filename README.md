@@ -567,6 +567,7 @@ Number
 | `@DocumentConverter(XxxConverter::class)` | 指定该字段专用的转换器实现类 |
 | `@DocumentDateTimeFormat("yyyy-MM-dd", timezone = "Asia/Shanghai")` | 指定日期/时间字段的解析与格式化模式 |
 | `@DocumentNumberFormat("#,##0.00", locale = "zh-CN")` | 指定数字字段的解析与格式化模式 |
+| `@DocumentRootName("user")` | 指定 XML 写出根元素名 |
 
 字段注解示例（Kotlin；Java Bean 直接把注解写在字段上即可。普通 Kotlin 属性如果注解默认落在 property 上，Java 反射读不到，建议使用 `@field:`；引入 `serialization-kotlin` 后，data class / Kotlin 属性可以通过 Kotlin 反射读取无 use-site target 的注解）：
 
