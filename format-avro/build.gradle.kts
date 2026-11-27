@@ -11,6 +11,9 @@ kotlin {
 dependencies {
     api(project(":schema"))
     api(project(":core"))
+    api(project(":exception"))
+    api(project(":serialization"))
+    api("org.apache.avro:avro:1.11.3")
     testImplementation(kotlin("test"))
 }
 

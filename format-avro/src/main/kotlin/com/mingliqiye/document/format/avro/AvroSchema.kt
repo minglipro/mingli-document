@@ -3,6 +3,7 @@ package com.mingliqiye.document.format.avro
 import com.mingliqiye.document.schema.DocumentSchema
 import com.mingliqiye.document.schema.SchemaField
 import com.mingliqiye.document.schema.SchemaType
+import org.apache.avro.Schema
 
 /**
  * Avro 记录 Schema。
@@ -119,7 +120,102 @@ public class AvroSchema(
         append('}')
     }
 
+    /**
+     * 转换为 Apache Avro [Schema]。
+     *
+     * 记录名、命名空间、字段顺序与字段描述原样保留；可空或非必填字段写成
+     * `["null", "<type>"]` 并带 `null` 默认值，与 Avro 推荐写法一致。
+     *
+     * 通用 [SchemaType] 不携带嵌套结构信息，复合字段按以下约定映射：
+     * - [SchemaType.ARRAY] 映射为 `array<string>`
+     * - [SchemaType.MAP] 映射为 `map<string>`
+     * - [SchemaType.OBJECT] 映射为以 `<记录名>_<字段名>` 命名的空嵌套 record
+     * - [SchemaType.DECIMAL] 映射为不含 precision/scale 的 `bytes`
+     *
+     * 需要完整嵌套类型（自定义子 record、enum、fixed、非 string 元素）时，
+     * 应直接使用 Apache Avro Schema 构造 [AvroMapper]。
+     *
+     * @return Apache Avro Schema
+     */
+    public fun toAvroSchema(): Schema {
+        val record = Schema.createRecord(name, null, namespace, false)
+        val avroFields = ArrayList<Schema.Field>(fields.size)
+        for (field in fields) {
+            avroFields.add(toAvroField(field))
+        }
+        record.setFields(avroFields)
+        return record
+    }
+
+    private fun toAvroField(field: SchemaField): Schema.Field {
+        val fieldSchema = toAvroFieldSchema(field)
+        if (fieldSchema.type == Schema.Type.NULL) {
+            return Schema.Field(field.name, fieldSchema, field.description, Schema.Field.NULL_DEFAULT_VALUE)
+        }
+        return if (field.nullable || !field.required) {
+            val union = Schema.createUnion(Schema.create(Schema.Type.NULL), fieldSchema)
+            Schema.Field(field.name, union, field.description, Schema.Field.NULL_DEFAULT_VALUE)
+        } else {
+            Schema.Field(field.name, fieldSchema, field.description)
+        }
+    }
+
+    private fun toAvroFieldSchema(field: SchemaField): Schema = when (AvroType.fromSchemaType(field.type)) {
+        AvroType.STRING -> Schema.create(Schema.Type.STRING)
+        AvroType.INT -> Schema.create(Schema.Type.INT)
+        AvroType.LONG -> Schema.create(Schema.Type.LONG)
+        AvroType.DOUBLE -> Schema.create(Schema.Type.DOUBLE)
+        AvroType.BOOLEAN -> Schema.create(Schema.Type.BOOLEAN)
+        AvroType.BYTES -> Schema.create(Schema.Type.BYTES)
+        AvroType.NULL -> Schema.create(Schema.Type.NULL)
+        AvroType.ARRAY -> Schema.createArray(Schema.create(Schema.Type.STRING))
+        AvroType.MAP -> Schema.createMap(Schema.create(Schema.Type.STRING))
+        AvroType.OBJECT -> Schema.createRecord(
+            "${name}_${field.name}",
+            null,
+            namespace,
+            false,
+            emptyList<Schema.Field>(),
+        )
+    }
+
     public companion object {
+
+        /**
+         * 从 Apache Avro [Schema] 构造 Avro Schema 视图。
+         *
+         * 只接受 record；字段顺序、字段描述与命名空间保留，`["null", X]` 形式的
+         * 字段标记为可空且非必填。通用 [SchemaType] 无法表达的类型按以下方式归一：
+         * - `float` 归一为 [SchemaType.DOUBLE]
+         * - `enum` 归一为 [SchemaType.STRING]
+         * - `fixed` 归一为 [SchemaType.BYTES]（decimal 逻辑类型归一为 [SchemaType.DECIMAL]）
+         * - 含多个分支的 union 只保留第一个非 null 分支
+         * - 嵌套 record 归一为 [SchemaType.OBJECT]
+         *
+         * @param schema Apache Avro Schema
+         * @return Avro Schema 视图
+         * @throws IllegalArgumentException Schema 不是 record 时抛出
+         */
+        @JvmStatic
+        public fun fromAvroSchema(schema: Schema): AvroSchema {
+            require(schema.type == Schema.Type.RECORD) {
+                "Avro schema must be a record but was ${schema.type}"
+            }
+            val schemaFields = ArrayList<SchemaField>(schema.fields.size)
+            for (field in schema.fields) {
+                val nullable = isNullableAvroType(field.schema())
+                schemaFields.add(
+                    SchemaField(
+                        field.name(),
+                        schemaTypeOf(nonNullAvroType(field.schema())),
+                        required = !nullable,
+                        nullable = nullable,
+                        description = field.doc(),
+                    ),
+                )
+            }
+            return AvroSchema(schema.name, schema.namespace, schemaFields)
+        }
 
         /**
          * 创建 Avro Schema 构建器。
@@ -184,3 +280,34 @@ private fun escapeJson(value: String): String = buildString(value.length) {
         }
     }
 }
+
+/** 判断 Avro 类型是否可空：`null` 类型或包含 `null` 分支的 union。 */
+private fun isNullableAvroType(schema: Schema): Boolean = schema.type == Schema.Type.NULL ||
+    (schema.type == Schema.Type.UNION && schema.types.any { it.type == Schema.Type.NULL })
+
+/** 取 Avro union 中第一个非 `null` 分支；非 union 原样返回。 */
+private fun nonNullAvroType(schema: Schema): Schema = if (schema.type != Schema.Type.UNION) {
+    schema
+} else {
+    schema.types.firstOrNull { it.type != Schema.Type.NULL } ?: Schema.create(Schema.Type.NULL)
+}
+
+/** 将 Avro 类型归一为通用 [SchemaType]。 */
+private fun schemaTypeOf(schema: Schema): SchemaType = when (schema.type) {
+    Schema.Type.NULL -> SchemaType.NULL
+    Schema.Type.BOOLEAN -> SchemaType.BOOLEAN
+    Schema.Type.INT -> SchemaType.INT
+    Schema.Type.LONG -> SchemaType.LONG
+    Schema.Type.FLOAT, Schema.Type.DOUBLE -> SchemaType.DOUBLE
+    Schema.Type.STRING -> SchemaType.STRING
+    Schema.Type.BYTES -> if (isDecimalAvroType(schema)) SchemaType.DECIMAL else SchemaType.BYTES
+    Schema.Type.FIXED -> if (isDecimalAvroType(schema)) SchemaType.DECIMAL else SchemaType.BYTES
+    Schema.Type.ENUM -> SchemaType.STRING
+    Schema.Type.ARRAY -> SchemaType.ARRAY
+    Schema.Type.MAP -> SchemaType.MAP
+    Schema.Type.RECORD -> SchemaType.OBJECT
+    Schema.Type.UNION -> schemaTypeOf(nonNullAvroType(schema))
+}
+
+/** 判断 Avro 类型是否带 `decimal` 逻辑类型。 */
+private fun isDecimalAvroType(schema: Schema): Boolean = schema.logicalType?.name == "decimal"
