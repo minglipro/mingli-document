@@ -17,7 +17,10 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  *
  * `parse(ByteArray, Class)` 会优先用 [createTokenReader] 返回的 [CborTokenReader]
  * 流式直读 Bean，不构建完整 Node 树；Token 路径不可用时回退到
- * [CborReader] 构建 Node 再映射。写出仍由 [CborWriter] 完成。
+ * [CborReader] 构建 Node 再映射。
+ *
+ * `formatBytes` 同样优先用 [CborTokenWriter] Token 直写，不构建完整 Node 树；
+ * [CborWriter] 的 Node 写出能力仍然保留（例如 `Node.toCborBytes()`）。
  *
  * CBOR 的 byte string 映射为 [com.mingliqiye.document.core.BinaryNode]/BINARY Token，
  * 因此 Java 的 `byte[]` 属性可无损往返。
@@ -67,6 +70,28 @@ public open class CborMapper internal constructor(
      * @return Token 读取器
      */
     override fun createTokenReader(source: ByteArray): DocumentTokenReader = CborTokenReader(source)
+
+    /**
+     * 将 Java 实体写成 CBOR 字节。
+     *
+     * 直接通过 [writeTo] 驱动 [CborTokenWriter]，不构建完整 Node 树；数字与二进制
+     * 处理策略与 [CborWriter] 一致。注意 Token 直写的对象/数组为 CBOR 不定长形式，
+     * 与 [CborWriter] 的定长写法不同但合法且可读回。
+     *
+     * @param value Java 实体、集合、Map 或 [com.mingliqiye.document.core.Node]
+     * @return CBOR 二进制内容
+     * @throws com.mingliqiye.document.format.cbor.exception.CborException 写出失败或
+     *   数字 raw 非法时抛出
+     */
+    override fun formatBytes(value: Any?): ByteArray {
+        val writer = CborTokenWriter()
+        return try {
+            writeTo(value, writer)
+            writer.toByteArray()
+        } finally {
+            writer.close()
+        }
+    }
 
     public companion object {
 

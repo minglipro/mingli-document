@@ -7,6 +7,7 @@ import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
+import com.mingliqiye.document.format.cbor.exception.CborException
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
@@ -157,6 +158,55 @@ class CborMapperTest {
         assertEquals(node, CborReader(mapper.formatBytes(node)).read())
     }
 
+    @Test
+    fun formatBytesUsesStreamingTokenWriter() {
+        val mapper = CborMapper()
+        val bytes = mapper.formatBytes(
+            Person().apply {
+                name = "token"
+                age = 9
+                tags = listOf("t")
+            },
+        )
+
+        // Token 直写使用 CBOR 不定长 map（0xBF ... 0xFF），证明未经过 Node 定长写出。
+        assertEquals(0xBF, bytes.first().toInt() and 0xFF)
+        assertEquals(0xFF, bytes.last().toInt() and 0xFF)
+
+        val node = CborReader(bytes).read().asObject()
+        assertEquals("token", node["name"]?.asString())
+        assertEquals(9, node["age"]?.asNumber()?.toInt())
+        assertEquals(1, node["tags"]?.asArray()?.size)
+    }
+
+    @Test
+    fun formatBytesRoundTripsBeanWithBinaryAndNestedBean() {
+        val mapper = CborMapper()
+        val person = Person().apply {
+            name = "直写"
+            age = 33
+            tags = listOf("a", "b")
+            address = Address().apply { city = "南京" }
+            data = byteArrayOf(0, 1, 2, 127, -1)
+        }
+
+        val restored = mapper.parse(mapper.formatBytes(person), Person::class.java)
+        assertEquals("直写", restored.name)
+        assertEquals(33, restored.age)
+        assertEquals(listOf("a", "b"), restored.tags)
+        assertEquals("南京", restored.address?.city)
+        assertContentEquals(byteArrayOf(0, 1, 2, 127, -1), restored.data)
+    }
+
+    @Test
+    fun formatBytesRejectsNonFiniteFloatingPoint() {
+        val holder = DoubleHolder().apply { value = Double.NaN }
+
+        assertFailsWith<CborException> {
+            CborMapper().formatBytes(holder)
+        }
+    }
+
     private class RecordingCborMapper : CborMapper() {
         var tokenReaderCalls: Int = 0
             private set
@@ -177,5 +227,9 @@ class CborMapperTest {
 
     private class Address {
         var city: String? = null
+    }
+
+    private class DoubleHolder {
+        var value: Double = 0.0
     }
 }

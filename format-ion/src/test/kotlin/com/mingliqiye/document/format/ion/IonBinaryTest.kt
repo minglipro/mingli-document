@@ -171,6 +171,20 @@ class IonBinaryTest {
         assertTrue(mapper.tokenReaderUsed)
     }
 
+    @Test
+    fun formatBytesWritesNodeTreesThroughTokenWriter() {
+        val mapper = IonMapper()
+        val node = ObjectNode.of(
+            "a" to NumberNode.of(1),
+            "blob" to BinaryNode.of(byteArrayOf(7, 8)),
+            "list" to ArrayNode.of(StringNode.of("x"), BooleanNode.of(true)),
+        )
+
+        val bytes = mapper.formatBytes(node)
+
+        assertEquals(node, IonBinaryReader.parse(bytes))
+    }
+
     private class ByteArrayHolder {
         var data: ByteArray? = null
     }

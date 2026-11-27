@@ -161,6 +161,57 @@ class SmileMapperTest {
         assertEquals(node, SmileReader(mapper.formatBytes(node)).read())
     }
 
+    @Test
+    fun formatBytesWritesBeanThroughTokenPath() {
+        val mapper = SmileMapper()
+        val person = Person().apply {
+            name = "小于"
+            age = 24
+            tags = listOf("a", "b")
+            address = Address().apply { city = "杭州" }
+        }
+
+        val bytes = mapper.formatBytes(person)
+        // Token 直写与 SmileWriter 的 Node 写出路径产生相同 Smile 字节。
+        assertContentEquals(mapper.toNode(person).toSmileBytes(), bytes)
+
+        val restored = mapper.parse(bytes, Person::class.java)
+        assertEquals("小于", restored.name)
+        assertEquals(24, restored.age)
+        assertEquals(listOf("a", "b"), restored.tags)
+        assertEquals("杭州", restored.address?.city)
+    }
+
+    @Test
+    fun nestedBeanAndByteArrayRoundTripThroughTokenWriter() {
+        val mapper = SmileMapper()
+        val holder = NestedHolder().apply {
+            title = "根"
+            person = Person().apply {
+                name = "嵌套"
+                age = 30
+                tags = listOf("x")
+                address = Address().apply { city = "苏州" }
+            }
+            data = byteArrayOf(0, 1, 2, 127, -1)
+        }
+
+        val bytes = mapper.formatBytes(holder)
+        val restored = mapper.parse(bytes, NestedHolder::class.java)
+        assertEquals("根", restored.title)
+        assertEquals("嵌套", restored.person?.name)
+        assertEquals(30, restored.person?.age)
+        assertEquals(listOf("x"), restored.person?.tags)
+        assertEquals("苏州", restored.person?.address?.city)
+        assertContentEquals(byteArrayOf(0, 1, 2, 127, -1), restored.data)
+    }
+
+    private class NestedHolder {
+        var title: String? = null
+        var person: Person? = null
+        var data: ByteArray? = null
+    }
+
     private class RecordingSmileMapper : SmileMapper() {
         var tokenReaderCalls: Int = 0
             private set

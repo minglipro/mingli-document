@@ -15,8 +15,9 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * [formatBytes] / [parse] 的 `ByteArray` 重载负责读写，文本 `format` / `parse(String)`
  * 由基类统一抛出“不支持”异常。
  *
- * `parse(ByteArray)` 优先使用 [createTokenReader] 提供的 Token 流直读 Bean，
- * 不再构建完整 Node 树；[SmileReader] 的 Node 解析仍作为基类 fallback 保留。
+ * `formatBytes` 通过 [SmileTokenWriter] 直接写 Token 流，`parse(ByteArray)` 通过
+ * [SmileTokenReader] 直接解码 Bean，均不构建完整 Node 树；[SmileReader] / [SmileWriter]
+ * 的 Node 路径仍作为基类 fallback 保留。
  *
  * 与 Jackson 的 `SmileMapper` 类似：外部只使用这个 Mapper，不需要接触内部
  * Codec SPI。
@@ -66,6 +67,25 @@ public open class SmileMapper internal constructor(
      * @return Smile Token 读取器
      */
     override fun createTokenReader(source: ByteArray): DocumentTokenReader = SmileTokenReader(source)
+
+    /**
+     * 将 Java 实体直接写成 Smile 字节。
+     *
+     * 通过 [writeTo] 驱动 [SmileTokenWriter]，不构建完整 Node 树；[SmileWriter]
+     * 的 Node 写出路径仍保留在基类 fallback 中。
+     *
+     * @param value 任意实体、集合、Map 或 Node
+     * @return Smile 二进制内容
+     */
+    override fun formatBytes(value: Any?): ByteArray {
+        val writer = SmileTokenWriter()
+        try {
+            writeTo(value, writer)
+            return writer.toByteArray()
+        } finally {
+            writer.close()
+        }
+    }
 
     public companion object {
 

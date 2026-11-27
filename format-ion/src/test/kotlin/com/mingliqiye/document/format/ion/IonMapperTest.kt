@@ -3,6 +3,7 @@ package com.mingliqiye.document.format.ion
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.serialization.DocumentMapper
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -105,11 +106,35 @@ class IonMapperTest {
         assertEquals("杭州", restored.address?.city)
     }
 
+    @Test
+    fun formatBytesStreamsBeanWithNestedBeanAndBinaryField() {
+        val mapper = IonMapper()
+        val person = Person().apply {
+            name = "小于"
+            age = 18
+            tags = listOf("a", "b")
+            address = Address().apply { city = "杭州" }
+            data = byteArrayOf(1, 2, -1)
+        }
+
+        val bytes = mapper.formatBytes(person)
+
+        assertTrue(bytes.size > 4)
+        assertEquals(0xE0.toByte(), bytes[0])
+        val restored = mapper.parse(bytes, Person::class.java)
+        assertEquals("小于", restored.name)
+        assertEquals(18, restored.age)
+        assertEquals(listOf("a", "b"), restored.tags)
+        assertEquals("杭州", restored.address?.city)
+        assertContentEquals(byteArrayOf(1, 2, -1), restored.data)
+    }
+
     private class Person {
         var name: String? = null
         var age: Int = 0
         var tags: List<String> = emptyList()
         var address: Address? = null
+        var data: ByteArray? = null
     }
 
     private class Address {

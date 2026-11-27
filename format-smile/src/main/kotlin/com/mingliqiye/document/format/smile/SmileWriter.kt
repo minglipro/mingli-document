@@ -60,7 +60,7 @@ public class SmileWriter {
             is ObjectNode -> writeObject(generator, node)
             is ArrayNode -> writeArray(generator, node)
             is StringNode -> generator.writeString(node.value)
-            is NumberNode -> writeNumber(generator, node)
+            is NumberNode -> writeSmileNumber(generator, node.raw)
             is BooleanNode -> generator.writeBoolean(node.value)
             is NullNode -> generator.writeNull()
             is BinaryNode -> generator.writeBinary(node.value)
@@ -84,31 +84,6 @@ public class SmileWriter {
         generator.writeEndArray()
     }
 
-    private fun writeNumber(generator: JsonGenerator, node: NumberNode) {
-        val raw = node.raw
-        try {
-            if (isIntegerText(raw)) {
-                val intValue = raw.toIntOrNull()
-                if (intValue != null) {
-                    generator.writeNumber(intValue)
-                    return
-                }
-                val longValue = raw.toLongOrNull()
-                if (longValue != null) {
-                    generator.writeNumber(longValue)
-                    return
-                }
-                generator.writeNumber(BigInteger(raw))
-            } else {
-                generator.writeNumber(BigDecimal(raw))
-            }
-        } catch (e: NumberFormatException) {
-            throw SmileException("Invalid number '$raw'", e)
-        }
-    }
-
-    private fun isIntegerText(raw: String): Boolean = raw.none { it == '.' || it == 'e' || it == 'E' || it == 'd' || it == 'D' }
-
     private fun closeQuietly(generator: JsonGenerator) {
         try {
             generator.close()
@@ -122,6 +97,42 @@ public class SmileWriter {
         private val SMILE_FACTORY: SmileFactory = SmileFactory()
     }
 }
+
+/**
+ * 按数字原始文本写出 Smile 数字。
+ *
+ * 纯整数（无小数点/指数）写为 Smile 整数：能放进 Int/Long 时写原生整数，否则写
+ * big integer；其余写为 big decimal。Node 写出与 Token 写出共用该分类，保证两条
+ * 路径的输出一致。
+ *
+ * @param generator Jackson Smile 生成器
+ * @param raw 数字原始文本
+ * @throws java.io.IOException Jackson 写出失败
+ * @throws SmileException 数字文本非法
+ */
+internal fun writeSmileNumber(generator: JsonGenerator, raw: String) {
+    try {
+        if (isIntegerText(raw)) {
+            val intValue = raw.toIntOrNull()
+            if (intValue != null) {
+                generator.writeNumber(intValue)
+                return
+            }
+            val longValue = raw.toLongOrNull()
+            if (longValue != null) {
+                generator.writeNumber(longValue)
+                return
+            }
+            generator.writeNumber(BigInteger(raw))
+        } else {
+            generator.writeNumber(BigDecimal(raw))
+        }
+    } catch (e: NumberFormatException) {
+        throw SmileException("Invalid number '$raw'", e)
+    }
+}
+
+private fun isIntegerText(raw: String): Boolean = raw.none { it == '.' || it == 'e' || it == 'E' || it == 'd' || it == 'D' }
 
 /**
  * 将文档树写成 Smile 字节数组。

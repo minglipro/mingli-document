@@ -82,7 +82,15 @@ private fun writeArray(writer: com.amazon.ion.IonWriter, node: ArrayNode) {
 }
 
 private fun writeNumber(writer: com.amazon.ion.IonWriter, node: NumberNode) {
-    val raw = node.raw
+    writeIonNumber(writer, node.raw)
+}
+
+/**
+ * 按 Ion 文本规则写出数字：不含小数点或指数的写为 int，其余写为 decimal。
+ *
+ * 文本 [IonWriter]、[IonBinaryWriter] 与 [IonBinaryTokenWriter] 共用该规则。
+ */
+internal fun writeIonNumber(writer: com.amazon.ion.IonWriter, raw: String) {
     val isDecimal = raw.any { it == '.' || it == 'e' || it == 'E' || it == 'd' || it == 'D' }
     try {
         if (isDecimal) {

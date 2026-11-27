@@ -8,7 +8,7 @@ import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.serialization.DocumentValueWriter
+import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.util.Base64
 
 private const val HEX_DIGITS = "0123456789abcdef"
@@ -20,13 +20,17 @@ private const val HEX_DIGITS = "0123456789abcdef"
  */
 internal class JsonStreamWriter(
     private val pretty: Boolean,
-) : DocumentValueWriter {
+) : DocumentTokenWriter {
 
     private val builder = StringBuilder()
     private val quotedNames = HashMap<String, String>()
     private var firstElements = BooleanArray(8)
     private var depth = 0
     private var expectingValue = false
+
+    override fun writeBinary(value: ByteArray) {
+        writeString(Base64.getEncoder().encodeToString(value))
+    }
 
     override fun writeNull() {
         beforeValue()
