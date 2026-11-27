@@ -13,6 +13,7 @@ import com.mingliqiye.document.serialization.exception.DocumentSerializationExce
 import java.beans.IntrospectionException
 import java.beans.Introspector
 import java.beans.PropertyDescriptor
+import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.GenericArrayType
 import java.lang.reflect.Method
@@ -70,6 +71,7 @@ public abstract class DocumentMapper protected constructor(
     ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null, null)
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
+    private val constructorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
@@ -1042,8 +1044,9 @@ public abstract class DocumentMapper protected constructor(
     internal fun deserializeForInstantiator(node: Node, targetType: Type, path: String): Any? = deserializeValue(node, targetType, path)
 
     private fun newInstance(type: Class<*>): Any {
-        val constructor = type.getDeclaredConstructor()
-        constructor.isAccessible = true
+        val constructor = constructorCache.computeIfAbsent(type) {
+            type.getDeclaredConstructor().apply { isAccessible = true }
+        }
         return constructor.newInstance()
     }
 
