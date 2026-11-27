@@ -77,7 +77,22 @@ createParentDirectories 自动创建父目录
 maxInputSize            单次输入最大字节数，0 表示不限制
 maxNodeDepth            Node 树最大深度，0 表示不限制
 maxNodeCount            Node 树最大节点数，0 表示不限制
+resolveReferences       反序列化前解析本地 $ref，默认 false
 ```
+
+本地 `$ref`：
+
+```kotlin
+val mapper = JsonMapper(
+    DocumentMapperConfig.builder()
+        .resolveReferences(true)
+        .build(),
+)
+
+val node = mapper.fromNode(JsonReader.parse(document), Map::class.java)
+```
+
+支持 `#/...` JSON Pointer、循环检测；只支持本地引用。
 
 ## 转换器
 

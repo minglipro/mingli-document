@@ -24,6 +24,7 @@ public class DocumentMapperConfigBuilder {
     private var maxInputSize = 0L
     private var maxNodeDepth = 0
     private var maxNodeCount = 0L
+    private var resolveReferences = false
 
     /**
      * 为指定字段绑定转换器。
@@ -228,6 +229,17 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置反序列化前是否解析本地 `$ref`。
+     *
+     * @param resolve 是否解析引用
+     * @return 当前构建器
+     */
+    public fun resolveReferences(resolve: Boolean): DocumentMapperConfigBuilder {
+        this.resolveReferences = resolve
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      *
      * @throws IllegalArgumentException 子类型注册项非法（如子类不可赋值给基类、
@@ -245,6 +257,7 @@ public class DocumentMapperConfigBuilder {
         maxInputSize,
         maxNodeDepth,
         maxNodeCount,
+        resolveReferences,
         SubtypeRegistries.build(subtypeRegistrations, subtypeTypeProperties),
     )
 }

@@ -33,6 +33,8 @@ public open class DocumentMapperConfig protected constructor(
     public val maxNodeDepth: Int = 0,
     /** Node 树最大节点数；0 表示不限制。 */
     public val maxNodeCount: Long = 0L,
+    /** 是否在反序列化前解析本地 `$ref`。 */
+    public val resolveReferences: Boolean = false,
     private val subtypeRegistries: Map<Class<*>, SubtypeRegistry> = emptyMap(),
 ) {
 
@@ -53,6 +55,7 @@ public open class DocumentMapperConfig protected constructor(
         other.maxInputSize,
         other.maxNodeDepth,
         other.maxNodeCount,
+        other.resolveReferences,
         other.subtypeRegistries,
     )
 
@@ -103,6 +106,7 @@ public open class DocumentMapperConfig protected constructor(
             maxInputSize: Long,
             maxNodeDepth: Int,
             maxNodeCount: Long,
+            resolveReferences: Boolean,
             subtypes: SubtypeRegistries = SubtypeRegistries.EMPTY,
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
@@ -116,6 +120,7 @@ public open class DocumentMapperConfig protected constructor(
             maxInputSize,
             maxNodeDepth,
             maxNodeCount,
+            resolveReferences,
             subtypes.toMap(),
         )
     }
