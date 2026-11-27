@@ -73,6 +73,9 @@ allprojects {
                 }
             }
         }
+        extensions.configure<SigningExtension> {
+            sign(project.extensions.getByType<PublishingExtension>().publications.getByName("mavenJava"))
+        }
     }
 
     // 推送仓库由 init.gradle 提供；这里只按版本选择 release/snapshot 仓库，
