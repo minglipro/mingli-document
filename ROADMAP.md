@@ -64,7 +64,7 @@
 - [x] Mapper 层 maxNodeDepth / maxNodeCount
 - [x] CBOR / Smile 解析器 maxDepth
 - [x] Protobuf 解析器 maxDepth
-- [x] Avro 解析器 maxDepth\n- [ ] Ion 等其余格式解析器 maxDepth
+- [x] Avro 解析器 maxDepth\n- [x] Ion 解析器 maxDepth\n- [ ] YAML / XML / Properties / TOML / CSV maxDepth
 - [x] 全格式 maxInputSize
 - [ ] 全格式 maxStringLength
 - [ ] YAML alias 扩张限制
@@ -123,7 +123,7 @@
 
 - CBOR tag 保留
 - Ion 类型保真
-- Ion 解析深度
+
 - 原生 Token Reader
 - Ryu / Schubfach
 - Jazzer / JQF 持续 fuzz

@@ -51,7 +51,17 @@ STRUCT      -> ObjectNode
 - 文本 Ion
 - 二进制 Ion
 - Token 直读 Bean
+- 解析深度限制
 - 文件/流读写
+
+## 解析深度
+
+```kotlin
+IonReader(text, maxDepth = 64).read()
+IonBinaryReader(bytes, maxDepth = 64).read()
+```
+
+`IonMapper(DocumentMapperConfig.builder().maxNodeDepth(64).build())` 的 Node 路径同样生效。
 
 ## 限制
 
