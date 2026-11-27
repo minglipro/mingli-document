@@ -60,6 +60,7 @@ val mapper = CsvMapper(schema)
 - CSV Schema
 - 文件/流读写
 - Token 直读 Bean
+- 原生 CSV Token Reader
 
 ## 限制
 
