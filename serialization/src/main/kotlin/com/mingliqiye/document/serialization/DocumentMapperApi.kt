@@ -94,6 +94,11 @@ interface DocumentMapperApi {
     companion object {
 
         /**
+         * 创建 Mapper 构建器。
+         */
+        fun builder(): DocumentMapperBuilder = DefaultDocumentMapperBuilder()
+
+        /**
          * 按 reified 泛型参数把文档树反序列化为 Java 实体。
          */
         inline fun <reified T> DocumentMapperApi.fromNode(node: Node): T = fromNode(node, DocumentTypeReference.of<T>())

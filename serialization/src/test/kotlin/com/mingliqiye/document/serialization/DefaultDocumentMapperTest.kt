@@ -77,8 +77,9 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun customConverter() {
-        val registry = DocumentConverterRegistryApi.empty().register(MoneyConverter())
-        val mapper = DefaultDocumentMapper(converterRegistry = registry)
+        val mapper = DocumentMapperApi.builder()
+            .addConverter(MoneyConverter())
+            .build()
 
         val node = mapper.toNode(Money(12))
         assertEquals("12 CNY", node.asString())
@@ -175,11 +176,11 @@ class DefaultDocumentMapperTest {
 
     private data class Money(val amount: Int)
 
-    private class MoneyConverter : DocumentConverter<Money> {
-        override fun toNode(value: Money): Node = StringNode.of("${value.amount} CNY")
-
-        override fun fromNode(node: Node): Money = Money(node.asString().removeSuffix(" CNY").toInt())
-
+    private class MoneyConverter : JsonConverter<Money> {
         override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
+
+        override fun serialize(value: Money, context: SerializationContext): Node = StringNode.of("${value.amount} CNY")
+
+        override fun deserialize(node: Node, context: DeserializationContext): Money = Money(node.asString().removeSuffix(" CNY").toInt())
     }
 }

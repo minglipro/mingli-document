@@ -1,7 +1,5 @@
 package com.mingliqiye.document.serialization
 
-import com.mingliqiye.document.annotation.DocumentIgnore
-import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
@@ -58,12 +56,19 @@ class DocumentSerializationException @JvmOverloads constructor(
  *
  * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
-class DefaultDocumentMapper(
+class DefaultDocumentMapper internal constructor(
     /** 可选的文本格式编解码器；用于 [parse] / [format] 便捷方法。 */
-    val codec: DocumentCodec? = null,
-    /** 自定义转换器注册表。 */
-    val converterRegistry: DocumentConverterRegistryApi = DocumentConverterRegistryApi.empty(),
+    val codec: DocumentCodec?,
+    private val serializers: Map<Class<*>, JsonSerializer<*>>,
+    private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
 ) : DocumentMapperApi {
+
+    /**
+     * 创建只做树映射、不解析文本的 Mapper。
+     *
+     * @param codec 可选的文本格式编解码器
+     */
+    constructor(codec: DocumentCodec? = null) : this(codec, emptyMap(), emptyMap())
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
 
@@ -74,7 +79,7 @@ class DefaultDocumentMapper(
      * @return 文档树
      * @throws DocumentSerializationException 序列化失败或存在循环引用时抛出
      */
-    override fun toNode(value: Any?): Node = serializeValue(value, IdentityHashMap(), 0)
+    override fun toNode(value: Any?): Node = serializeValue(value, IdentityHashMap(), 0, null, "$")
 
     /**
      * 将文档树反序列化为指定 Java 类型。
@@ -169,37 +174,54 @@ class DefaultDocumentMapper(
     override fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D = fromNode(toNode(source), destinationType)
 
     private fun requireCodec(): DocumentCodec = codec ?: throw DocumentSerializationException(
-        "DefaultDocumentMapper has no DocumentCodec; pass one to the constructor to use parse/format",
+        "DefaultDocumentMapper has no DocumentCodec; build with DocumentMapperApi.builder().codec(...) to use parse/format",
     )
 
-    /**
-     * 注册自定义转换器。
-     *
-     * @param converter 转换器
-     * @return 当前 Mapper，便于链式调用
-     */
-    fun registerConverter(converter: DocumentConverter<*>): DefaultDocumentMapper {
-        converterRegistry.register(converter)
-        return this
+    private fun serializeWithSerializer(
+        serializer: JsonSerializer<*>,
+        value: Any,
+        property: DocumentProperty?,
+        path: String,
+    ): Node {
+        @Suppress("UNCHECKED_CAST")
+        return (serializer as JsonSerializer<Any>).serialize(
+            value,
+            DefaultSerializationContext(this, property, path),
+        )
     }
 
-    private fun serializeWithConverter(converter: DocumentConverter<*>, value: Any): Node {
+    private fun deserializeWithDeserializer(
+        deserializer: JsonDeserializer<*>,
+        node: Node,
+        property: DocumentProperty?,
+        path: String,
+    ): Any? {
         @Suppress("UNCHECKED_CAST")
-        return (converter as DocumentConverter<Any>).toNode(value)
+        return (deserializer as JsonDeserializer<Any>).deserialize(
+            node,
+            DefaultDeserializationContext(this, property, path),
+        )
     }
+
+    private fun findSerializer(type: Class<*>): JsonSerializer<*>? = serializers[type] ?: serializers.entries.firstOrNull { it.key.isAssignableFrom(type) }?.value
+
+    private fun findDeserializer(type: Class<*>): JsonDeserializer<*>? = deserializers[type] ?: deserializers.entries.firstOrNull { it.key.isAssignableFrom(type) }?.value
 
     private fun serializeValue(
         value: Any?,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        property: DocumentProperty? = null,
+        path: String = "$",
     ): Node {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
         }
         if (value != null && value !is Node) {
-            val converter = converterRegistry.find(value.javaClass)
-            if (converter != null) {
-                return serializeWithConverter(converter, value)
+            val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
+                ?: findSerializer(value.javaClass)
+            if (serializer != null) {
+                return serializeWithSerializer(serializer, value, property, path)
             }
         }
         return when (value) {
@@ -218,7 +240,7 @@ class DefaultDocumentMapper(
                 if (type.isArray) {
                     serializeReflectArray(value, seen, depth)
                 } else {
-                    serializeBean(value, seen, depth)
+                    serializeBean(value, seen, depth, path)
                 }
             }
         }
@@ -301,43 +323,72 @@ class DefaultDocumentMapper(
         bean: Any,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        path: String,
     ): Node = withCycleCheck(bean, seen) {
         val fields = LinkedHashMap<String, Node>()
         val handled = HashSet<String>()
         for (property in beanProperties(bean.javaClass)) {
             handled.add(property.name)
-            if (isIgnored(bean.javaClass, property)) {
+            val metadata = documentProperty(bean.javaClass, property)
+            if (metadata.isIgnored()) {
                 continue
             }
             val reader = property.readMethod ?: continue
             if (Modifier.isStatic(reader.modifiers) || reader.parameterCount != 0) {
                 continue
             }
-            fields[documentName(bean.javaClass, property)] = serializeValue(
+            fields[metadata.documentName] = serializeValue(
                 invoke(reader, bean),
                 seen,
                 depth + 1,
+                metadata,
+                "$path.${metadata.name}",
             )
         }
         for (field in bean.javaClass.fields) {
             if (Modifier.isStatic(field.modifiers) ||
                 field.isSynthetic ||
-                field.name in handled ||
-                field.isAnnotationPresent(DocumentIgnore::class.java)
+                field.name in handled
             ) {
                 continue
             }
-            fields[fieldName(field)] = serializeValue(field.get(bean), seen, depth + 1)
+            val metadata = documentProperty(bean.javaClass, field)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            fields[metadata.documentName] = serializeValue(
+                field.get(bean),
+                seen,
+                depth + 1,
+                metadata,
+                "$path.${metadata.name}",
+            )
         }
         ObjectNode.from(fields)
     }
 
-    private fun deserializeValue(node: Node, type: Type, path: String): Any? {
+    private fun deserializeValue(
+        node: Node,
+        type: Type,
+        path: String,
+        property: DocumentProperty? = null,
+    ): Any? {
         if (node is NullNode) {
             if (type is Class<*> && type.isPrimitive) {
                 throw DocumentSerializationException("Cannot assign null to primitive type at $path")
             }
             return null
+        }
+        val rawType = when (type) {
+            is Class<*> -> type
+            is ParameterizedType -> type.rawType as? Class<*>
+            else -> null
+        }
+        if (rawType != null) {
+            val deserializer = findDeserializer(rawType)
+            if (deserializer != null) {
+                return deserializeWithDeserializer(deserializer, node, property, path)
+            }
         }
         return when (type) {
             is Class<*> -> deserializeClass(node, type, path)
@@ -345,12 +396,12 @@ class DefaultDocumentMapper(
             is GenericArrayType -> deserializeArray(node, type.genericComponentType, path)
             is WildcardType -> {
                 val upperBound = type.upperBounds.firstOrNull() ?: Any::class.java
-                deserializeValue(node, upperBound, path)
+                deserializeValue(node, upperBound, path, property)
             }
 
             is TypeVariable<*> -> {
                 val bound = type.bounds.firstOrNull() ?: Any::class.java
-                deserializeValue(node, bound, path)
+                deserializeValue(node, bound, path, property)
             }
 
             else -> throw DocumentSerializationException("Unsupported type at $path: $type")
@@ -363,11 +414,6 @@ class DefaultDocumentMapper(
         }
         if (type == Any::class.java) {
             return node
-        }
-        val converter = converterRegistry.find(type)
-        if (converter != null) {
-            @Suppress("UNCHECKED_CAST")
-            return (converter as DocumentConverter<Any>).fromNode(node)
         }
         return when {
             type == String::class.java || type == CharSequence::class.java -> node.asString()
@@ -500,15 +546,21 @@ class DefaultDocumentMapper(
                 continue
             }
             handled.add(property.name)
-            if (isIgnored(type, property)) {
+            val metadata = documentProperty(type, property)
+            if (metadata.isIgnored()) {
                 continue
             }
-            val valueNode = objectNode[documentName(type, property)] ?: continue
+            val valueNode = objectNode[metadata.documentName] ?: continue
             val parameterType = writer.genericParameterTypes.firstOrNull() ?: property.propertyType
             invoke(
                 writer,
                 instance,
-                deserializeValue(valueNode, parameterType, "$path.${property.name}"),
+                deserializeValue(
+                    valueNode,
+                    parameterType,
+                    "$path.${property.name}",
+                    metadata,
+                ),
             )
         }
 
@@ -516,15 +568,23 @@ class DefaultDocumentMapper(
             if (Modifier.isStatic(field.modifiers) ||
                 field.isSynthetic ||
                 Modifier.isFinal(field.modifiers) ||
-                field.name in handled ||
-                field.isAnnotationPresent(DocumentIgnore::class.java)
+                field.name in handled
             ) {
                 continue
             }
-            val valueNode = objectNode[fieldName(field)] ?: continue
+            val metadata = documentProperty(type, field)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            val valueNode = objectNode[metadata.documentName] ?: continue
             field.set(
                 instance,
-                deserializeValue(valueNode, field.genericType, "$path.${field.name}"),
+                deserializeValue(
+                    valueNode,
+                    field.genericType,
+                    "$path.${field.name}",
+                    metadata,
+                ),
             )
         }
         return instance
@@ -605,22 +665,21 @@ class DefaultDocumentMapper(
         else -> throw DocumentSerializationException("Unsupported component type: $type")
     }
 
-    private fun documentName(type: Class<*>, property: PropertyDescriptor): String {
+    private fun documentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty {
         val field = findField(type, property.name)
-        return property.readMethod?.getAnnotation(DocumentName::class.java)?.value
-            ?: property.writeMethod?.getAnnotation(DocumentName::class.java)?.value
-            ?: field?.getAnnotation(DocumentName::class.java)?.value
-            ?: property.name
+        val elements = listOfNotNull(property.readMethod, property.writeMethod, field)
+        val propertyType = property.readMethod?.genericReturnType
+            ?: property.writeMethod?.genericParameterTypes?.firstOrNull()
+            ?: property.propertyType
+        return DefaultDocumentProperty(
+            type,
+            property.name,
+            propertyType,
+            elements,
+        )
     }
 
-    private fun isIgnored(type: Class<*>, property: PropertyDescriptor): Boolean {
-        val field = findField(type, property.name)
-        return property.readMethod?.isAnnotationPresent(DocumentIgnore::class.java) == true ||
-            property.writeMethod?.isAnnotationPresent(DocumentIgnore::class.java) == true ||
-            field?.isAnnotationPresent(DocumentIgnore::class.java) == true
-    }
-
-    private fun fieldName(field: Field): String = field.getAnnotation(DocumentName::class.java)?.value ?: field.name
+    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(type, field.name, field.genericType, listOf(field))
 
     private fun findField(type: Class<*>, name: String): Field? {
         var current: Class<*>? = type
