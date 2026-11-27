@@ -11,10 +11,12 @@ import org.apache.avro.Schema
 /**
  * [AvroMapper] 构建器。
  *
- * @param schema Avro record Schema
+ * @param writerSchema writer Schema
+ * @param readerSchema reader Schema；与 writer Schema 相同表示不做演进
  */
 public class AvroMapperBuilder internal constructor(
-    private val schema: Schema,
+    private val writerSchema: Schema,
+    private val readerSchema: Schema,
 ) : DocumentMapperBuilder<AvroMapper>() {
 
     override fun createMapper(
@@ -37,7 +39,8 @@ public class AvroMapperBuilder internal constructor(
         propertyMetadataResolver: PropertyMetadataResolver?,
         config: DocumentMapperConfig,
     ): AvroMapper = AvroMapper(
-        schema,
+        writerSchema,
+        readerSchema,
         serializers,
         deserializers,
         objectInstantiator,

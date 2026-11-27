@@ -43,6 +43,17 @@ internal class AvroWireWriter(
         return output.toByteArray()
     }
 
+    /**
+     * 把单根 [Node] 转换为 Avro datum。
+     *
+     * 供容器写出等复用同一套 Schema 映射规则。
+     *
+     * @param node 文档树
+     * @return Avro datum
+     * @throws AvroException 节点与 Schema 不匹配时抛出
+     */
+    fun toDatum(node: Node): Any? = toDatum(node, schema, "$")
+
     private fun toDatum(node: Node, schema: Schema, path: String): Any? = when (schema.type) {
         Schema.Type.NULL -> nullDatum(node, path)
         Schema.Type.BOOLEAN -> booleanDatum(node, path)
