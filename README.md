@@ -20,7 +20,7 @@
 | `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
-| `serialization-kotlin` | Kotlin data class 支持模块 `KotlinModule` | `serialization`、`annotation`、`kotlin-reflect` |
+| `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
 
@@ -119,13 +119,13 @@ Java Bean 需要无参构造器；Kotlin data class 可以通过 `serialization-
 
 ```kotlin
 import com.mingliqiye.document.format.json.JsonMapper
-import com.mingliqiye.document.serialization.kotlin.KotlinModule
+import com.mingliqiye.document.serialization.kotlin.kotlinModule
 
 data class User(val name: String, val age: Int)
 
 fun main() {
     val mapper = JsonMapper.builder()
-        .addModule(KotlinModule)
+        .addModule(kotlinModule())
         .build()
 
     val user = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
@@ -137,7 +137,7 @@ YAML 同样注册模块：
 
 ```kotlin
 val mapper = YamlMapper.builder()
-    .addModule(KotlinModule)
+    .addModule(kotlinModule())
     .build()
 ```
 

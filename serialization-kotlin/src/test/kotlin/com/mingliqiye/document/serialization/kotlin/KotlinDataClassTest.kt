@@ -11,7 +11,7 @@ import kotlin.test.assertFailsWith
 class KotlinDataClassTest {
 
     private val jsonMapper = JsonMapper.builder()
-        .addModule(KotlinModule)
+        .addModule(kotlinModule())
         .build()
 
     @Test
@@ -74,7 +74,7 @@ class KotlinDataClassTest {
     @Test
     fun yamlMapperUsesKotlinInstantiator() {
         val mapper = YamlMapper.builder()
-            .addModule(KotlinModule)
+            .addModule(kotlinModule())
             .build()
 
         val user = mapper.parse("name: 小于\nage: 18\n", User::class.java)

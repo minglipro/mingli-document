@@ -4,16 +4,21 @@ import com.mingliqiye.document.serialization.DocumentModule
 import com.mingliqiye.document.serialization.ModuleSetupContext
 
 /**
- * Kotlin data class 支持模块。
+ * 获取 Kotlin data class 支持模块。
  *
- * 类似 Jackson 的 `KotlinModule`，通过 Mapper Builder 注册：
+ * 模块对象不对外暴露，通过函数获取，避免公开单例实现：
  * ```kotlin
  * val mapper = JsonMapper.builder()
- *     .addModule(KotlinModule)
+ *     .addModule(kotlinModule())
  *     .build()
  * ```
  */
-public object KotlinModule : DocumentModule {
+public fun kotlinModule(): DocumentModule = DefaultKotlinModule
+
+/**
+ * Kotlin data class 支持模块默认实现。
+ */
+private object DefaultKotlinModule : DocumentModule {
 
     override val moduleName: String
         get() = "kotlin"
