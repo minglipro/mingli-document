@@ -391,6 +391,53 @@ Builder 全局转换器
 
 `DocumentMapperConfig` 对 Java Bean 和 Kotlin data class 字段都生效。
 
+## 日期时间格式
+
+`@DocumentDateTimeFormat` 直接定义单个日期/时间字段的解析与格式化：
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentDateTimeFormat
+import java.time.LocalDate
+import java.util.Date
+
+class Order {
+    @field:DocumentDateTimeFormat("yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
+    var createdAt: Date? = null
+
+    @field:DocumentDateTimeFormat("yyyy/MM/dd")
+    var deliveryDate: LocalDate? = null
+}
+```
+
+支持类型：
+
+```text
+java.util.Date
+java.util.Calendar
+java.sql.Date / Timestamp
+java.time.LocalDate
+java.time.LocalDateTime
+java.time.LocalTime
+java.time.OffsetDateTime
+java.time.ZonedDateTime
+java.time.Instant
+```
+
+`timezone` 可选；不传时使用系统默认时区。
+
+优先级：
+
+```text
+DocumentMapperConfig 字段配置
+  ↓
+@DocumentConverter
+  ↓
+@DocumentDateTimeFormat
+  ↓
+Builder 全局转换器
+  ↓
+内置类型映射
+```
 ## 字段注解
 
 注解位于 `com.mingliqiye.document.annotation`：
@@ -400,6 +447,7 @@ Builder 全局转换器
 | `@DocumentName("name")` | 指定该字段在文档中的名称 |
 | `@DocumentIgnore` | 序列化和反序列化时跳过该字段 |
 | `@DocumentConverter(XxxConverter::class)` | 指定该字段专用的转换器实现类 |
+| `@DocumentDateTimeFormat("yyyy-MM-dd", timezone = "Asia/Shanghai")` | 指定日期/时间字段的解析与格式化模式 |
 
 字段注解示例（Kotlin；Java Bean 直接把注解写在字段上即可。普通 Kotlin 属性如果注解默认落在 property 上，Java 反射读不到，建议使用 `@field:`；引入 `serialization-kotlin` 后，data class / Kotlin 属性可以通过 Kotlin 反射读取无 use-site target 的注解）：
 

@@ -1,9 +1,11 @@
 package com.mingliqiye.document.serialization.kotlin
 
+import com.mingliqiye.document.annotation.DocumentDateTimeFormat
 import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.format.json.JsonMapper
 import com.mingliqiye.document.format.yaml.YamlMapper
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -29,6 +31,16 @@ class KotlinDataClassTest {
     fun jsonParse() {
         val user = jsonMapper.parse("""{"name":"小于","age":18}""", User::class.java)
         assertEquals(User("小于", 18), user)
+    }
+
+    @Test
+    fun dateTimeFormatAnnotationIsRead() {
+        val value = Timed(LocalDate.of(2024, 5, 1))
+        val node = jsonMapper.toNode(value)
+        assertEquals("2024/05/01", node.asObject()["date"]?.asString())
+
+        val restored = jsonMapper.parse("""{"date":"2024/05/01"}""", Timed::class.java)
+        assertEquals(value, restored)
     }
 
     @Test
@@ -102,6 +114,11 @@ class KotlinDataClassTest {
     )
 
     private data class Required(val name: String)
+
+    private data class Timed(
+        @field:DocumentDateTimeFormat("yyyy/MM/dd")
+        val date: LocalDate,
+    )
 
     private class Plain {
         var name: String = ""
