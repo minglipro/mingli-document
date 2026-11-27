@@ -1,23 +1,24 @@
 plugins {
-    kotlin("jvm") version "2.4.20"
-    id("org.jlleitschuh.gradle.ktlint") version "14.0.1"
+    kotlin("jvm") version "2.0.0" apply false
+    id("org.jlleitschuh.gradle.ktlint") version "14.0.1" apply false
 }
 
-group = "com.mingliqiye.json"
-version = "1.0-SNAPSHOT"
+allprojects {
+    group = "com.mingliqiye.document"
+    version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
+    repositories {
+        mavenLocal()
+        maven {
+            name = "mingliqiye-public"
+            url = uri("https://repository.mingliqiye.com/repository/maven-public/")
+        }
+        mavenCentral()
+    }
 }
 
-dependencies {
-    testImplementation(kotlin("test"))
-}
-
-kotlin {
-    jvmToolchain(8)
-}
-
-tasks.test {
-    useJUnitPlatform()
+tasks.register("buildAll") {
+    group = "build"
+    description = "Builds all subprojects."
+    dependsOn(subprojects.map { "${it.path}:build" })
 }
