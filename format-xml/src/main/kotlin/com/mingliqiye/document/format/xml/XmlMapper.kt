@@ -28,6 +28,10 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * - 混合内容按 [XmlMixedContentPolicy] 处理：默认 `PRESERVE` 保留到 `#text`；
  *   `PRESERVE_ORDERED` 额外输出 `#content` 有序数组（文本项 `StringNode`、
  *   子元素项单字段 `ObjectNode`），写出时按该数组顺序交错输出文本与子元素；`REJECT` 抛异常。
+ *
+ * `parse(String)` 默认通过原生 [XmlTokenReader] 直接消费 Token，不构建 Node 树；
+ * 非默认读取配置（属性映射、命名空间、自定义键名、有序/拒绝混合内容）或配置了
+ * Node 树限制/`resolveReferences` 时回退 [NodeTokenReader] 路径。
  */
 public open class XmlMapper internal constructor(
     serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
@@ -47,7 +51,7 @@ public open class XmlMapper internal constructor(
 ) {
 
     private val xmlConfig: XmlConfig? = config as? XmlConfig
-    private val maxNodeDepth: Int = config.maxNodeDepth
+    private val mapperConfig: DocumentMapperConfig = config
 
     /**
      * 创建默认 XML 映射器。
@@ -83,7 +87,41 @@ public open class XmlMapper internal constructor(
         return XmlWriter.from(xmlConfig, rootName).write(toNode(value), pretty)
     }
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(XmlReader.from(source, xmlConfig, maxNodeDepth).read())
+    /**
+     * 创建 XML 文本 Token Reader。
+     *
+     * 默认读取配置（[XmlConfig] 为 `null` 或 [XmlConfig.usesDefaultReadConfiguration]）且
+     * 未配置 Node 树限制/`resolveReferences` 时使用原生 [XmlTokenReader]，直接从 DOM
+     * 生成 Token，不构建 Node 树；其他配置回退 [NodeTokenReader]（先经 [XmlReader]
+     * 构建 Node 并执行 [validateNodeLimits]），保持属性映射、命名空间、有序混合内容等语义。
+     *
+     * @param source XML 文本
+     * @return Token Reader
+     */
+    override fun createTextTokenReader(source: String): DocumentTokenReader {
+        if (usesNativeTokenReader()) {
+            return XmlTokenReader(source)
+        }
+        val node = XmlReader.from(source, xmlConfig, mapperConfig.maxNodeDepth).read()
+        validateNodeLimits(node)
+        return NodeTokenReader(node)
+    }
+
+    /**
+     * 是否可使用原生 Token 读取器。
+     *
+     * Node 树限制与 `resolveReferences` 只能在 Node 路径完整实现，因此配置后回退。
+     */
+    private fun usesNativeTokenReader(): Boolean {
+        if (mapperConfig.maxNodeDepth > 0 ||
+            mapperConfig.maxNodeCount > 0 ||
+            mapperConfig.maxStringLength > 0 ||
+            mapperConfig.resolveReferences
+        ) {
+            return false
+        }
+        return xmlConfig?.usesDefaultReadConfiguration() ?: true
+    }
 
     public companion object {
 

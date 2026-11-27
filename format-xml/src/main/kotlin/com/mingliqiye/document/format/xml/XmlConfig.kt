@@ -68,6 +68,21 @@ public class XmlConfig internal constructor(
     public val clarkNames: Boolean
         get() = namespaceMode == XmlNamespaceMode.CLARK
 
+    /**
+     * 是否使用默认读取语义，可走原生 Token 读取器（[XmlTokenReader]）。
+     *
+     * 只检查影响读取结果的 XML 选项：无属性映射、无命名空间感知、默认名称模式、
+     * 默认 `textKey`/`itemsKey`/`contentKey`、[XmlMixedContentPolicy.PRESERVE] 混合内容。
+     * `rootName` 只影响写出，不影响判断；Node 树限制与非默认通用配置由 Mapper 另行判断回退。
+     */
+    internal fun usesDefaultReadConfiguration(): Boolean = attributePrefix == null &&
+        !namespaceAware &&
+        namespaceMode == XmlNamespaceMode.PREFIX &&
+        textKey == DEFAULT_TEXT_KEY &&
+        itemsKey == DEFAULT_ITEMS_KEY &&
+        contentKey == DEFAULT_CONTENT_KEY &&
+        mixedContentPolicy == XmlMixedContentPolicy.PRESERVE
+
     public companion object {
 
         /** 属性映射默认前缀。 */
