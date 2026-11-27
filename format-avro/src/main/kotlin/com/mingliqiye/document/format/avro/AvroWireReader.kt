@@ -18,6 +18,7 @@ import org.apache.avro.io.DecoderFactory
 internal class AvroWireReader(
     private val writerSchema: Schema,
     private val readerSchema: Schema,
+    private val maxDepth: Int = 0,
 ) {
 
     /**
@@ -40,6 +41,6 @@ internal class AvroWireReader(
         } catch (e: Exception) {
             throw AvroParseException("Failed to parse Avro binary data: ${e.message}", e)
         }
-        return AvroDatumConverter.toNode(datum)
+        return AvroDatumConverter.toNode(datum, maxDepth)
     }
 }

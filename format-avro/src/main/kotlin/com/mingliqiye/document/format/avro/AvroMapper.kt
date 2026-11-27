@@ -53,7 +53,7 @@ public open class AvroMapper internal constructor(
     config: DocumentMapperConfig,
 ) : BinaryDocumentMapper(
     FORMAT_NAME,
-    { source -> AvroWireReader(writerSchema, readerSchema).read(source) },
+    { source -> AvroWireReader(writerSchema, readerSchema, config.maxNodeDepth).read(source) },
     { node, _ -> AvroWireWriter(writerSchema).write(node) },
     serializers,
     deserializers,
