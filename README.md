@@ -242,8 +242,51 @@ NullNode
 | `parse(bytes, Class)` / `parse(bytes, DocumentTypeReference)` | 二进制 -> 实体 |
 | `format(value)` / `formatPretty(value)` | 实体 -> 文本 |
 | `formatBytes(value)` | 实体 -> 二进制 |
+| `parse(file, Class)` / `parse(path, Class)` | 文件/路径 -> 实体 |
+| `parse(inputStream, Class)` / `parse(reader, Class)` | 流 -> 实体 |
+| `format(value, file)` / `format(value, outputStream)` | 实体 -> 文件/流 |
 | `fromTokens(reader, Class)` / `fromTokens(reader, DocumentTypeReference)` | Token -> 实体 |
 | `convert(source, Class)` | 实体/Node -> 实体 |
+
+## 文件与流
+
+```kotlin
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+
+val mapper = JsonMapper()
+val user = User().apply {
+    name = "小于"
+    age = 18
+}
+
+// 文件
+mapper.format(user, File("user.json"))
+val fromFile = mapper.parse(File("user.json"), User::class.java)
+
+// 路径
+mapper.format(user, Paths.get("user.json"))
+val fromPath = mapper.parse(Paths.get("user.json"), User::class.java)
+
+// 字节流：文本格式使用 UTF-8
+val output = ByteArrayOutputStream()
+mapper.format(user, output)
+val fromStream = mapper.parse(ByteArrayInputStream(output.toByteArray()), User::class.java)
+
+// 字符流
+val writer = StringWriter()
+mapper.format(user, writer)
+val fromReader = mapper.parse(StringReader(writer.toString()), User::class.java)
+```
+
+二进制格式使用同样的 `File` / `Path` / `InputStream` / `OutputStream` 方法，内部自动走 `formatBytes` / `parse(ByteArray)`。
+
+说明：
+
+- 文本格式文件/流默认使用 UTF-8
+- `File` / `Path` API 会自己打开和关闭文件
+- 调用方传入的 `InputStream` / `OutputStream` / `Reader` / `Writer` 不会被关闭
+- 二进制格式不支持 `Reader` / `Writer`，会抛 `DocumentSerializationException`
 
 ## 注解
 

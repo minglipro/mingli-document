@@ -3,6 +3,12 @@ package com.mingliqiye.document.serialization
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.Reader
+import java.io.Writer
+import java.nio.file.Path
 
 /**
  * Java 实体与文档树之间的映射 API。
@@ -105,6 +111,76 @@ public interface DocumentMapperApi {
     public fun formatPretty(value: Any?): String
 
     /**
+     * 从文件解析 Java 实体。
+     *
+     * 文本格式按 UTF-8 读取，二进制格式按字节读取。
+     */
+    public fun <T> parse(file: File, targetType: Class<T>): T
+
+    /**
+     * 从文件解析指定泛型类型。
+     */
+    public fun <T> parse(file: File, targetType: DocumentTypeReference<T>): T
+
+    /**
+     * 从路径解析 Java 实体。
+     */
+    public fun <T> parse(path: Path, targetType: Class<T>): T
+
+    /**
+     * 从路径解析指定泛型类型。
+     */
+    public fun <T> parse(path: Path, targetType: DocumentTypeReference<T>): T
+
+    /**
+     * 从输入流解析 Java 实体。
+     *
+     * 文本格式按 UTF-8 解码；调用方负责关闭流。
+     */
+    public fun <T> parse(input: InputStream, targetType: Class<T>): T
+
+    /**
+     * 从输入流解析指定泛型类型。
+     */
+    public fun <T> parse(input: InputStream, targetType: DocumentTypeReference<T>): T
+
+    /**
+     * 从字符流解析 Java 实体。
+     *
+     * 只支持文本格式；调用方负责关闭 Reader。
+     */
+    public fun <T> parse(reader: Reader, targetType: Class<T>): T
+
+    /**
+     * 从字符流解析指定泛型类型。
+     */
+    public fun <T> parse(reader: Reader, targetType: DocumentTypeReference<T>): T
+
+    /**
+     * 将 Java 实体写入文件。
+     */
+    public fun format(value: Any?, file: File)
+
+    /**
+     * 将 Java 实体写入路径。
+     */
+    public fun format(value: Any?, path: Path)
+
+    /**
+     * 将 Java 实体写入输出流。
+     *
+     * 调用方负责关闭流；本方法只 flush。
+     */
+    public fun format(value: Any?, output: OutputStream)
+
+    /**
+     * 将 Java 实体写入字符流。
+     *
+     * 只支持文本格式；调用方负责关闭 Writer。
+     */
+    public fun format(value: Any?, writer: Writer)
+
+    /**
      * 将任意对象转换为指定 Java 类型。
      *
      * @param source 源对象，可以是 Java 实体或 [Node]
@@ -123,6 +199,26 @@ public interface DocumentMapperApi {
     public fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D
 
     public companion object {
+
+        /**
+         * 按 reified 泛型参数从文件解析 Java 实体。
+         */
+        public inline fun <reified T> DocumentMapperApi.parse(file: File): T = parse(file, DocumentTypeReference.of<T>())
+
+        /**
+         * 按 reified 泛型参数从路径解析 Java 实体。
+         */
+        public inline fun <reified T> DocumentMapperApi.parse(path: Path): T = parse(path, DocumentTypeReference.of<T>())
+
+        /**
+         * 按 reified 泛型参数从输入流解析 Java 实体。
+         */
+        public inline fun <reified T> DocumentMapperApi.parse(input: InputStream): T = parse(input, DocumentTypeReference.of<T>())
+
+        /**
+         * 按 reified 泛型参数从字符流解析 Java 实体。
+         */
+        public inline fun <reified T> DocumentMapperApi.parse(reader: Reader): T = parse(reader, DocumentTypeReference.of<T>())
 
         /**
          * 按 reified 泛型参数把文档树反序列化为 Java 实体。

@@ -16,6 +16,11 @@ import com.mingliqiye.document.serialization.exception.DocumentSerializationExce
 import java.beans.IntrospectionException
 import java.beans.Introspector
 import java.beans.PropertyDescriptor
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.Reader
+import java.io.Writer
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.GenericArrayType
@@ -27,6 +32,8 @@ import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.Base64
 import java.util.IdentityHashMap
 import java.util.LinkedHashMap
@@ -63,6 +70,9 @@ public abstract class DocumentMapper protected constructor(
     private val parseBytes: ((ByteArray) -> Node)? = null,
     private val writeBytes: ((Node, Boolean) -> ByteArray)? = null,
 ) : DocumentMapperApi {
+
+    /** 该 Mapper 是否使用文本文件/流的 UTF-8 语义；二进制 Mapper 覆盖为 false。 */
+    protected open val usesTextFormat: Boolean = true
 
     /**
      * 创建不带文本编解码能力的映射器基类构造器。
@@ -235,6 +245,60 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 序列化失败时抛出
      */
     override fun formatPretty(value: Any?): String = writeText(toNode(value), true)
+
+    override fun <T> parse(file: File, targetType: Class<T>): T = parse(file.toPath(), targetType)
+
+    override fun <T> parse(file: File, targetType: DocumentTypeReference<T>): T = parse(file.toPath(), targetType)
+
+    override fun <T> parse(path: Path, targetType: Class<T>): T = parse(path, DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(path: Path, targetType: DocumentTypeReference<T>): T = parseBytesOrText(Files.readAllBytes(path), targetType)
+
+    override fun <T> parse(input: InputStream, targetType: Class<T>): T = parse(input, DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(input: InputStream, targetType: DocumentTypeReference<T>): T = parseBytesOrText(input.readBytes(), targetType)
+
+    override fun <T> parse(reader: Reader, targetType: Class<T>): T = parse(reader, DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(reader: Reader, targetType: DocumentTypeReference<T>): T {
+        if (!usesTextFormat) {
+            throw DocumentSerializationException("$formatName mapper does not support character streams")
+        }
+        return parse(reader.readText(), targetType)
+    }
+
+    override fun format(value: Any?, file: File) {
+        format(value, file.toPath())
+    }
+
+    override fun format(value: Any?, path: Path) {
+        Files.write(path, outputBytes(value))
+    }
+
+    override fun format(value: Any?, output: OutputStream) {
+        output.write(outputBytes(value))
+        output.flush()
+    }
+
+    override fun format(value: Any?, writer: Writer) {
+        if (!usesTextFormat) {
+            throw DocumentSerializationException("$formatName mapper does not support character streams")
+        }
+        writer.write(format(value))
+        writer.flush()
+    }
+
+    private fun <T> parseBytesOrText(bytes: ByteArray, targetType: DocumentTypeReference<T>): T = if (usesTextFormat) {
+        parse(String(bytes, Charsets.UTF_8), targetType)
+    } else {
+        parse(bytes, targetType)
+    }
+
+    private fun outputBytes(value: Any?): ByteArray = if (usesTextFormat) {
+        format(value).toByteArray(Charsets.UTF_8)
+    } else {
+        formatBytes(value)
+    }
 
     /**
      * 将任意对象转换为指定 Java 类型。

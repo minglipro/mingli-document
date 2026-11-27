@@ -29,4 +29,7 @@ public abstract class BinaryDocumentMapper protected constructor(
     config,
     parseBytes,
     writeBytes,
-)
+) {
+
+    protected override val usesTextFormat: Boolean = false
+}
