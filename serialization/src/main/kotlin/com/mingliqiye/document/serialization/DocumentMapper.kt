@@ -2,6 +2,7 @@ package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
+import com.mingliqiye.document.annotation.DocumentNumberFormat
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
@@ -251,8 +252,22 @@ public abstract class DocumentMapper protected constructor(
         if (annotation == null) {
             val dateTimeFormat = property.getAnnotation(DocumentDateTimeFormat::class.java)
             if (dateTimeFormat == null) {
-                propertyConverterCache[property] = noConverter
-                return null
+                val numberFormat = property.getAnnotation(DocumentNumberFormat::class.java)
+                if (numberFormat == null) {
+                    propertyConverterCache[property] = noConverter
+                    return null
+                }
+                val converter = try {
+                    DocumentNumberFormatConverter(numberFormat.value, numberFormat.locale)
+                } catch (e: Exception) {
+                    throw DocumentSerializationException(
+                        "Invalid NumberFormat '${numberFormat.value}' for " +
+                            "${property.declaringClass.name}.${property.name}",
+                        e,
+                    )
+                }
+                propertyConverterCache[property] = converter
+                return converter
             }
             val converter = try {
                 DocumentDateTimeFormatConverter(dateTimeFormat.value, dateTimeFormat.timezone)

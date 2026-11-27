@@ -434,10 +434,48 @@ DocumentMapperConfig 字段配置
   ↓
 @DocumentDateTimeFormat
   ↓
+@DocumentNumberFormat
+  ↓
 Builder 全局转换器
   ↓
 内置类型映射
 ```
+
+## 数字格式
+
+`@DocumentNumberFormat` 使用 `DecimalFormat` 定义数字字段的解析与格式化：
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentNumberFormat
+import java.math.BigDecimal
+
+class Order {
+    @field:DocumentNumberFormat("#,##0.00")
+    var amount: BigDecimal? = null
+
+    @field:DocumentNumberFormat("#,##0", locale = "de-DE")
+    var count: Int = 0
+}
+```
+
+输出示例：
+
+```json
+{"amount":"1,234.50","count":"1"}
+```
+
+支持目标类型：
+
+```text
+BigDecimal
+BigInteger
+Byte / Short / Int / Long
+Float / Double
+Number
+```
+
+`locale` 可选；不传时使用系统默认 Locale。
+
 ## 字段注解
 
 注解位于 `com.mingliqiye.document.annotation`：
@@ -448,6 +486,7 @@ Builder 全局转换器
 | `@DocumentIgnore` | 序列化和反序列化时跳过该字段 |
 | `@DocumentConverter(XxxConverter::class)` | 指定该字段专用的转换器实现类 |
 | `@DocumentDateTimeFormat("yyyy-MM-dd", timezone = "Asia/Shanghai")` | 指定日期/时间字段的解析与格式化模式 |
+| `@DocumentNumberFormat("#,##0.00", locale = "zh-CN")` | 指定数字字段的解析与格式化模式 |
 
 字段注解示例（Kotlin；Java Bean 直接把注解写在字段上即可。普通 Kotlin 属性如果注解默认落在 property 上，Java 反射读不到，建议使用 `@field:`；引入 `serialization-kotlin` 后，data class / Kotlin 属性可以通过 Kotlin 反射读取无 use-site target 的注解）：
 

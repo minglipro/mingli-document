@@ -2,9 +2,11 @@ package com.mingliqiye.document.serialization.kotlin
 
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
 import com.mingliqiye.document.annotation.DocumentName
+import com.mingliqiye.document.annotation.DocumentNumberFormat
 import com.mingliqiye.document.format.json.JsonMapper
 import com.mingliqiye.document.format.yaml.YamlMapper
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
+import java.math.BigDecimal
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,6 +43,16 @@ class KotlinDataClassTest {
 
         val restored = jsonMapper.parse("""{"date":"2024/05/01"}""", Timed::class.java)
         assertEquals(value, restored)
+    }
+
+    @Test
+    fun numberFormatAnnotationIsRead() {
+        val value = Priced(BigDecimal("1234.5"))
+        val node = jsonMapper.toNode(value)
+        assertEquals("1,234.50", node.asObject()["price"]?.asString())
+
+        val restored = jsonMapper.parse("""{"price":"1,234.50"}""", Priced::class.java)
+        assertEquals(BigDecimal("1234.50"), restored.price)
     }
 
     @Test
@@ -118,6 +130,11 @@ class KotlinDataClassTest {
     private data class Timed(
         @field:DocumentDateTimeFormat("yyyy/MM/dd")
         val date: LocalDate,
+    )
+
+    private data class Priced(
+        @field:DocumentNumberFormat("#,##0.00")
+        val price: BigDecimal,
     )
 
     private class Plain {
