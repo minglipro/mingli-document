@@ -25,7 +25,7 @@
 - [x] 字段命名策略（SNAKE_CASE / KEBAB_CASE / UPPER_CAMEL）
 - [x] 多态类型（type 字段 + 类型注册）
 - [x] 构造器注入
-- [ ] Builder 模式实例化
+- [x] Builder 模式实例化
 - [ ] 对象引用 / `$ref`
 - [ ] Java record / Kotlin value class / sealed class
 - [ ] 只读属性
@@ -87,7 +87,7 @@
 - [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）\n- [ ] Gitea CI
 - [ ] Maven Central 发布
-- [ ] SBOM / 校验和
+- [x] SHA-256 校验和\n- [ ] SBOM
 - [ ] JPMS module-info
 - [ ] GraalVM Native Image
 

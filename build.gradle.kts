@@ -2,6 +2,7 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.plugins.signing.SigningExtension
+import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -160,4 +161,37 @@ tasks.register("buildAll") {
     group = "build"
     description = "Builds all subprojects."
     dependsOn(subprojects.map { "${it.path}:build" })
+}
+
+tasks.register("generateChecksums") {
+    group = "release"
+    description = "Generate SHA-256 checksums for all assembled jar artifacts."
+    dependsOn(subprojects.map { "${it.path}:assemble" })
+    doLast {
+        val outputDirectory = rootProject.layout.buildDirectory.dir("checksums").get().asFile
+        outputDirectory.mkdirs()
+        val lines = subprojects
+            .flatMap { project ->
+                project.layout.buildDirectory.dir("libs").get().asFile
+                    .listFiles()
+                    .orEmpty()
+                    .filter { it.isFile && it.extension == "jar" }
+                    .map { file -> project.name to file }
+            }
+            .sortedBy { (projectName, file) -> "$projectName/${file.name}" }
+            .map { (projectName, file) ->
+                val digest = MessageDigest.getInstance("SHA-256")
+                file.inputStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+                val hash = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+                "$hash  $projectName/${file.name}"
+            }
+        outputDirectory.resolve("SHA256SUMS.txt").writeText(lines.joinToString("\n") + "\n")
+    }
 }
