@@ -51,7 +51,7 @@
 
 - [x] CSV 原生 Token Reader\n- [ ] YAML / XML / Properties / TOML 原生 Token Reader
 - [x] JSON 紧凑模式纯字节写出
-- [ ] Ryu / Schubfach 数字格式化
+- [x] Schubfach Double 最短格式化
 - [ ] 运行期代码生成
 - [ ] 编译期代码生成
 - [ ] 大文件流式 Bean 映射
