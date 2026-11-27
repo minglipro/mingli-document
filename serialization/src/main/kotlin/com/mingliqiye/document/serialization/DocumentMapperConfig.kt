@@ -5,7 +5,7 @@ package com.mingliqiye.document.serialization
  *
  * 当前支持按字段声明类和属性名绑定专用转换器，用于定义单个字段的解析与格式化方式。
  */
-public class DocumentMapperConfig internal constructor(
+public open class DocumentMapperConfig protected constructor(
     private val fieldConverters: Map<FieldKey, JsonConverter<*>>,
 ) {
 
@@ -24,5 +24,7 @@ public class DocumentMapperConfig internal constructor(
          */
         @JvmStatic
         public fun empty(): DocumentMapperConfig = DocumentMapperConfig(emptyMap())
+
+        internal fun from(fieldConverters: Map<FieldKey, JsonConverter<*>>): DocumentMapperConfig = DocumentMapperConfig(fieldConverters)
     }
 }

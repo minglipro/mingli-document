@@ -350,6 +350,25 @@ val mapper = JsonMapper.builder()
     .build()
 ```
 
+格式子模块还可以使用带格式选项的 Config：
+
+```kotlin
+val jsonConfig = JsonConfig.builder()
+    .field(Order::class.java, "createdAt", DateFieldConverter())
+    .allowComments(false)
+    .pretty(true)
+    .build()
+
+val jsonMapper = JsonMapper(jsonConfig)
+
+val yamlConfig = YamlConfig.builder()
+    .field(Order::class.java, "createdAt", DateFieldConverter())
+    .pretty(true)
+    .build()
+
+val yamlMapper = YamlMapper(yamlConfig)
+```
+
 配置中的转换器与普通 `JsonConverter` 完全一致，仍然可以通过 `context.property` 获取：
 
 ```kotlin
@@ -371,6 +390,7 @@ Builder 全局转换器
 ```
 
 `DocumentMapperConfig` 对 Java Bean 和 Kotlin data class 字段都生效。
+
 ## 字段注解
 
 注解位于 `com.mingliqiye.document.annotation`：

@@ -17,6 +17,15 @@ class YamlMapperTest {
         assertEquals("小于", mapper.parse("name: 小于", Person::class.java).name)
     }
 
+    @Test
+    fun yamlConfigControlsPrettyOutput() {
+        val mapper = YamlMapper(YamlConfig.builder().pretty(true).build())
+        val text = mapper.format(linkedMapOf("name" to "小于", "age" to 18))
+
+        assertTrue(text.contains("name: 小于"))
+        assertTrue(text.contains("\n"))
+    }
+
     private class Person {
         var name: String = ""
     }

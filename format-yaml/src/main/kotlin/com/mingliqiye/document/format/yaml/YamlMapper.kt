@@ -30,6 +30,8 @@ public open class YamlMapper internal constructor(
     config,
 ) {
 
+    private val yamlConfig: YamlConfig? = config as? YamlConfig
+
     /**
      * 创建默认 YAML 映射器。
      */
@@ -47,6 +49,12 @@ public open class YamlMapper internal constructor(
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
+
+    override fun format(value: Any?): String = if (yamlConfig?.pretty == true) {
+        super.formatPretty(value)
+    } else {
+        super.format(value)
+    }
 
     public companion object {
 

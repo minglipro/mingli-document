@@ -31,6 +31,8 @@ public open class JsonMapper internal constructor(
     config,
 ) {
 
+    private val jsonConfig: JsonConfig? = config as? JsonConfig
+
     /**
      * 创建默认 JSON 映射器。
      */
@@ -49,10 +51,18 @@ public open class JsonMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun <T> parse(source: String, targetType: Class<T>): T = readFrom(JsonValueReader(source), DocumentTypeReference.of(targetType))
+    override fun <T> parse(source: String, targetType: Class<T>): T = parseDirect(source, DocumentTypeReference.of(targetType))
 
-    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = readFrom(JsonValueReader(source), targetType)
-    override fun format(value: Any?): String = writeJson(value, pretty = false)
+    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = parseDirect(source, targetType)
+
+    private fun <T> parseDirect(source: String, targetType: DocumentTypeReference<T>): T {
+        val reader = JsonValueReader(source, jsonConfig?.allowComments ?: true)
+        val result = readFrom(reader, targetType)
+        reader.ensureEnd()
+        return result
+    }
+
+    override fun format(value: Any?): String = writeJson(value, pretty = jsonConfig?.pretty ?: false)
 
     override fun formatPretty(value: Any?): String = writeJson(value, pretty = true)
 

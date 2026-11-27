@@ -29,5 +29,5 @@ public class DocumentMapperConfigBuilder {
     /**
      * 构建不可变配置。
      */
-    public fun build(): DocumentMapperConfig = DocumentMapperConfig(LinkedHashMap(fieldConverters))
+    public fun build(): DocumentMapperConfig = DocumentMapperConfig.from(LinkedHashMap(fieldConverters))
 }

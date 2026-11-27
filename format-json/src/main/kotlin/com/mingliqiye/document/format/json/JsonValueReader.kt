@@ -20,12 +20,23 @@ import java.util.LinkedHashMap
  */
 internal class JsonValueReader(
     private val source: String,
+    private val allowComments: Boolean = true,
 ) : DocumentValueReader {
 
     private var position = 0
     private var objectFirst = false
     private var arrayFirst = false
     private var pendingFieldName: String? = null
+
+    /**
+     * 确认根值之后只剩空白或允许的注释。
+     */
+    internal fun ensureEnd() {
+        skipWhitespace()
+        if (hasNext()) {
+            throw error("Unexpected trailing content")
+        }
+    }
 
     override fun tryReadNull(): Boolean {
         skipWhitespace()
@@ -350,7 +361,7 @@ internal class JsonValueReader(
             val ch = source[position]
             when {
                 ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> position++
-                ch == '/' -> {
+                allowComments && ch == '/' -> {
                     if (!skipComment()) {
                         return
                     }
