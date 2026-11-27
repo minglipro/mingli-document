@@ -38,9 +38,9 @@ public class ProtobufMapper @JvmOverloads constructor(
     /**
      * 使用 [ProtobufSchema] 创建映射器。
      *
-     * Schema 只保存标量类型，包含 enum/message/map 字段时无法还原 Descriptor，会抛出
-     * [com.mingliqiye.document.format.protobuf.exception.ProtobufException]；这类场景请直接传入
-     * [Descriptor]。
+     * 通过 [ProtobufSchema.toDescriptor] 生成完整 Descriptor，支持 Schema 内定义的嵌套 message、
+     * enum、map 与 oneof；字段缺少类型引用或引用无法解析时抛出
+     * [com.mingliqiye.document.format.protobuf.exception.ProtobufException]。
      *
      * @param schema Protobuf Schema
      */

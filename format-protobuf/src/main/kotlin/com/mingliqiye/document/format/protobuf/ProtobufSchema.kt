@@ -1,11 +1,7 @@
 package com.mingliqiye.document.format.protobuf
 
-import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.Descriptor
-import com.google.protobuf.Descriptors.DescriptorValidationException
-import com.google.protobuf.Descriptors.FieldDescriptor
 import com.google.protobuf.Descriptors.FileDescriptor
-import com.mingliqiye.document.format.protobuf.exception.ProtobufException
 import com.mingliqiye.document.schema.DocumentSchema
 import com.mingliqiye.document.schema.SchemaField
 import com.mingliqiye.document.schema.SchemaType
@@ -13,21 +9,28 @@ import com.mingliqiye.document.schema.SchemaType
 /**
  * Protobuf 文档 Schema。
  *
- * 保存 message 名称、可选的 package 以及带字段编号与 repeated 标记的 Protobuf 字段列表，
- * 同时通过 [fields] 提供格式无关的 [SchemaField] 视图。
+ * 保存 message 名称、可选的 package、带字段编号与 repeated 标记的 Protobuf 字段列表，以及可选的
+ * 嵌套 message/enum 定义；同时通过 [fields] 提供格式无关的 [SchemaField] 视图。
  *
- * [fields] 中 repeated 字段的类型为 [SchemaType.ARRAY]；需要字段编号、`.proto` 类型名或 repeated
- * 标记时使用 [protobufFields] 与 [protobufField]。
+ * [fields] 中 repeated 字段的类型为 [SchemaType.ARRAY]；需要字段编号、`.proto` 类型名、复杂类型引用
+ * 或 repeated 标记时使用 [protobufFields] 与 [protobufField]。
+ *
+ * message/enum/map 字段通过 [ProtobufSchemaField.typeReference] 引用类型；[toDescriptor] 可把
+ * Schema 生成完整的 [Descriptor]，嵌套定义通过 [nestedMessages] 与 [enums] 提供。
  *
  * @property messageName message 名称，可含嵌套点号，如 `Outer.Inner`
  * @property packageName package 名；没有 package 时为 `null`
  * @property messageFullName message 全名，即 `package.message`，无 package 时等于 [messageName]
  * @property protobufFields Protobuf 字段列表，保持声明顺序
+ * @property nestedMessages 嵌套 message 定义
+ * @property enums 嵌套 enum 定义
  */
 public class ProtobufSchema(
     messageName: String,
     fieldList: List<ProtobufSchemaField>,
     packageName: String? = null,
+    nestedMessageList: List<ProtobufMessage> = emptyList(),
+    enumList: List<ProtobufEnum> = emptyList(),
 ) : DocumentSchema {
 
     /** message 名称，可含嵌套点号，如 `Outer.Inner`。 */
@@ -43,6 +46,12 @@ public class ProtobufSchema(
     /** Protobuf 字段列表，保持声明顺序。 */
     public val protobufFields: List<ProtobufSchemaField> = fieldList.toList()
 
+    /** 嵌套 message 定义。 */
+    public val nestedMessages: List<ProtobufMessage> = nestedMessageList.toList()
+
+    /** 嵌套 enum 定义。 */
+    public val enums: List<ProtobufEnum> = enumList.toList()
+
     /** 格式无关字段视图，repeated 字段映射为 [SchemaType.ARRAY]。 */
     override val fields: List<SchemaField> = protobufFields.map { it.toSchemaField() }
 
@@ -56,6 +65,10 @@ public class ProtobufSchema(
     private val schemaFieldByName: Map<String, SchemaField> =
         protobufFields.associate { it.name to it.toSchemaField() }
 
+    private val nestedMessageByName: Map<String, ProtobufMessage> = nestedMessages.associateBy { it.name }
+
+    private val enumByName: Map<String, ProtobufEnum> = enums.associateBy { it.name }
+
     init {
         checkMessageName(messageName)
         checkPackageName(packageName)
@@ -63,6 +76,7 @@ public class ProtobufSchema(
         require(duplicateNames.isEmpty()) { "Protobuf 字段名重复: $duplicateNames" }
         val duplicateNumbers = protobufFields.groupBy { it.fieldNumber }.filterValues { it.size > 1 }.keys
         require(duplicateNumbers.isEmpty()) { "Protobuf 字段编号重复: $duplicateNumbers" }
+        ProtobufMessage(messageName.substringAfterLast('.'), protobufFields, nestedMessages, enums)
     }
 
     /**
@@ -90,50 +104,34 @@ public class ProtobufSchema(
     public fun protobufField(fieldNumber: Int): ProtobufSchemaField? = protobufFieldByNumber[fieldNumber]
 
     /**
-     * 转换为 Protobuf [Descriptor]。
+     * 按名称查找嵌套 message。
      *
-     * 生成 proto2 语法的单 message 临时文件：标量字段按 [ProtobufType] 映射为对应的
-     * `FieldDescriptorProto.Type`，repeated/required/optional 映射为 field label，
-     * [messageName] 中的嵌套点号（如 `Outer.Inner`）映射为嵌套 message。
-     *
-     * 该 Schema 适配层只保存标量类型，无法表达自定义 enum/message/map 的类型名，因此包含
-     * [ProtobufType.ENUM]、[ProtobufType.MESSAGE] 或 [ProtobufType.MAP] 字段时会抛出
-     * [ProtobufException]；这类场景请直接使用外部构造好的 [Descriptor]。
-     *
-     * @return Protobuf message 描述符
-     * @throws ProtobufException 字段类型无法还原或 Descriptor 构建失败时抛出
+     * @param name message 名称
+     * @return 嵌套 message；不存在时返回 `null`
      */
-    public fun toDescriptor(): Descriptor {
-        val messageParts = messageName.split('.')
-        val innermostMessage = DescriptorProtos.DescriptorProto.newBuilder().setName(messageParts.last())
-        protobufFields.forEach { field -> innermostMessage.addField(toFieldDescriptorProto(field)) }
-        var messageProto = innermostMessage.build()
-        for (index in messageParts.size - 2 downTo 0) {
-            messageProto = DescriptorProtos.DescriptorProto.newBuilder()
-                .setName(messageParts[index])
-                .addNestedType(messageProto)
-                .build()
-        }
-        val packageName = this.packageName
-        val fileProtoBuilder = DescriptorProtos.FileDescriptorProto.newBuilder()
-            .setName(fileName(messageName, packageName))
-            .addMessageType(messageProto)
-        if (!packageName.isNullOrEmpty()) {
-            fileProtoBuilder.setPackage(packageName)
-        }
-        val fileDescriptor = try {
-            FileDescriptor.buildFrom(fileProtoBuilder.build(), emptyArray())
-        } catch (e: DescriptorValidationException) {
-            throw ProtobufException("构建 Protobuf Descriptor 失败: ${e.message}", e)
-        }
-        var descriptor = fileDescriptor.findMessageTypeByName(messageParts.first())
-            ?: throw ProtobufException("未找到 Protobuf message: $messageName")
-        for (index in 1 until messageParts.size) {
-            descriptor = descriptor.findNestedTypeByName(messageParts[index])
-                ?: throw ProtobufException("未找到嵌套 Protobuf message: $messageName")
-        }
-        return descriptor
-    }
+    public fun nestedMessage(name: String): ProtobufMessage? = nestedMessageByName[name]
+
+    /**
+     * 按名称查找嵌套 enum。
+     *
+     * @param name enum 名称
+     * @return 嵌套 enum；不存在时返回 `null`
+     */
+    public fun enumeration(name: String): ProtobufEnum? = enumByName[name]
+
+    /**
+     * 生成完整的 Protobuf [Descriptor]。
+     *
+     * 生成 proto2 语法的单文件 descriptor：字段类型/编号/repeated/required/oneof 映射为对应
+     * FieldDescriptorProto，message/enum 类型引用解析为文件内的绝对类型名，map 字段生成
+     * `map_entry = true` 的嵌套 entry message，[nestedMessages]/[enums] 递归生成。
+     *
+     * @param dependencies 依赖的 FileDescriptor，用于解析 `.` 开头的全限定类型引用；默认无依赖
+     * @return 根 message 描述符
+     * @throws com.mingliqiye.document.format.protobuf.exception.ProtobufException 类型引用缺失/
+     *   无法解析或 Descriptor 校验失败时抛出
+     */
+    public fun toDescriptor(dependencies: Array<FileDescriptor> = emptyArray()): Descriptor = ProtobufDescriptorGenerator.generate(this, dependencies)
 
     /**
      * 转换为 JSON 风格描述。
@@ -143,6 +141,8 @@ public class ProtobufSchema(
         "package" to packageName,
         "fullName" to messageFullName,
         "fields" to protobufFields.map { it.toJsonDescription() },
+        "nestedMessages" to nestedMessages.map { it.toJsonDescription() },
+        "enums" to enums.map { it.toJsonDescription() },
     )
 
     public companion object {
@@ -158,6 +158,21 @@ public class ProtobufSchema(
         public fun builder(messageName: String, packageName: String? = null): ProtobufSchemaBuilder = ProtobufSchemaBuilder(messageName, packageName)
 
         /**
+         * 从 [Descriptor] 还原 Schema。
+         *
+         * 字段类型/编号/repeated/required/presence 与 oneof 归属保持不变；嵌套 message/enum 递归
+         * 还原为 [ProtobufMessage]/[ProtobufEnum]；map 字段由 map entry 还原为
+         * [ProtobufTypeReference.MapType]。根 message 之外的类型引用记录为全限定名。
+         *
+         * @param descriptor Protobuf message 描述符
+         * @return Protobuf Schema
+         * @throws com.mingliqiye.document.format.protobuf.exception.ProtobufException group 字段
+         *   或非法 map entry 时抛出
+         */
+        @JvmStatic
+        public fun fromDescriptor(descriptor: Descriptor): ProtobufSchema = ProtobufSchemaConverter.convert(descriptor)
+
+        /**
          * 从 [toJsonDescription] 生成的 JSON 风格描述还原 Schema。
          *
          * @param description JSON 风格描述
@@ -169,120 +184,15 @@ public class ProtobufSchema(
             val messageName = description["message"] as? String
                 ?: throw IllegalArgumentException("JSON 描述缺少 message: $description")
             val packageName = description["package"] as? String
-            val rawFields = description["fields"] as? List<*> ?: emptyList<Any?>()
             val builder = builder(messageName, packageName)
-            rawFields.forEach { rawField ->
+            rawList(description, "fields").forEach { rawField ->
                 val fieldDescription = rawField as? Map<*, *>
                     ?: throw IllegalArgumentException("非法字段描述: $rawField")
-                val name = fieldDescription["name"] as? String
-                    ?: throw IllegalArgumentException("字段描述缺少 name: $fieldDescription")
-                val number = (fieldDescription["number"] as? Number)?.toInt()
-                    ?: throw IllegalArgumentException("字段描述缺少 number: $fieldDescription")
-                val typeName = fieldDescription["type"] as? String
-                    ?: throw IllegalArgumentException("字段描述缺少 type: $fieldDescription")
-                val protobufType = ProtobufType.fromTypeName(typeName)
-                    ?: throw IllegalArgumentException("未识别的 Protobuf 类型: $typeName")
-                builder.field(
-                    name = name,
-                    fieldNumber = number,
-                    type = protobufType,
-                    repeated = fieldDescription["repeated"] as? Boolean ?: false,
-                    required = fieldDescription["required"] as? Boolean ?: true,
-                    nullable = fieldDescription["nullable"] as? Boolean ?: false,
-                    description = fieldDescription["description"] as? String,
-                )
+                builder.field(parseFieldDescription(fieldDescription))
             }
+            parseNestedMessages(description).forEach { builder.nestedMessage(it) }
+            parseEnums(description).forEach { builder.enumeration(it) }
             return builder.build()
-        }
-
-        /**
-         * 从 Protobuf [Descriptor] 还原 Schema。
-         *
-         * 字段类型映射为 [ProtobufType]（map 字段映射为 [ProtobufType.MAP]），字段编号、repeated、
-         * required 与 presence（nullable）保持不变；package 与嵌套 message 名称从
-         * [Descriptor.fullName]、[Descriptor.file] 推导。
-         *
-         * @param descriptor Protobuf message 描述符
-         * @return Protobuf Schema
-         * @throws IllegalArgumentException 字段编号或名称不合法时抛出
-         */
-        @JvmStatic
-        public fun fromDescriptor(descriptor: Descriptor): ProtobufSchema {
-            val packageName = descriptor.file.getPackage().takeIf { it.isNotEmpty() }
-            val messageName = if (packageName == null) {
-                descriptor.fullName
-            } else {
-                descriptor.fullName.removePrefix("$packageName.")
-            }
-            val builder = builder(messageName, packageName)
-            for (field in descriptor.fields) {
-                builder.field(
-                    name = field.name,
-                    fieldNumber = field.number,
-                    type = protobufTypeOf(field),
-                    repeated = field.isRepeated && !field.isMapField,
-                    required = field.isRequired,
-                    nullable = field.hasPresence() && !field.isRequired,
-                    description = null,
-                )
-            }
-            return builder.build()
-        }
-
-        private fun protobufTypeOf(field: FieldDescriptor): ProtobufType {
-            if (field.isMapField) {
-                return ProtobufType.MAP
-            }
-            if (field.type == FieldDescriptor.Type.GROUP) {
-                return ProtobufType.MESSAGE
-            }
-            return ProtobufType.fromTypeName(field.type.name.lowercase())
-                ?: throw ProtobufException("不支持的 Protobuf 字段类型: ${field.type}")
-        }
-
-        private fun fileName(messageName: String, packageName: String?): String {
-            val messagePath = messageName.replace('.', '/')
-            val prefix = packageName?.replace('.', '/')
-            return if (prefix.isNullOrEmpty()) "$messagePath.proto" else "$prefix/$messagePath.proto"
-        }
-
-        private fun toFieldDescriptorProto(field: ProtobufSchemaField): DescriptorProtos.FieldDescriptorProto {
-            val label = when {
-                field.repeated -> DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED
-                field.required -> DescriptorProtos.FieldDescriptorProto.Label.LABEL_REQUIRED
-                else -> DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL
-            }
-            return DescriptorProtos.FieldDescriptorProto.newBuilder()
-                .setName(field.name)
-                .setNumber(field.fieldNumber)
-                .setLabel(label)
-                .setType(toFieldDescriptorType(field))
-                .build()
-        }
-
-        private fun toFieldDescriptorType(field: ProtobufSchemaField): DescriptorProtos.FieldDescriptorProto.Type = when (field.protobufType) {
-            ProtobufType.DOUBLE -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_DOUBLE
-            ProtobufType.FLOAT -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_FLOAT
-            ProtobufType.INT32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT32
-            ProtobufType.INT64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64
-            ProtobufType.UINT32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_UINT32
-            ProtobufType.UINT64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_UINT64
-            ProtobufType.SINT32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SINT32
-            ProtobufType.SINT64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SINT64
-            ProtobufType.FIXED32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_FIXED32
-            ProtobufType.FIXED64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_FIXED64
-            ProtobufType.SFIXED32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SFIXED32
-            ProtobufType.SFIXED64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SFIXED64
-            ProtobufType.BOOL -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_BOOL
-            ProtobufType.STRING -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING
-            ProtobufType.BYTES -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_BYTES
-            ProtobufType.ENUM,
-            ProtobufType.MESSAGE,
-            ProtobufType.MAP,
-            -> throw ProtobufException(
-                "字段 '${field.name}' 的类型 '${field.protobufTypeName}' 需要显式 Descriptor，" +
-                    "无法从 ProtobufSchema 还原",
-            )
         }
 
         /**
@@ -301,6 +211,96 @@ public class ProtobufSchema(
             }
             require(qualifiedNamePattern.matches(packageName)) { "非法 Protobuf package 名称: $packageName" }
         }
+
+        private fun parseFieldDescription(description: Map<*, *>): ProtobufSchemaField {
+            val name = description["name"] as? String
+                ?: throw IllegalArgumentException("字段描述缺少 name: $description")
+            val number = (description["number"] as? Number)?.toInt()
+                ?: throw IllegalArgumentException("字段描述缺少 number: $description")
+            val typeName = description["type"] as? String
+                ?: throw IllegalArgumentException("字段描述缺少 type: $description")
+            val protobufType = ProtobufType.fromTypeName(typeName)
+                ?: throw IllegalArgumentException("未识别的 Protobuf 类型: $typeName")
+            return ProtobufSchemaField(
+                name = name,
+                fieldNumber = number,
+                protobufType = protobufType,
+                repeated = description["repeated"] as? Boolean ?: false,
+                required = description["required"] as? Boolean ?: true,
+                nullable = description["nullable"] as? Boolean ?: false,
+                description = description["description"] as? String,
+                typeReference = parseTypeReference(description, protobufType),
+                oneofName = description["oneof"] as? String,
+            )
+        }
+
+        private fun parseTypeReference(description: Map<*, *>, protobufType: ProtobufType): ProtobufTypeReference? = when (protobufType) {
+            ProtobufType.MESSAGE -> (description["messageType"] as? String)?.let { ProtobufTypeReference.MessageType(it) }
+            ProtobufType.ENUM -> (description["enumType"] as? String)?.let { ProtobufTypeReference.EnumType(it) }
+            ProtobufType.MAP -> parseMapType(description)
+            else -> null
+        }
+
+        private fun parseMapType(description: Map<*, *>): ProtobufTypeReference.MapType {
+            val keyTypeName = description["mapKeyType"] as? String
+                ?: throw IllegalArgumentException("map 字段描述缺少 mapKeyType: $description")
+            val valueTypeName = description["mapValueType"] as? String
+                ?: throw IllegalArgumentException("map 字段描述缺少 mapValueType: $description")
+            val keyType = ProtobufType.fromTypeName(keyTypeName)
+                ?: throw IllegalArgumentException("未识别的 map key 类型: $keyTypeName")
+            val valueType = ProtobufType.fromTypeName(valueTypeName)
+                ?: throw IllegalArgumentException("未识别的 map value 类型: $valueTypeName")
+            val valueReference = when (valueType) {
+                ProtobufType.MESSAGE ->
+                    (description["mapValueMessageType"] as? String)?.let { ProtobufTypeReference.MessageType(it) }
+
+                ProtobufType.ENUM ->
+                    (description["mapValueEnumType"] as? String)?.let { ProtobufTypeReference.EnumType(it) }
+
+                else -> null
+            }
+            return ProtobufTypeReference.MapType(keyType, valueType, valueReference)
+        }
+
+        private fun parseNestedMessages(description: Map<*, *>): List<ProtobufMessage> = rawList(description, "nestedMessages").map { rawMessage ->
+            val messageDescription = rawMessage as? Map<*, *>
+                ?: throw IllegalArgumentException("非法嵌套 message 描述: $rawMessage")
+            parseMessageDescription(messageDescription)
+        }
+
+        private fun parseMessageDescription(description: Map<*, *>): ProtobufMessage {
+            val name = description["name"] as? String
+                ?: throw IllegalArgumentException("嵌套 message 描述缺少 name: $description")
+            val fields = rawList(description, "fields").map { rawField ->
+                val fieldDescription = rawField as? Map<*, *>
+                    ?: throw IllegalArgumentException("非法字段描述: $rawField")
+                parseFieldDescription(fieldDescription)
+            }
+            return ProtobufMessage(name, fields, parseNestedMessages(description), parseEnums(description))
+        }
+
+        private fun parseEnums(description: Map<*, *>): List<ProtobufEnum> = rawList(description, "enums").map { rawEnum ->
+            val enumDescription = rawEnum as? Map<*, *>
+                ?: throw IllegalArgumentException("非法 enum 描述: $rawEnum")
+            parseEnumDescription(enumDescription)
+        }
+
+        private fun parseEnumDescription(description: Map<*, *>): ProtobufEnum {
+            val name = description["name"] as? String
+                ?: throw IllegalArgumentException("enum 描述缺少 name: $description")
+            val values = rawList(description, "values").map { rawValue ->
+                val valueDescription = rawValue as? Map<*, *>
+                    ?: throw IllegalArgumentException("非法 enum 值描述: $rawValue")
+                val valueName = valueDescription["name"] as? String
+                    ?: throw IllegalArgumentException("enum 值描述缺少 name: $valueDescription")
+                val number = (valueDescription["number"] as? Number)?.toInt()
+                    ?: throw IllegalArgumentException("enum 值描述缺少 number: $valueDescription")
+                ProtobufEnumValue(valueName, number)
+            }
+            return ProtobufEnum(name, values)
+        }
+
+        private fun rawList(description: Map<*, *>, key: String): List<*> = description[key] as? List<*> ?: emptyList<Any?>()
 
         private val qualifiedNamePattern: Regex = Regex("[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*")
     }
