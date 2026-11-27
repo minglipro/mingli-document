@@ -35,6 +35,7 @@
 | `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
 | `serialization` | Java 实体与树之间的映射、DocumentMapper 基类 | `core`、`annotation` |
 | `serialization-kotlin` | Kotlin data class 模块函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
+| `benchmarks` | JMH 性能基准（开发工具，不发布） | 各模块、JMH、Jackson（仅测试） |
 
 允许的依赖方向：
 

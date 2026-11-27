@@ -1,0 +1,34 @@
+# JMH 性能基准
+
+本模块只用于性能测试，不参与发布。
+
+## 运行
+
+```bash
+gradle :benchmarks:jmh
+```
+
+环境：
+
+- JDK8 toolchain
+- JMH 1.37
+- 1000 个 Java Bean，JSON 约 128 KB
+- 3 轮 warmup + 5 轮测量，单 fork
+
+## 当前结果
+
+```text
+Benchmark                             Mode  Cnt  Score   Error  Units
+JsonMapperBenchmark.jacksonFormat     avgt    5  0.204 ± 0.009  ms/op
+JsonMapperBenchmark.jacksonParseData  avgt    5  0.287 ± 0.008  ms/op
+JsonMapperBenchmark.jacksonParseTree  avgt    5  0.315 ± 0.017  ms/op
+JsonMapperBenchmark.ourFormat         avgt    5  0.863 ± 0.019  ms/op
+JsonMapperBenchmark.ourParseData      avgt    5  1.445 ± 0.134  ms/op
+JsonMapperBenchmark.ourParseTree      avgt    5  0.619 ± 0.027  ms/op
+```
+
+说明：
+
+- `ourFormat` 使用流式 JSON 写出，不构建完整 Node 树
+- 该结果是单机普通 JVM 数据，不代表所有硬件/负载
+- 与 Jackson 对比时注意：本库输出统一的不可变 Node 树，Jackson 直接绑定 Bean

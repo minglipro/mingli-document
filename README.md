@@ -33,6 +33,7 @@ serialization ──► annotation（implementation）
 annotation：项目内无依赖
 ```
 
+- `benchmarks` 是开发工具模块，不对外发布；
 - `core` 不依赖任何具体格式；`format-json` / `format-yaml` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
 - 外部使用方只需要引入对应格式模块（如 `format-json`）即可获得 `JsonMapper`；不需要接触内部 Codec 实现。
 
@@ -504,6 +505,27 @@ fun main() {
 - 重复键默认拒绝，解析失败抛出 `YamlParseException`；
 - 不支持 YAML 的 `NaN` / `Infinity` 数字。
 
+## 性能基准
+
+`benchmarks` 模块提供 JMH 基准。JDK8、1000 个 Bean（约 128 KB JSON）的结果：
+
+| Benchmark | 本项目 | Jackson |
+|---|---:|---:|
+| JSON 解析树 | 0.619 ms | 0.315 ms |
+| JSON → Bean | 1.445 ms | 0.287 ms |
+| Bean → JSON | 0.863 ms | 0.204 ms |
+
+运行：
+
+```bash
+gradle :benchmarks:jmh
+```
+
+说明：
+
+- 本项目面向统一不可变 Node 树，Jackson 直接绑定 Bean，两者不是同一工作负载
+- `JsonMapper.format` 使用流式写出，不构建完整 Node 树
+- 详细方法和结果见 [benchmarks/README.md](benchmarks/README.md)
 ## 构建与测试
 
 ```bash
