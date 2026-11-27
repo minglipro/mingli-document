@@ -13,13 +13,13 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
-class DocumentMapperTest {
+class DefaultDocumentMapperTest {
 
-    private val mapper = DocumentMapper()
+    private val mapper = DefaultDocumentMapper()
 
     @Test
     fun mapperApi() {
-        val mapper: DocumentMapperApi = DocumentMapper(JsonCodec)
+        val mapper: DocumentMapperApi = DefaultDocumentMapper(JsonCodec)
         val source = User().apply {
             name = "api"
             age = 9
