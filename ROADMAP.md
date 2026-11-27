@@ -130,3 +130,23 @@
 - 运行期 / 编译期代码生成
 - 远程 `$ref`
 - Maven Central 自动发布
+---
+
+## 1.2.0 交付状态
+
+- master / dev / v1.2.0 已推送 GitHub
+- 私服 1.2.0 已发布（annotation/exception 409 表示已存在且内容一致）
+- 全量构建通过，657 tests / 0 failures
+- 新增 Protobuf/Avro/Ion/YAML/XML 解析深度
+- 新增可插拔远程 `$ref`
+- 修复 GitHub Actions `gradlew` 执行权限
+
+仍延后到 1.3.0：
+
+- CBOR tag 保留
+- Ion 类型保真
+- 原生 Token Reader
+- Ryu / Schubfach
+- Jazzer / JQF 持续 fuzz
+- 运行期 / 编译期代码生成
+- Maven Central 自动发布
