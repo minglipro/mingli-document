@@ -6,7 +6,7 @@ import com.mingliqiye.document.core.codec.DocumentCodec
 /**
  * JSON 格式编解码器。
  */
-object JsonCodec : DocumentCodec {
+public object JsonCodec : DocumentCodec {
 
     override val format: String
         get() = "json"

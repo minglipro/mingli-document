@@ -10,7 +10,7 @@ import com.mingliqiye.document.exception.DocumentException
  * @param enableSuppression 是否启用异常抑制
  * @param writableStackTrace 是否生成堆栈信息
  */
-open class JsonException @JvmOverloads constructor(
+public open class JsonException @JvmOverloads constructor(
     message: String? = null,
     throwable: Throwable? = null,
     enableSuppression: Boolean = false,
@@ -25,7 +25,7 @@ open class JsonException @JvmOverloads constructor(
  * @param enableSuppression 是否启用异常抑制
  * @param writableStackTrace 是否生成堆栈信息
  */
-class JsonParseException @JvmOverloads constructor(
+public class JsonParseException @JvmOverloads constructor(
     message: String? = null,
     throwable: Throwable? = null,
     enableSuppression: Boolean = false,

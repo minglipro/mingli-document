@@ -11,7 +11,7 @@ import com.mingliqiye.document.core.Node
  * @param source JSON 文本
  * @param allowComments 是否允许注释，默认 `true`
  */
-class JsonReader(
+public class JsonReader(
     private val source: String,
     private val allowComments: Boolean = true,
 ) {
@@ -21,9 +21,9 @@ class JsonReader(
      *
      * @throws JsonParseException JSON 格式非法时抛出
      */
-    fun read(): Node = JsonParser(source, allowComments).parse()
+    public fun read(): Node = JsonParser(source, allowComments).parse()
 
-    companion object {
+    public companion object {
 
         /**
          * 解析 JSON 字符串，允许注释。
@@ -31,7 +31,7 @@ class JsonReader(
          * @throws JsonParseException JSON 格式非法时抛出
          */
         @JvmStatic
-        fun parse(source: String): Node = JsonReader(source).read()
+        public fun parse(source: String): Node = JsonReader(source).read()
 
         /**
          * 解析 JSON 字符串。
@@ -41,7 +41,7 @@ class JsonReader(
          * @throws JsonParseException JSON 格式非法时抛出
          */
         @JvmStatic
-        fun parse(source: String, allowComments: Boolean): Node = JsonReader(source, allowComments).read()
+        public fun parse(source: String, allowComments: Boolean): Node = JsonReader(source, allowComments).read()
     }
 }
 
@@ -50,4 +50,4 @@ class JsonReader(
  *
  * @throws JsonParseException JSON 格式非法时抛出
  */
-fun String.toJsonNode(): Node = JsonReader(this).read()
+public fun String.toJsonNode(): Node = JsonReader(this).read()

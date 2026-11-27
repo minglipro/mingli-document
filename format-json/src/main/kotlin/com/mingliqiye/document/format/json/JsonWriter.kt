@@ -133,4 +133,4 @@ internal class JsonWriter(
  * @param pretty 是否使用两空格缩进的格式化输出
  * @return JSON 文本
  */
-fun Node.toJsonString(pretty: Boolean = false): String = JsonWriter(pretty).write(this)
+public fun Node.toJsonString(pretty: Boolean = false): String = JsonWriter(pretty).write(this)
