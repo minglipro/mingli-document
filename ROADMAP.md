@@ -61,7 +61,10 @@
 
 ## 阶段 4：安全边界
 
-- [x] Mapper 层 maxNodeDepth / maxNodeCount\n- [x] CBOR / Smile 解析器 maxDepth\n- [x] Protobuf 解析器 maxDepth\n- [ ] Avro / Ion 等其余格式解析器 maxDepth
+- [x] Mapper 层 maxNodeDepth / maxNodeCount
+- [x] CBOR / Smile 解析器 maxDepth
+- [x] Protobuf 解析器 maxDepth
+- [ ] Avro / Ion 等其余格式解析器 maxDepth
 - [x] 全格式 maxInputSize
 - [ ] 全格式 maxStringLength
 - [ ] YAML alias 扩张限制
@@ -120,7 +123,7 @@
 
 - CBOR tag 保留
 - Ion 类型保真
-- Avro / Protobuf 解析深度
+- Avro / Ion 解析深度
 - 原生 Token Reader
 - Ryu / Schubfach
 - Jazzer / JQF 持续 fuzz
