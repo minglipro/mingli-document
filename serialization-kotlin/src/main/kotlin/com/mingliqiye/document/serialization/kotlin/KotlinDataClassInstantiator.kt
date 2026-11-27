@@ -1,10 +1,10 @@
 package com.mingliqiye.document.serialization.kotlin
 
-import com.mingliqiye.document.annotation.DocumentIgnore
-import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.serialization.DocumentValueReader
 import com.mingliqiye.document.serialization.InstantiationContext
 import com.mingliqiye.document.serialization.ObjectInstantiator
+import com.mingliqiye.document.serialization.StreamingInstantiationContext
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import java.lang.reflect.Field
 import java.util.concurrent.ConcurrentHashMap
@@ -33,6 +33,24 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
     override fun canInstantiate(type: Class<*>): Boolean = type.kotlin.isData
 
     override fun instantiate(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        context: StreamingInstantiationContext,
+    ): Any? {
+        if (!type.kotlin.isData) {
+            return null
+        }
+        val metadata = cache.computeIfAbsent(type, ::createMetadata)
+        return try {
+            instantiateStreaming(reader, metadata, context, type)
+        } catch (e: DocumentSerializationException) {
+            throw e
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate data class ${type.name}", e)
+        }
+    }
+
+    override fun instantiate(
         type: Class<*>,
         node: ObjectNode,
         context: InstantiationContext,
@@ -46,6 +64,60 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
         } else {
             instantiateWithDefaults(metadata, node, context, type)
         }
+    }
+
+    private fun instantiateStreaming(
+        reader: DocumentValueReader,
+        metadata: DataClassMetadata,
+        context: StreamingInstantiationContext,
+        type: Class<*>,
+    ): Any {
+        val arguments = LinkedHashMap<KParameter, Any?>()
+        val argumentArray = arrayOfNulls<Any?>(metadata.parameters.size)
+        val seen = BooleanArray(metadata.parameters.size)
+
+        reader.beginObject()
+        while (reader.hasNextField()) {
+            val fieldName = reader.readFieldName()
+            val entry = metadata.parametersByField[fieldName]
+            if (entry == null) {
+                reader.skipValue()
+                continue
+            }
+            val (index, parameterMetadata) = entry
+            if (parameterMetadata.ignored) {
+                reader.skipValue()
+                continue
+            }
+            val value = context.readValue(reader, parameterMetadata.javaType, parameterMetadata.property)
+            arguments[parameterMetadata.parameter] = value
+            argumentArray[index] = value
+            seen[index] = true
+        }
+        reader.endObject()
+
+        if (metadata.directConstruction) {
+            for (index in seen.indices) {
+                if (!seen[index]) {
+                    throw DocumentSerializationException(
+                        "Missing required data class parameter '${metadata.parameters[index].parameter.name}' at ${context.path}",
+                    )
+                }
+            }
+            val constructor = requireNotNull(metadata.javaConstructor) {
+                "Data class ${type.name} has no Java constructor"
+            }
+            return constructor.newInstance(*argumentArray)
+        }
+
+        for ((index, parameterMetadata) in metadata.parameters.withIndex()) {
+            if (!seen[index] && !parameterMetadata.ignored && !parameterMetadata.parameter.isOptional) {
+                throw DocumentSerializationException(
+                    "Missing required data class parameter '${parameterMetadata.parameter.name}' at ${context.path}",
+                )
+            }
+        }
+        return metadata.constructor.callBy(arguments)
     }
 
     private fun instantiateDirect(
@@ -116,11 +188,19 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
                 val propertyName = parameter.name
                     ?: throw DocumentSerializationException("Data class ${type.name} has unnamed parameter")
                 val property = properties[propertyName]
+                val annotations = collectAnnotations(type, propertyName, property, parameter)
+                val dataProperty = KotlinDataProperty(
+                    type,
+                    propertyName,
+                    parameter.type.javaType,
+                    annotations,
+                )
                 DataClassParameterMetadata(
                     parameter = parameter,
-                    fieldName = documentName(type, property, parameter, propertyName),
-                    ignored = isIgnored(type, property, propertyName),
+                    fieldName = dataProperty.documentName,
+                    ignored = dataProperty.isIgnored(),
                     javaType = parameter.type.javaType,
+                    property = dataProperty,
                 )
             }
         val directConstruction = javaConstructor != null &&
@@ -130,30 +210,18 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
         return DataClassMetadata(constructor, javaConstructor, directConstruction, parameters)
     }
 
-    private fun documentName(
+    private fun collectAnnotations(
         type: Class<*>,
+        propertyName: String,
         property: KProperty1<*, *>?,
         parameter: KParameter,
-        fallback: String,
-    ): String {
-        property?.annotations?.filterIsInstance<DocumentName>()?.firstOrNull()?.let { return it.value }
-        property?.getter?.annotations?.filterIsInstance<DocumentName>()?.firstOrNull()?.let { return it.value }
-        parameter.annotations.filterIsInstance<DocumentName>().firstOrNull()?.let { return it.value }
-        return field(type, fallback)?.getAnnotation(DocumentName::class.java)?.value ?: fallback
-    }
-
-    private fun isIgnored(
-        type: Class<*>,
-        property: KProperty1<*, *>?,
-        fallback: String,
-    ): Boolean {
-        if (property?.annotations?.any { it is DocumentIgnore } == true) {
-            return true
-        }
-        if (property?.getter?.annotations?.any { it is DocumentIgnore } == true) {
-            return true
-        }
-        return field(type, fallback)?.isAnnotationPresent(DocumentIgnore::class.java) == true
+    ): List<Annotation> {
+        val annotations = LinkedHashSet<Annotation>()
+        property?.annotations?.let(annotations::addAll)
+        property?.getter?.annotations?.let(annotations::addAll)
+        parameter.annotations.let(annotations::addAll)
+        field(type, propertyName)?.annotations?.let(annotations::addAll)
+        return annotations.toList()
     }
 
     private fun field(type: Class<*>, name: String): Field? = try {

@@ -56,6 +56,7 @@ public open class JsonMapper internal constructor(
         /**
          * 创建 JSON Mapper 构建器。
          */
+        @JvmStatic
         public fun builder(): JsonMapperBuilder = JsonMapperBuilder()
     }
 }

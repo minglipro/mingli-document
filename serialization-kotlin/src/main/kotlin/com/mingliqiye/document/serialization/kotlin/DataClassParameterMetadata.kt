@@ -1,5 +1,6 @@
 package com.mingliqiye.document.serialization.kotlin
 
+import com.mingliqiye.document.serialization.DocumentProperty
 import java.lang.reflect.Type
 import kotlin.reflect.KParameter
 
@@ -11,4 +12,5 @@ internal class DataClassParameterMetadata(
     val fieldName: String,
     val ignored: Boolean,
     val javaType: Type,
+    val property: DocumentProperty,
 )

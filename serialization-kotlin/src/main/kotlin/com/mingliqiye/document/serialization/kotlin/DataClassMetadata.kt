@@ -1,6 +1,5 @@
 package com.mingliqiye.document.serialization.kotlin
 
-import java.lang.reflect.Constructor
 import kotlin.reflect.KFunction
 
 /**
@@ -8,7 +7,13 @@ import kotlin.reflect.KFunction
  */
 internal class DataClassMetadata(
     val constructor: KFunction<Any>,
-    val javaConstructor: Constructor<*>?,
+    val javaConstructor: java.lang.reflect.Constructor<*>?,
     val directConstruction: Boolean,
     val parameters: List<DataClassParameterMetadata>,
-)
+) {
+
+    val parametersByField: Map<String, Pair<Int, DataClassParameterMetadata>> =
+        parameters.withIndex().associate { (index, parameter) ->
+            parameter.fieldName to (index to parameter)
+        }
+}

@@ -328,6 +328,14 @@ public abstract class DocumentMapper protected constructor(
                 return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
             }
             if (objectInstantiator?.canInstantiate(rawType) == true) {
+                val streamed = objectInstantiator.instantiate(
+                    reader,
+                    rawType,
+                    DefaultStreamingInstantiationContext(this, path),
+                )
+                if (streamed != null) {
+                    return streamed
+                }
                 return deserializeValue(reader.readNode(), type, path, property)
             }
         }
@@ -348,6 +356,13 @@ public abstract class DocumentMapper protected constructor(
             else -> throw DocumentSerializationException("Unsupported type at $path: $type")
         }
     }
+
+    internal fun readValueForInstantiator(
+        reader: DocumentValueReader,
+        targetType: Type,
+        property: DocumentProperty?,
+        path: String,
+    ): Any? = readValue(reader, targetType, property, path)
 
     private fun readClass(reader: DocumentValueReader, type: Class<*>, path: String): Any? {
         if (Node::class.java.isAssignableFrom(type) || type == Any::class.java) {

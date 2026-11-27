@@ -43,6 +43,7 @@ public open class YamlMapper internal constructor(
         /**
          * 创建 YAML Mapper 构建器。
          */
+        @JvmStatic
         public fun builder(): YamlMapperBuilder = YamlMapperBuilder()
     }
 }

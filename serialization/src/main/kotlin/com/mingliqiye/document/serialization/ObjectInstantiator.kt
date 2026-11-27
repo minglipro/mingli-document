@@ -32,4 +32,20 @@ public fun interface ObjectInstantiator {
      * @param type 目标类型
      */
     public fun canInstantiate(type: Class<*>): Boolean = true
+
+    /**
+     * 流式创建目标类型实例。
+     *
+     * 返回 `null` 表示不处理；默认实现不读取流。
+     *
+     * @param reader 文档读取器
+     * @param type 目标类型
+     * @param context 流式实例化上下文
+     * @return 实例；不处理时返回 `null`
+     */
+    public fun instantiate(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        context: StreamingInstantiationContext,
+    ): Any? = null
 }
