@@ -21,6 +21,6 @@ import kotlin.reflect.KClass
     AnnotationTarget.PROPERTY_SETTER,
     AnnotationTarget.FUNCTION,
 )
-annotation class DocumentConverter(
+public annotation class DocumentConverter(
     val value: KClass<*>,
 )

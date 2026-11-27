@@ -11,6 +11,6 @@ package com.mingliqiye.document.annotation
     AnnotationTarget.PROPERTY,
     AnnotationTarget.FUNCTION,
 )
-annotation class DocumentName(
+public annotation class DocumentName(
     val value: String,
 )

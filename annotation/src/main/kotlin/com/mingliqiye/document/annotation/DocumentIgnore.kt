@@ -9,4 +9,4 @@ package com.mingliqiye.document.annotation
     AnnotationTarget.PROPERTY,
     AnnotationTarget.FUNCTION,
 )
-annotation class DocumentIgnore
+public annotation class DocumentIgnore
