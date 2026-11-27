@@ -95,10 +95,15 @@ items / minItems / maxItems / uniqueItems
 minimum / maximum / exclusiveMinimum / exclusiveMaximum / multipleOf
 minLength / maxLength / pattern
 allOf / anyOf / oneOf / not
+if / then / else
+contains / minContains / maxContains
+dependentRequired
+propertyNames
+format：date-time / date / time / email / hostname / ipv4 / ipv6 / uri / uuid
 本地 $ref
 ```
 
-不支持远程 `$ref`、`format`、`if/then/else` 等高级关键字。
+不支持远程 `$ref`、`dependentSchemas`、`unevaluatedProperties` 等高级关键字。
 
 ## 构建
 

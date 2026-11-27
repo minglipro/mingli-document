@@ -5,9 +5,15 @@ import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NodeType
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.json.JsonReader
 import com.mingliqiye.document.format.json.exception.JsonSchemaException
 import java.math.BigDecimal
+import java.net.URI
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.util.UUID
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
 
@@ -162,6 +168,44 @@ public class JsonSchema private constructor(
                 errors += JsonSchemaValidationError(path, "must not match the not schema")
             }
         }
+        objectSchema["if"]?.let { condition ->
+            val matches = branchErrors(condition, value, path, depth).isEmpty()
+            val branch = if (matches) objectSchema["then"] else objectSchema["else"]
+            branch?.let { validateNode(it, value, path, errors, depth + 1) }
+        }
+        if (value.type == NodeType.OBJECT) {
+            objectSchema["dependentRequired"]?.asObject()?.asMap()?.forEach { (property, requiredNames) ->
+                if (value.asObject().containsKey(property)) {
+                    requiredNames.asArray().asList().forEach { requiredName ->
+                        if (!value.asObject().containsKey(requiredName.asString())) {
+                            errors += JsonSchemaValidationError(
+                                path,
+                                "property '$property' requires '${requiredName.asString()}'",
+                            )
+                        }
+                    }
+                }
+            }
+            objectSchema["propertyNames"]?.let { nameSchema ->
+                value.asObject().keys.forEach { name ->
+                    validateNode(nameSchema, StringNode.of(name), path, errors, depth + 1)
+                }
+            }
+        }
+        if (value.type == NodeType.ARRAY) {
+            objectSchema["contains"]?.let { itemSchema ->
+                val matching = value.asArray().asList()
+                    .count { item -> branchErrors(itemSchema, item, path, depth).isEmpty() }
+                val minimum = objectSchema["minContains"]?.numberOrNull()?.value?.toInt() ?: 1
+                val maximum = objectSchema["maxContains"]?.numberOrNull()?.value?.toInt()
+                if (matching < minimum) {
+                    errors += JsonSchemaValidationError(path, "must contain at least $minimum matching items")
+                }
+                if (maximum != null && matching > maximum) {
+                    errors += JsonSchemaValidationError(path, "must contain at most $maximum matching items")
+                }
+            }
+        }
     }
 
     private fun validateNumber(
@@ -223,6 +267,48 @@ public class JsonSchema private constructor(
                 errors += JsonSchemaValidationError(path, "must match pattern $pattern")
             }
         }
+        schema["format"]?.stringOrNull()?.let { format ->
+            if (!matchesFormat(format, value)) {
+                errors += JsonSchemaValidationError(path, "must match format $format")
+            }
+        }
+    }
+
+    private fun matchesFormat(format: String, value: String): Boolean = try {
+        when (format) {
+            "date-time" -> {
+                OffsetDateTime.parse(value)
+                true
+            }
+
+            "date" -> {
+                LocalDate.parse(value)
+                true
+            }
+
+            "time" -> {
+                LocalTime.parse(value)
+                true
+            }
+
+            "email" -> EMAIL.matcher(value).matches()
+            "hostname" -> HOSTNAME.matcher(value).matches()
+            "ipv4" -> IPV4.matcher(value).matches()
+            "ipv6" -> value.contains(":") && IPV6.matcher(value).matches()
+            "uri" -> {
+                URI.create(value)
+                true
+            }
+
+            "uuid" -> {
+                UUID.fromString(value)
+                true
+            }
+
+            else -> true
+        }
+    } catch (_: RuntimeException) {
+        false
     }
 
     private fun validateArray(
@@ -379,3 +465,12 @@ public class JsonSchema private constructor(
 }
 
 private const val MAX_SCHEMA_DEPTH = 256
+
+private val EMAIL: Pattern = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")
+private val HOSTNAME: Pattern = Pattern.compile(
+    "^(?=.{1,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)*[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$",
+)
+private val IPV4: Pattern = Pattern.compile(
+    "^(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)(?:\\.(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)){3}$",
+)
+private val IPV6: Pattern = Pattern.compile("^[0-9A-Fa-f:]+$")
