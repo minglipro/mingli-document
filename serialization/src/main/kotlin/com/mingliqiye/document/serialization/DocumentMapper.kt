@@ -151,6 +151,16 @@ public abstract class DocumentMapper protected constructor(
     override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = fromNode(parseText(source), targetType)
 
     /**
+     * 为二进制格式创建 Token Reader。
+     *
+     * 返回 `null` 时回退到 Node 解析函数。
+     *
+     * @param source 二进制内容
+     * @return Token Reader 或 `null`
+     */
+    protected open fun createTokenReader(source: ByteArray): DocumentTokenReader? = null
+
+    /**
      * 将字节数组解析为 Java 实体。
      *
      * @param source 二进制内容
@@ -158,6 +168,7 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      */
     override fun <T> parse(source: ByteArray, targetType: Class<T>): T {
+        createTokenReader(source)?.let { return fromTokens(it, targetType) }
         val parser = parseBytes
             ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
         return fromNode(parser(source), targetType)
@@ -171,6 +182,7 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      */
     override fun <T> parse(source: ByteArray, targetType: DocumentTypeReference<T>): T {
+        createTokenReader(source)?.let { return fromTokens(it, targetType) }
         val parser = parseBytes
             ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
         return fromNode(parser(source), targetType)
@@ -461,6 +473,318 @@ public abstract class DocumentMapper protected constructor(
         property: DocumentProperty?,
         path: String,
     ): Any? = readValue(reader, targetType, property, path)
+
+    /**
+     * 从 Token 流反序列化为指定类型。
+     *
+     * @param reader Token 读取器
+     * @param targetType 目标类型
+     * @return Java 实体
+     */
+    public fun <T> fromTokens(reader: DocumentTokenReader, targetType: Class<T>): T {
+        @Suppress("UNCHECKED_CAST")
+        return fromTokens(reader, targetType as Type) as T
+    }
+
+    /**
+     * 从 Token 流反序列化为指定泛型类型。
+     *
+     * @param reader Token 读取器
+     * @param targetType 目标类型引用
+     * @return Java 实体
+     */
+    public fun <T> fromTokens(reader: DocumentTokenReader, targetType: DocumentTypeReference<T>): T {
+        @Suppress("UNCHECKED_CAST")
+        return fromTokens(reader, targetType.type) as T
+    }
+
+    /**
+     * 从 Token 流反序列化为指定 [Type]。
+     *
+     * @param reader Token 读取器
+     * @param targetType 目标类型
+     * @return Java 实体
+     */
+    public fun fromTokens(reader: DocumentTokenReader, targetType: Type): Any? {
+        reader.nextToken() ?: throw DocumentSerializationException("Empty token stream")
+        return readTokenValue(reader, targetType, null, "$")
+    }
+
+    private fun readTokenValue(
+        reader: DocumentTokenReader,
+        type: Type,
+        property: DocumentProperty?,
+        path: String,
+    ): Any? {
+        val token = reader.currentToken
+            ?: throw DocumentSerializationException("No current token at $path")
+        if (token == DocumentTokenType.NULL) {
+            if (type is Class<*> && type.isPrimitive) {
+                throw DocumentSerializationException("Cannot assign null to primitive type at $path")
+            }
+            return null
+        }
+        val rawType = when (type) {
+            is Class<*> -> type
+            is ParameterizedType -> type.rawType as? Class<*>
+            else -> null
+        }
+        if (rawType != null) {
+            val needsNode = propertyDeserializer(property) != null ||
+                findDeserializer(rawType) != null ||
+                objectInstantiator?.canInstantiate(rawType) == true
+            if (needsNode) {
+                return deserializeValue(TokenTreeReader.readNode(reader), type, path, property)
+            }
+        }
+        return when (type) {
+            is Class<*> -> readTokenClass(reader, type, path)
+            is ParameterizedType -> readTokenParameterized(reader, type, path)
+            is GenericArrayType -> readTokenArray(reader, type.genericComponentType, path)
+            is WildcardType -> {
+                val bound = type.upperBounds.firstOrNull() ?: Any::class.java
+                readTokenValue(reader, bound, property, path)
+            }
+
+            is TypeVariable<*> -> {
+                val bound = type.bounds.firstOrNull() ?: Any::class.java
+                readTokenValue(reader, bound, property, path)
+            }
+
+            else -> throw DocumentSerializationException("Unsupported type at $path: $type")
+        }
+    }
+
+    private fun readTokenClass(reader: DocumentTokenReader, type: Class<*>, path: String): Any? {
+        if (Node::class.java.isAssignableFrom(type) || type == Any::class.java) {
+            return TokenTreeReader.readNode(reader)
+        }
+        return when {
+            type == String::class.java || type == CharSequence::class.java -> readTokenString(reader, path)
+            type == Char::class.java || type == Character::class.java -> {
+                val value = readTokenString(reader, path)
+                if (value.length != 1) {
+                    throw DocumentSerializationException("Expected single character at $path")
+                }
+                value[0]
+            }
+
+            type == Boolean::class.java || type == java.lang.Boolean::class.java -> readTokenBoolean(reader, path)
+            type == Byte::class.java || type == java.lang.Byte::class.java -> readTokenNumber(reader, type, path)
+            type == Short::class.java || type == java.lang.Short::class.java -> readTokenNumber(reader, type, path)
+            type == Int::class.java || type == java.lang.Integer::class.java -> readTokenNumber(reader, type, path)
+            type == Long::class.java || type == java.lang.Long::class.java -> readTokenNumber(reader, type, path)
+            type == Float::class.java || type == java.lang.Float::class.java -> readTokenNumber(reader, type, path)
+            type == Double::class.java || type == java.lang.Double::class.java -> readTokenNumber(reader, type, path)
+            type == BigDecimal::class.java -> readTokenNumber(reader, type, path)
+            type == BigInteger::class.java -> readTokenNumber(reader, type, path)
+            type == ByteArray::class.java -> readTokenBinary(reader, path)
+            type.isEnum -> enumValue(type, readTokenString(reader, path), path)
+            type.isArray -> readTokenArray(reader, type.componentType, path)
+            Collection::class.java.isAssignableFrom(type) ->
+                readTokenCollection(reader, Any::class.java, type, path)
+
+            Map::class.java.isAssignableFrom(type) ->
+                readTokenMap(reader, String::class.java, Any::class.java, type, path)
+
+            else -> readTokenBean(reader, type, path)
+        }
+    }
+
+    private fun readTokenParameterized(
+        reader: DocumentTokenReader,
+        type: ParameterizedType,
+        path: String,
+    ): Any? {
+        val rawType = type.rawType as? Class<*>
+            ?: return readTokenValue(reader, type.rawType, null, path)
+        val arguments = type.actualTypeArguments
+        return when {
+            Collection::class.java.isAssignableFrom(rawType) ->
+                readTokenCollection(reader, arguments.firstOrNull() ?: Any::class.java, rawType, path)
+
+            Map::class.java.isAssignableFrom(rawType) ->
+                readTokenMap(
+                    reader,
+                    arguments.getOrNull(0) ?: String::class.java,
+                    arguments.getOrNull(1) ?: Any::class.java,
+                    rawType,
+                    path,
+                )
+
+            else -> deserializeValue(TokenTreeReader.readNode(reader), type, path)
+        }
+    }
+
+    private fun readTokenString(reader: DocumentTokenReader, path: String): String {
+        if (reader.currentToken != DocumentTokenType.STRING) {
+            throw DocumentSerializationException("Expected string at $path but was ${reader.currentToken}")
+        }
+        return reader.textValue ?: throw DocumentSerializationException("Missing string value at $path")
+    }
+
+    private fun readTokenBoolean(reader: DocumentTokenReader, path: String): Boolean {
+        if (reader.currentToken != DocumentTokenType.BOOLEAN) {
+            throw DocumentSerializationException("Expected boolean at $path but was ${reader.currentToken}")
+        }
+        return reader.booleanValue ?: throw DocumentSerializationException("Missing boolean value at $path")
+    }
+
+    private fun readTokenNumber(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        path: String,
+    ): Any {
+        if (reader.currentToken != DocumentTokenType.NUMBER) {
+            throw DocumentSerializationException("Expected number at $path but was ${reader.currentToken}")
+        }
+        val raw = reader.textValue ?: throw DocumentSerializationException("Missing number value at $path")
+        val node = NumberNode.ofRaw(raw)
+        return try {
+            when (type) {
+                Byte::class.java, java.lang.Byte::class.java -> node.toByte()
+                Short::class.java, java.lang.Short::class.java -> node.toShort()
+                Int::class.java, java.lang.Integer::class.java -> node.toInt()
+                Long::class.java, java.lang.Long::class.java -> node.toLong()
+                Float::class.java, java.lang.Float::class.java -> node.toFloat()
+                Double::class.java, java.lang.Double::class.java -> node.toDouble()
+                BigInteger::class.java -> node.toBigInteger()
+                else -> node.value
+            }
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot convert number '$raw' to ${type.name} at $path", e)
+        }
+    }
+
+    private fun readTokenBinary(reader: DocumentTokenReader, path: String): ByteArray = when (reader.currentToken) {
+        DocumentTokenType.BINARY ->
+            reader.binaryValue
+                ?: throw DocumentSerializationException("Missing binary value at $path")
+
+        DocumentTokenType.STRING -> Base64.getDecoder().decode(
+            reader.textValue ?: throw DocumentSerializationException("Missing binary value at $path"),
+        )
+
+        else -> throw DocumentSerializationException("Expected binary at $path but was ${reader.currentToken}")
+    }
+
+    private fun readTokenBean(reader: DocumentTokenReader, type: Class<*>, path: String): Any {
+        if (reader.currentToken != DocumentTokenType.START_OBJECT) {
+            throw DocumentSerializationException("Expected object at $path but was ${reader.currentToken}")
+        }
+        val instance = instantiate(type)
+        val metadata = beanMetadata(type)
+        val seen = HashSet<String>()
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of object at $path")
+                DocumentTokenType.END_OBJECT -> break
+                DocumentTokenType.FIELD_NAME -> {
+                    val fieldName = reader.textValue
+                        ?: throw DocumentSerializationException("Missing field name at $path")
+                    val accessor = metadata.property(fieldName)
+                    reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
+                    if (accessor != null && accessor.canWrite) {
+                        seen.add(fieldName)
+                        accessor.write(
+                            instance,
+                            readTokenValue(reader, accessor.valueType, accessor.metadata, "$path.$fieldName"),
+                        )
+                    } else {
+                        if (config.failOnUnknownFields && fieldName !in metadata.knownFields) {
+                            throw DocumentSerializationException(
+                                "Unknown field '$fieldName' for ${type.name} at $path",
+                            )
+                        }
+                        TokenTreeReader.skipValue(reader)
+                    }
+                }
+
+                else -> throw DocumentSerializationException("Expected field name or end of object at $path")
+            }
+        }
+        applyMissingFields(instance, metadata, seen, path)
+        return instance
+    }
+
+    private fun readTokenCollection(
+        reader: DocumentTokenReader,
+        elementType: Type,
+        rawType: Class<*>,
+        path: String,
+    ): Any {
+        if (reader.currentToken != DocumentTokenType.START_ARRAY) {
+            throw DocumentSerializationException("Expected array at $path but was ${reader.currentToken}")
+        }
+        val collection = newCollection(rawType)
+        var index = 0
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of array at $path")
+                DocumentTokenType.END_ARRAY -> return collection
+                else -> {
+                    collection.add(readTokenValue(reader, elementType, null, "$path[$index]"))
+                    index++
+                }
+            }
+        }
+    }
+
+    private fun readTokenMap(
+        reader: DocumentTokenReader,
+        keyType: Type,
+        valueType: Type,
+        rawType: Class<*>,
+        path: String,
+    ): Any {
+        if (reader.currentToken != DocumentTokenType.START_OBJECT) {
+            throw DocumentSerializationException("Expected object at $path but was ${reader.currentToken}")
+        }
+        val map = newMap(rawType)
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of object at $path")
+                DocumentTokenType.END_OBJECT -> return map
+                DocumentTokenType.FIELD_NAME -> {
+                    val key = deserializeMapKey(
+                        reader.textValue ?: throw DocumentSerializationException("Missing field name at $path"),
+                        keyType,
+                        path,
+                    )
+                    reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
+                    map[key] = readTokenValue(reader, valueType, null, "$path.$key")
+                }
+
+                else -> throw DocumentSerializationException("Expected field name or end of object at $path")
+            }
+        }
+    }
+
+    private fun readTokenArray(
+        reader: DocumentTokenReader,
+        componentType: Type,
+        path: String,
+    ): Any {
+        if (reader.currentToken != DocumentTokenType.START_ARRAY) {
+            throw DocumentSerializationException("Expected array at $path but was ${reader.currentToken}")
+        }
+        val values = ArrayList<Any?>()
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of array at $path")
+                DocumentTokenType.END_ARRAY -> {
+                    val componentClass = rawClass(componentType)
+                    val result = ReflectArray.newInstance(componentClass, values.size)
+                    for (index in values.indices) {
+                        ReflectArray.set(result, index, values[index])
+                    }
+                    return result
+                }
+
+                else -> values.add(readTokenValue(reader, componentType, null, "$path[${values.size}]"))
+            }
+        }
+    }
 
     private fun readClass(reader: DocumentValueReader, type: Class<*>, path: String): Any? {
         if (Node::class.java.isAssignableFrom(type) || type == Any::class.java) {
