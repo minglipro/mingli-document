@@ -37,7 +37,7 @@ Java Bean / Kotlin data class
 Maven 坐标：
 
 - 普通模块：`com.mingliqiye.document:<module>`
-- 格式模块：`com.mingliqiye.document.format:<module>`
+- 格式模块：`com.mingliqiye.document.format:<格式名>`（如 `json`、`yaml`）
 
 版本来自项目根 `gradle.properties` 的 `projectVersion`。
 
@@ -50,27 +50,27 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:format-json:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:json:1.0-SNAPSHOT")
 
     // 需要 Kotlin data class 时
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
 }
 ```
 
-常用格式模块：
+常用格式模块（artifactId）：
 
 ```text
-format-json
-format-yaml
-format-xml
-format-properties
-format-toml
-format-csv
-format-ion
-format-cbor
-format-smile
-format-avro
-format-protobuf
+json
+yaml
+xml
+properties
+toml
+csv
+ion
+cbor
+smile
+avro
+protobuf
 ```
 
 ## 快速开始

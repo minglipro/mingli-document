@@ -47,6 +47,11 @@ allprojects {
             publications {
                 create<MavenPublication>("mavenJava") {
                     from(components["java"])
+                    artifactId = if (project.name.startsWith("format-")) {
+                        project.name.removePrefix("format-")
+                    } else {
+                        project.name
+                    }
                     artifact(tasks.named("javaDocJar"))
                     artifact(tasks.named("kotlinDocJar"))
                     pom {

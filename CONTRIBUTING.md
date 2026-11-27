@@ -243,7 +243,7 @@ gradle clean ktlintCheck build
 Maven 坐标：
 
 - 普通模块：`com.mingliqiye.document:<module>`
-- 格式模块：`com.mingliqiye.document.format:<module>`
+- 格式模块：`com.mingliqiye.document.format:<格式名>`（如 `json`、`yaml`）
 
 版本与分组在根 `gradle.properties`：
 
