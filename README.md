@@ -1055,22 +1055,25 @@ Avro/Protobuf 目前是 Schema 适配层，完整 wire 编解码后续接入。
 
 | Benchmark | 本项目 | Jackson |
 |---|---:|---:|
-| JSON 解析树 | 0.671 ms | 0.304 ms |
-| JSON → Bean | 1.036 ms | 0.309 ms |
-| JSON → data class | 1.089 ms | 0.309 ms |
-| Bean → JSON | 0.724 ms | 0.203 ms |
+| JSON 解析树 | 0.475 ms | 0.328 ms |
+| JSON → Bean | 0.785 ms | 0.316 ms |
+| JSON → data class | 0.816 ms | 0.316 ms |
+| Bean → JSON | 0.774 ms | 0.217 ms |
 
-Token 直读/直写（CBOR、1000 个 Kotlin data class）：
+Token 直读/直写：
 
-| Benchmark | Token 路径 | Node 路径 | 提升 |
+| Benchmark | Token 路径 | Node/旧直读路径 | 提升 |
 |---|---:|---:|---:|
-| CBOR → Bean | 1.028 ms | 1.328 ms | 约 23% |
-| Bean → CBOR | 0.701 ms | 1.432 ms | 约 51% |
+| JSON → Java Bean | 0.812 ms | 0.907 ms | 约 10% |
+| JSON → Kotlin data class | 0.806 ms | 0.839 ms | 约 4% |
+| CBOR → Bean | 0.917 ms | 1.175 ms | 约 22% |
+| Bean → CBOR | 0.716 ms | 1.316 ms | 约 46% |
 
 说明：
 
-- JSON Token 路径：`JsonMapper.parse` / `format` 已走 `JsonTokenReader` / `JsonStreamWriter`
-- CBOR Token 路径：`CborMapper.parse(ByteArray)` / `formatBytes` 走 Token Reader/Writer
+- JSON Token 读取已做 **Token 对象零分配** 和 **数字原地解析**：`intValue/longValue` 不生成数字字符串
+- JSON Token 路径目前与旧 `JsonValueReader` 直读基本持平，Java Bean 场景略快
+- CBOR Token 路径通过省掉 Node 树获得明显收益
 - 数字受 JVM、硬件与 Gradle 构建环境影响，只用于同轮相对比较
 - 详细方法和结果见 [benchmarks/README.md](benchmarks/README.md)
 

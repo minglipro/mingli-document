@@ -1,5 +1,7 @@
 package com.mingliqiye.document.serialization
 
+import java.math.BigDecimal
+
 /**
  * 流式文档 Token 读取器。
  *
@@ -18,6 +20,22 @@ public interface DocumentTokenReader {
 
     /** 当前 Token 的二进制值。 */
     public val binaryValue: ByteArray?
+
+    /** 当前 NUMBER Token 的 int 值。 */
+    public fun intValue(): Int = textValue?.toIntOrNull()
+        ?: throw IllegalStateException("Current token is not a valid int")
+
+    /** 当前 NUMBER Token 的 long 值。 */
+    public fun longValue(): Long = textValue?.toLongOrNull()
+        ?: throw IllegalStateException("Current token is not a valid long")
+
+    /** 当前 NUMBER Token 的 double 值。 */
+    public fun doubleValue(): Double = textValue?.toDoubleOrNull()
+        ?: throw IllegalStateException("Current token is not a valid double")
+
+    /** 当前 NUMBER Token 的 decimal 值。 */
+    public fun decimalValue(): BigDecimal = textValue?.let(::BigDecimal)
+        ?: throw IllegalStateException("Current token is not a valid decimal")
 
     /**
      * 前进到下一个 Token。

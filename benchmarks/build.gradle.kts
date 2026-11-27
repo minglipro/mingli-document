@@ -27,5 +27,9 @@ tasks.register<JavaExec>("jmh") {
     javaLauncher.set(javaToolchains.launcherFor {
         languageVersion.set(JavaLanguageVersion.of(8))
     })
-    args = listOf("-rf", "text", "-wi", "3", "-i", "5", "-f", "1")
+    val configuredArgs = (project.findProperty("jmhArgs") as String?)
+        ?.trim()
+        ?.split(Regex("\\s+"))
+        ?.filter { it.isNotEmpty() }
+    args = configuredArgs ?: listOf("-rf", "text", "-wi", "3", "-i", "5", "-f", "1")
 }

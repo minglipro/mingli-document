@@ -32,8 +32,9 @@ import kotlin.reflect.jvm.javaType
 internal object KotlinDataClassInstantiator : ObjectInstantiator {
 
     private val cache = ConcurrentHashMap<Class<*>, DataClassMetadata>()
+    private val dataClassTypes = ConcurrentHashMap<Class<*>, Boolean>()
 
-    override fun canInstantiate(type: Class<*>): Boolean = type.kotlin.isData
+    override fun canInstantiate(type: Class<*>): Boolean = dataClassTypes.computeIfAbsent(type) { it.kotlin.isData }
 
     override fun instantiate(
         reader: DocumentValueReader,

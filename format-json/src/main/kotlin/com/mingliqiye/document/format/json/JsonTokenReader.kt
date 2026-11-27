@@ -1,17 +1,15 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.format.json.exception.JsonParseException
-import com.mingliqiye.document.serialization.DocumentToken
 import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.DocumentTokenType
+import java.math.BigDecimal
 
 private const val OBJECT_FIRST_FIELD = 0
-private const val OBJECT_FIELD = 1
 private const val OBJECT_VALUE = 2
 private const val OBJECT_AFTER_VALUE = 3
 
 private const val ARRAY_FIRST_VALUE = 0
-private const val ARRAY_VALUE = 1
 private const val ARRAY_AFTER_VALUE = 2
 
 /**
@@ -27,20 +25,51 @@ internal class JsonTokenReader(
     private var position = 0
     private var rootStarted = false
     private var rootFinished = false
-    private val containers = ArrayList<JsonTokenContainer>()
-    private var current: DocumentToken? = null
+    private var depth = 0
+    private var containerArrays = BooleanArray(8)
+    private var containerPhases = IntArray(8)
+    private var currentType: DocumentTokenType? = null
+    private var currentText: String? = null
+    private var currentBoolean: Boolean? = null
+    private var numberStart = -1
+    private var numberEnd = -1
 
     override val currentToken: DocumentTokenType?
-        get() = current?.type
+        get() = currentType
 
     override val textValue: String?
-        get() = current?.text
+        get() = currentText ?: if (numberStart >= 0 && numberEnd > numberStart) {
+            source.substring(numberStart, numberEnd)
+        } else {
+            null
+        }
 
     override val booleanValue: Boolean?
-        get() = current?.booleanValue
+        get() = currentBoolean
 
     override val binaryValue: ByteArray?
-        get() = current?.binaryValue
+        get() = null
+
+    override fun intValue(): Int {
+        if (numberStart >= 0 && isIntegerNumber()) {
+            return parseInt(numberStart, numberEnd)
+        }
+        return decimalValue().intValueExact()
+    }
+
+    override fun longValue(): Long {
+        if (numberStart >= 0 && isIntegerNumber()) {
+            return parseLong(numberStart, numberEnd)
+        }
+        return decimalValue().longValueExact()
+    }
+
+    override fun doubleValue(): Double = textValue?.toDouble()
+        ?: throw IllegalStateException("Current token is not a valid double")
+
+    override fun decimalValue(): BigDecimal = BigDecimal(
+        textValue ?: throw IllegalStateException("Current token is not a valid decimal"),
+    )
 
     override fun nextToken(): DocumentTokenType? {
         if (rootFinished) {
@@ -49,97 +78,75 @@ internal class JsonTokenReader(
         while (true) {
             if (!rootStarted) {
                 rootStarted = true
-                return emit(parseValueStart())
+                return parseValueStart()
             }
-            val container = containers.lastOrNull()
-            if (container == null) {
+            if (depth == 0) {
                 rootFinished = true
                 validateEnd()
                 return null
             }
-            if (container.array) {
-                when (container.phase) {
+            if (containerArrays[depth - 1]) {
+                when (containerPhases[depth - 1]) {
                     ARRAY_FIRST_VALUE -> {
                         skipWhitespace()
                         if (consume(']')) {
-                            containers.removeAt(containers.lastIndex)
-                            return emit(DocumentToken.endArray())
+                            depth--
+                            return emit(DocumentTokenType.END_ARRAY)
                         }
-                        container.phase = ARRAY_AFTER_VALUE
-                        return emit(parseValueStart())
-                    }
-
-                    ARRAY_VALUE -> {
-                        skipWhitespace()
-                        expect(',')
-                        skipWhitespace()
-                        if (peek() == ']') {
-                            throw error("Trailing comma in array")
-                        }
-                        container.phase = ARRAY_AFTER_VALUE
-                        return emit(parseValueStart())
+                        containerPhases[depth - 1] = ARRAY_AFTER_VALUE
+                        return parseValueStart()
                     }
 
                     else -> {
                         skipWhitespace()
                         if (consume(']')) {
-                            containers.removeAt(containers.lastIndex)
-                            return emit(DocumentToken.endArray())
+                            depth--
+                            return emit(DocumentTokenType.END_ARRAY)
                         }
                         expect(',')
                         skipWhitespace()
                         if (peek() == ']') {
                             throw error("Trailing comma in array")
                         }
-                        container.phase = ARRAY_FIRST_VALUE
+                        containerPhases[depth - 1] = ARRAY_FIRST_VALUE
                     }
                 }
             } else {
-                when (container.phase) {
+                when (containerPhases[depth - 1]) {
                     OBJECT_FIRST_FIELD -> {
                         skipWhitespace()
                         if (consume('}')) {
-                            containers.removeAt(containers.lastIndex)
-                            return emit(DocumentToken.endObject())
+                            depth--
+                            return emit(DocumentTokenType.END_OBJECT)
                         }
-                        container.phase = OBJECT_VALUE
-                        return emit(parseFieldName())
-                    }
-
-                    OBJECT_FIELD -> {
-                        skipWhitespace()
-                        if (consume('}')) {
-                            containers.removeAt(containers.lastIndex)
-                            return emit(DocumentToken.endObject())
-                        }
-                        container.phase = OBJECT_VALUE
-                        return emit(parseFieldName())
+                        containerPhases[depth - 1] = OBJECT_VALUE
+                        return parseFieldName()
                     }
 
                     OBJECT_VALUE -> {
-                        container.phase = OBJECT_AFTER_VALUE
-                        return emit(parseValueStart())
+                        containerPhases[depth - 1] = OBJECT_AFTER_VALUE
+                        return parseValueStart()
                     }
 
                     else -> {
                         skipWhitespace()
                         if (consume('}')) {
-                            containers.removeAt(containers.lastIndex)
-                            return emit(DocumentToken.endObject())
+                            depth--
+                            return emit(DocumentTokenType.END_OBJECT)
                         }
                         expect(',')
                         skipWhitespace()
                         if (peek() == '}') {
                             throw error("Trailing comma in object")
                         }
-                        container.phase = OBJECT_FIRST_FIELD
+                        containerPhases[depth - 1] = OBJECT_FIRST_FIELD
                     }
                 }
             }
         }
     }
 
-    private fun parseValueStart(): DocumentToken {
+    private fun parseValueStart(): DocumentTokenType {
         skipWhitespace()
         if (!hasNext()) {
             throw error("Unexpected end of input")
@@ -147,47 +154,60 @@ internal class JsonTokenReader(
         return when (val ch = source[position]) {
             '{' -> {
                 position++
-                containers.add(JsonTokenContainer(array = false))
-                DocumentToken.startObject()
+                pushContainer(array = false)
+                emit(DocumentTokenType.START_OBJECT)
             }
 
             '[' -> {
                 position++
-                containers.add(JsonTokenContainer(array = true))
-                DocumentToken.startArray()
+                pushContainer(array = true)
+                emit(DocumentTokenType.START_ARRAY)
             }
 
-            '"' -> DocumentToken.string(parseString())
+            '"' -> emit(DocumentTokenType.STRING, text = parseString())
 
             't' -> {
                 expectLiteral("true")
-                DocumentToken.boolean(true)
+                emit(DocumentTokenType.BOOLEAN, booleanValue = true)
             }
 
             'f' -> {
                 expectLiteral("false")
-                DocumentToken.boolean(false)
+                emit(DocumentTokenType.BOOLEAN, booleanValue = false)
             }
 
             'n' -> {
                 expectLiteral("null")
-                DocumentToken.nullValue()
+                emit(DocumentTokenType.NULL)
             }
 
-            '-', in '0'..'9' -> DocumentToken.number(parseNumberRaw())
+            '-', in '0'..'9' -> {
+                scanNumber()
+                emitNumber()
+            }
 
             else -> throw error("Unexpected character '$ch'")
         }
     }
 
-    private fun parseFieldName(): DocumentToken {
+    private fun pushContainer(array: Boolean) {
+        if (depth == containerArrays.size) {
+            containerArrays = containerArrays.copyOf(depth * 2)
+            containerPhases = containerPhases.copyOf(depth * 2)
+        }
+        containerArrays[depth] = array
+        containerPhases[depth] = 0
+        depth++
+    }
+
+    private fun parseFieldName(): DocumentTokenType {
         if (!hasNext() || source[position] != '"') {
             throw error("Expected object key")
         }
         val key = parseString()
         skipWhitespace()
         expect(':')
-        return DocumentToken.fieldName(key)
+        return emit(DocumentTokenType.FIELD_NAME, text = key)
     }
 
     private fun parseString(): String {
@@ -261,7 +281,7 @@ internal class JsonTokenReader(
         return code.toChar()
     }
 
-    private fun parseNumberRaw(): String {
+    private fun scanNumber() {
         val start = position
         consume('-')
         if (!hasNext()) {
@@ -294,7 +314,47 @@ internal class JsonTokenReader(
             }
             consumeDigits()
         }
-        return source.substring(start, position)
+        numberStart = start
+        numberEnd = position
+    }
+
+    private fun isIntegerNumber(): Boolean {
+        for (index in numberStart until numberEnd) {
+            when (source[index]) {
+                '.', 'e', 'E' -> return false
+            }
+        }
+        return true
+    }
+
+    private fun parseInt(start: Int, end: Int): Int {
+        var index = start
+        var negative = false
+        if (index < end && source[index] == '-') {
+            negative = true
+            index++
+        }
+        var value = 0
+        while (index < end) {
+            value = value * 10 + (source[index] - '0')
+            index++
+        }
+        return if (negative) -value else value
+    }
+
+    private fun parseLong(start: Int, end: Int): Long {
+        var index = start
+        var negative = false
+        if (index < end && source[index] == '-') {
+            negative = true
+            index++
+        }
+        var value = 0L
+        while (index < end) {
+            value = value * 10 + (source[index] - '0')
+            index++
+        }
+        return if (negative) -value else value
     }
 
     private fun consumeDigits() {
@@ -395,9 +455,24 @@ internal class JsonTokenReader(
         }
     }
 
-    private fun emit(token: DocumentToken): DocumentTokenType {
-        current = token
-        return token.type
+    private fun emit(
+        type: DocumentTokenType,
+        text: String? = null,
+        booleanValue: Boolean? = null,
+    ): DocumentTokenType {
+        currentType = type
+        currentText = text
+        currentBoolean = booleanValue
+        numberStart = -1
+        numberEnd = -1
+        return type
+    }
+
+    private fun emitNumber(): DocumentTokenType {
+        currentType = DocumentTokenType.NUMBER
+        currentText = null
+        currentBoolean = null
+        return DocumentTokenType.NUMBER
     }
 
     private fun error(message: String): JsonParseException {

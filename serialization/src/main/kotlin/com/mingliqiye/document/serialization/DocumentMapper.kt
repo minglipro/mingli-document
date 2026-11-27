@@ -545,7 +545,10 @@ public abstract class DocumentMapper protected constructor(
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path, property)
             }
             val instantiator = objectInstantiator
-            if (instantiator != null && instantiator.canInstantiate(rawType)) {
+            if (token == DocumentTokenType.START_OBJECT &&
+                instantiator != null &&
+                instantiator.canInstantiate(rawType)
+            ) {
                 val streamed = instantiator.instantiate(
                     reader,
                     rawType,
@@ -658,21 +661,43 @@ public abstract class DocumentMapper protected constructor(
         if (reader.currentToken != DocumentTokenType.NUMBER) {
             throw DocumentSerializationException("Expected number at $path but was ${reader.currentToken}")
         }
-        val raw = reader.textValue ?: throw DocumentSerializationException("Missing number value at $path")
-        val node = NumberNode.ofRaw(raw)
         return try {
             when (type) {
-                Byte::class.java, java.lang.Byte::class.java -> node.toByte()
-                Short::class.java, java.lang.Short::class.java -> node.toShort()
-                Int::class.java, java.lang.Integer::class.java -> node.toInt()
-                Long::class.java, java.lang.Long::class.java -> node.toLong()
-                Float::class.java, java.lang.Float::class.java -> node.toFloat()
-                Double::class.java, java.lang.Double::class.java -> node.toDouble()
-                BigInteger::class.java -> node.toBigInteger()
-                else -> node.value
+                Int::class.java, java.lang.Integer::class.java -> reader.intValue()
+
+                Long::class.java, java.lang.Long::class.java -> reader.longValue()
+
+                Double::class.java, java.lang.Double::class.java -> reader.doubleValue()
+
+                BigDecimal::class.java -> reader.decimalValue()
+
+                Byte::class.java, java.lang.Byte::class.java -> {
+                    val raw = reader.textValue ?: throw DocumentSerializationException("Missing number value at $path")
+                    raw.toByteOrNull() ?: BigDecimal(raw).byteValueExact()
+                }
+
+                Short::class.java, java.lang.Short::class.java -> {
+                    val raw = reader.textValue ?: throw DocumentSerializationException("Missing number value at $path")
+                    raw.toShortOrNull() ?: BigDecimal(raw).shortValueExact()
+                }
+
+                Float::class.java, java.lang.Float::class.java -> {
+                    val raw = reader.textValue ?: throw DocumentSerializationException("Missing number value at $path")
+                    raw.toFloatOrNull() ?: BigDecimal(raw).toFloat()
+                }
+
+                BigInteger::class.java -> {
+                    val raw = reader.textValue ?: throw DocumentSerializationException("Missing number value at $path")
+                    raw.toBigIntegerOrNull() ?: BigDecimal(raw).toBigIntegerExact()
+                }
+
+                else -> reader.decimalValue()
             }
         } catch (e: Exception) {
-            throw DocumentSerializationException("Cannot convert number '$raw' to ${type.name} at $path", e)
+            throw DocumentSerializationException(
+                "Cannot convert number '${reader.textValue}' to ${type.name} at $path",
+                e,
+            )
         }
     }
 
@@ -694,7 +719,8 @@ public abstract class DocumentMapper protected constructor(
         }
         val instance = instantiate(type)
         val metadata = beanMetadata(type)
-        val seen = HashSet<String>()
+        val trackSeen = config.missingFieldPolicy != MissingFieldPolicy.KEEP_DEFAULT
+        val seen: MutableSet<String>? = if (trackSeen) HashSet() else null
         while (true) {
             when (reader.nextToken()) {
                 null -> throw DocumentSerializationException("Unexpected end of object at $path")
@@ -705,7 +731,7 @@ public abstract class DocumentMapper protected constructor(
                     val accessor = metadata.property(fieldName)
                     reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
                     if (accessor != null && accessor.canWrite) {
-                        seen.add(fieldName)
+                        seen?.add(fieldName)
                         accessor.write(
                             instance,
                             readTokenValue(reader, accessor.valueType, accessor.metadata, "$path.$fieldName"),
@@ -723,7 +749,9 @@ public abstract class DocumentMapper protected constructor(
                 else -> throw DocumentSerializationException("Expected field name or end of object at $path")
             }
         }
-        applyMissingFields(instance, metadata, seen, path)
+        if (trackSeen) {
+            applyMissingFields(instance, metadata, seen ?: emptySet(), path)
+        }
         return instance
     }
 
