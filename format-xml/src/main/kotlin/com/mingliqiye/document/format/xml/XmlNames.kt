@@ -4,7 +4,8 @@ package com.mingliqiye.document.format.xml
  * XML 名称编码/解码。
  *
  * Java 字段名不一定满足 XML 名称规则，非法字符编码为 `_xHHHH_`。
- * 命名空间感知模式下使用 [encodeQualified] 保留 `prefix:local` 形式的冒号。
+ * 命名空间感知模式下使用 [encodeQualified] 保留 `prefix:local` 形式的冒号；
+ * Clark 名称模式使用 [clark] / [splitClark] 在 `{uri}local` 与名称段之间转换。
  */
 internal object XmlNames {
 
@@ -60,5 +61,27 @@ internal object XmlNames {
      */
     fun decode(name: String): String = escapeRegex.replace(name) { match ->
         match.groupValues[1].toInt(16).toChar().toString()
+    }
+
+    /**
+     * 拼装 Clark 名称；URI 为空时返回普通本地名。
+     */
+    fun clark(uri: String?, localName: String): String = if (uri.isNullOrEmpty()) localName else "{$uri}$localName"
+
+    /**
+     * 拆分 Clark 名称。
+     *
+     * @return 第一项为 `null` 表示普通名称；否则为 URI，第二项为本地名
+     * @throws IllegalArgumentException `{` 开头但缺少 URI 或本地名时抛出
+     */
+    fun splitClark(name: String): Pair<String?, String> {
+        if (!name.startsWith("{")) {
+            return null to name
+        }
+        val close = name.indexOf('}')
+        if (close <= 1 || close == name.length - 1) {
+            throw IllegalArgumentException("Invalid Clark name '$name'")
+        }
+        return name.substring(1, close) to name.substring(close + 1)
     }
 }

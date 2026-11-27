@@ -22,35 +22,56 @@ import javax.xml.parsers.DocumentBuilderFactory
  *
  * 识别 [XmlWriter] 生成的 `type` / `nil` 属性；没有类型属性时按元素结构推断。
  *
- * 启用属性映射（[attributePrefix] 非空）时：
- * - 对象元素的 XML attribute 映射为对象字段，键名为 `attributePrefix + 属性名`；
- * - `type` / `nil` 协议属性保留给类型协议，不映射为字段；
- * - 属性值没有类型标记，按 `true` / `false` / 数字 / 字符串顺序推断；
- * - 命名空间感知（[namespaceAware]）时属性名保留 `prefix:local` 形式，
- *   `xmlns` 声明同样作为属性字段保留，命名空间用“前缀限定名 + `xmlns` 字段”表示。
+ * 启用属性映射（[attributePrefix] 非空）时，XML attribute 映射为对象字段
+ * `attributePrefix + 名称`；`type` / `nil` 协议属性保留给类型协议，不映射为字段。
+ * 带属性的标量元素包装为 `{ 属性字段..., textKey: 标量 }` 对象，
+ * 带属性的数组元素包装为 `{ 属性字段..., itemsKey: 数组 }` 对象；
+ * 无属性的标量/数组保持原有节点类型。
  *
- * 只有对象节点承载属性：标量节点与数组节点上的 XML attribute 仍会被忽略。
- * 混合内容沿用原有推断行为：元素同时包含文本与子元素时按对象/数组处理并忽略文本。
- * 命名空间感知下若 [attributePrefix] 为 `null`，则 `xmlns` 声明无法保留。
+ * 命名空间模式为 [XmlNamespaceMode.CLARK] 时，元素/属性名用 `{uri}local` 表示，
+ * `xmlns` 声明不映射为字段（URI 已内嵌在名称中）；[XmlNamespaceMode.PREFIX] 模式
+ * 继续保留 `prefix:local` 与 `xmlns` 属性字段。CLARK 模式要求 [namespaceAware] 为 `true`。
+ *
+ * 混合内容（直接文本 + 子元素）按 [mixedContentPolicy] 处理：PRESERVE 时直接文本
+ * 首尾裁剪后写入 [textKey] 字段（与子元素相对顺序不保留），REJECT 时抛 [XmlParseException]。
+ * 只有空白直接文本视为格式化缩进，不产生文本字段。
  *
  * @param source XML 文本
  * @param attributePrefix 属性字段前缀；`null` 表示读取时忽略 XML attribute
  * @param namespaceAware 是否启用命名空间感知
+ * @param namespaceMode 命名空间名称表示模式
+ * @param textKey 文本字段名，默认 `#text`
+ * @param itemsKey 带属性数组的数组字段名，默认 `#items`
+ * @param mixedContentPolicy 混合内容策略
  */
 public class XmlReader(
     private val source: String,
     private val attributePrefix: String? = null,
     private val namespaceAware: Boolean = false,
+    private val namespaceMode: XmlNamespaceMode = XmlNamespaceMode.PREFIX,
+    private val textKey: String = XmlConfig.DEFAULT_TEXT_KEY,
+    private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
+    private val mixedContentPolicy: XmlMixedContentPolicy = XmlMixedContentPolicy.PRESERVE,
 ) {
 
     init {
         require(attributePrefix?.isEmpty() != true) { "attributePrefix must not be empty" }
+        require(textKey.isNotEmpty()) { "textKey must not be empty" }
+        require(itemsKey.isNotEmpty()) { "itemsKey must not be empty" }
+        require(textKey != itemsKey) { "textKey and itemsKey must be different" }
+        require(
+            attributePrefix == null ||
+                (!textKey.startsWith(attributePrefix) && !itemsKey.startsWith(attributePrefix)),
+        ) { "textKey and itemsKey must not start with attributePrefix" }
+        require(namespaceMode != XmlNamespaceMode.CLARK || namespaceAware) {
+            "CLARK namespace mode requires namespaceAware"
+        }
     }
 
     /**
      * 解析并返回文档树。
      *
-     * @throws XmlParseException XML 格式非法时抛出
+     * @throws XmlParseException XML 格式非法或混合内容被拒绝时抛出
      */
     public fun read(): Node {
         val factory = DocumentBuilderFactory.newInstance()
@@ -75,41 +96,70 @@ public class XmlReader(
     }
 
     private fun toNode(element: Element): Node {
+        val attributes = attributeFields(element)
         if (element.getAttribute(PROTOCOL_NIL) == "true") {
-            return NullNode.INSTANCE
+            return wrapScalar(element, attributes, NullNode.INSTANCE)
         }
         return when (element.getAttribute(PROTOCOL_TYPE)) {
-            "object" -> toObjectNode(element)
-            "array" -> toArrayNode(element)
-            "string" -> StringNode.of(element.textContent)
-            "number" -> toNumberNode(element.textContent)
-            "boolean" -> toBooleanNode(element.textContent)
-            "binary" -> BinaryNode.of(Base64.getDecoder().decode(element.textContent.trim()))
-            else -> inferNode(element)
+            "object" -> toObjectNode(element, attributes)
+            "array" -> toArrayNode(element, attributes)
+            "string" -> wrapScalar(element, attributes, StringNode.of(element.textContent))
+            "number" -> wrapScalar(element, attributes, toNumberNode(element.textContent))
+            "boolean" -> wrapScalar(element, attributes, toBooleanNode(element.textContent))
+            "binary" -> wrapScalar(element, attributes, BinaryNode.of(Base64.getDecoder().decode(element.textContent.trim())))
+            else -> inferNode(element, attributes)
         }
     }
 
-    private fun inferNode(element: Element): Node {
+    /**
+     * 属性 + 标量文本包装；没有属性时保持标量节点原样。
+     */
+    private fun wrapScalar(
+        element: Element,
+        attributes: List<Pair<String, Node>>,
+        scalar: Node,
+    ): Node {
+        if (attributes.isEmpty()) {
+            return scalar
+        }
+        val fields = LinkedHashMap<String, Node>(attributes.size + 1)
+        for ((name, value) in attributes) {
+            fields[name] = value
+        }
+        fields[textKey] = scalar
+        return ObjectNode.from(fields)
+    }
+
+    private fun inferNode(element: Element, attributes: List<Pair<String, Node>>): Node {
         val children = childElements(element)
-        val attributes = attributeFields(element)
         return when {
             children.isEmpty() && attributes.isEmpty() -> inferScalar(element.textContent)
-            children.isNotEmpty() && children.all { it.nodeName == "item" } -> toArrayNode(element)
+            children.isEmpty() -> {
+                val fields = LinkedHashMap<String, Node>(attributes.size + 1)
+                for ((name, value) in attributes) {
+                    fields[name] = value
+                }
+                val text = element.textContent
+                if (text.isNotEmpty()) {
+                    fields[textKey] = inferScalar(text)
+                }
+                ObjectNode.from(fields)
+            }
+
+            children.all { elementName(it) == ARRAY_ITEM_NAME } -> toArrayNode(element, attributes)
             else -> toObjectNode(element, attributes)
         }
     }
 
-    private fun toObjectNode(element: Element): ObjectNode = toObjectNode(element, attributeFields(element))
-
     private fun toObjectNode(element: Element, attributes: List<Pair<String, Node>>): ObjectNode {
         val children = childElements(element)
-        val fields = LinkedHashMap<String, Node>(attributes.size + children.size)
+        val fields = LinkedHashMap<String, Node>(attributes.size + children.size + 1)
         for ((name, value) in attributes) {
             fields[name] = value
         }
         val grouped = LinkedHashMap<String, MutableList<Node>>(children.size)
         for (child in children) {
-            val name = XmlNames.decode(child.nodeName)
+            val name = elementName(child)
             grouped.getOrPut(name) { ArrayList() }.add(toNode(child))
         }
         for ((name, values) in grouped) {
@@ -119,14 +169,54 @@ public class XmlReader(
                 ArrayNode.from(values)
             }
         }
+        containerText(element, children)?.let { fields[textKey] = it }
         return ObjectNode.from(fields)
+    }
+
+    private fun toArrayNode(element: Element, attributes: List<Pair<String, Node>>): Node {
+        val children = childElements(element)
+        val values = ArrayList<Node>(children.size)
+        for (child in children) {
+            values.add(toNode(child))
+        }
+        val text = containerText(element, children)
+        if (attributes.isEmpty() && text == null) {
+            return ArrayNode.from(values)
+        }
+        val fields = LinkedHashMap<String, Node>(attributes.size + 2)
+        for ((name, value) in attributes) {
+            fields[name] = value
+        }
+        fields[itemsKey] = ArrayNode.from(values)
+        text?.let { fields[textKey] = it }
+        return ObjectNode.from(fields)
+    }
+
+    /**
+     * 计算容器元素的文本字段；混合内容为空/仅空白时返回 `null`。
+     *
+     * @throws XmlParseException 混合内容策略为 REJECT 且存在非空白文本时抛出
+     */
+    private fun containerText(element: Element, children: List<Element>): StringNode? {
+        if (children.isEmpty()) {
+            val text = element.textContent
+            return if (text.isEmpty()) null else StringNode.of(text)
+        }
+        val text = directText(element).trim()
+        if (text.isEmpty()) {
+            return null
+        }
+        if (mixedContentPolicy == XmlMixedContentPolicy.REJECT) {
+            throw XmlParseException("Mixed content is not supported in element '${displayName(element)}'")
+        }
+        return StringNode.of(text)
     }
 
     /**
      * 收集对象元素上的 XML attribute 字段。
      *
-     * `type` / `nil` 是类型协议属性，不映射为普通字段；其余属性（含命名空间感知下的
-     * `xmlns` 声明）按文档顺序映射为 `attributePrefix + 限定名`。
+     * `type` / `nil` 是类型协议属性，不映射为普通字段；Clark 模式下跳过 `xmlns` 声明，
+     * 其余属性按 `attributePrefix + 名称` 映射。
      */
     private fun attributeFields(element: Element): List<Pair<String, Node>> {
         val prefix = attributePrefix ?: return emptyList()
@@ -138,18 +228,48 @@ public class XmlReader(
             if (name == PROTOCOL_TYPE || name == PROTOCOL_NIL) {
                 continue
             }
-            result.add(prefix + XmlNames.decode(name) to inferScalar(attribute.value))
+            val keyName = if (namespaceMode == XmlNamespaceMode.CLARK) {
+                if (attribute.namespaceURI == XMLNS_NAMESPACE) {
+                    continue
+                }
+                XmlNames.clark(attribute.namespaceURI, XmlNames.decode(attribute.localName ?: name))
+            } else {
+                XmlNames.decode(name)
+            }
+            result.add(prefix + keyName to inferScalar(attribute.value))
         }
         return result
     }
 
-    private fun toArrayNode(element: Element): ArrayNode {
-        val children = childElements(element)
-        val values = ArrayList<Node>(children.size)
-        for (child in children) {
-            values.add(toNode(child))
+    /**
+     * 元素在 Node 中的字段名。
+     */
+    private fun elementName(element: Element): String = if (namespaceMode == XmlNamespaceMode.CLARK) {
+        XmlNames.clark(
+            element.namespaceURI,
+            XmlNames.decode(element.localName ?: element.nodeName),
+        )
+    } else {
+        XmlNames.decode(element.nodeName)
+    }
+
+    private fun displayName(element: Element): String = elementName(element)
+
+    /**
+     * 元素直接子文本节点（不含后代元素文本）。
+     */
+    private fun directText(element: Element): String {
+        val children = element.childNodes
+        val builder = StringBuilder()
+        for (index in 0 until children.length) {
+            val child = children.item(index)
+            val isText = child.nodeType == org.w3c.dom.Node.TEXT_NODE ||
+                child.nodeType == org.w3c.dom.Node.CDATA_SECTION_NODE
+            if (isText) {
+                builder.append(child.nodeValue)
+            }
         }
-        return ArrayNode.from(values)
+        return builder.toString()
     }
 
     private fun inferScalar(text: String): Node {
@@ -199,6 +319,8 @@ public class XmlReader(
 
         private const val PROTOCOL_TYPE = "type"
         private const val PROTOCOL_NIL = "nil"
+        private const val ARRAY_ITEM_NAME = "item"
+        private const val XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/"
 
         /**
          * 解析 XML 字符串。
@@ -221,6 +343,10 @@ public class XmlReader(
             source,
             xmlConfig?.attributePrefix,
             xmlConfig?.namespaceAware == true,
+            xmlConfig?.namespaceMode ?: XmlNamespaceMode.PREFIX,
+            xmlConfig?.textKey ?: XmlConfig.DEFAULT_TEXT_KEY,
+            xmlConfig?.itemsKey ?: XmlConfig.DEFAULT_ITEMS_KEY,
+            xmlConfig?.mixedContentPolicy ?: XmlMixedContentPolicy.PRESERVE,
         )
     }
 }

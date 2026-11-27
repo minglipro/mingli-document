@@ -19,8 +19,13 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * 通过 [XmlConfig] 可额外启用属性映射与命名空间感知：
  * - 属性映射：`@DocumentName("@id")` 的字段写成 XML attribute `id="..."`，
  *   读取时 XML attribute 映射回 `@id` 字段；
- * - 命名空间感知：字段名可使用 `prefix:local` 形式（如 `ns:name`、`@ns:id`），
- *   `xmlns` 声明通过 `@xmlns:ns` 属性字段保留。
+ * - 带属性的标量/数组元素包装为 `{ 属性字段..., "#text": 标量 }` /
+ *   `{ 属性字段..., "#items": 数组 }` 对象，Bean 侧可用 `@DocumentName("#text")` 等字段接收；
+ * - 命名空间前缀模式：字段名可使用 `prefix:local` 形式（如 `ns:name`、`@ns:id`），
+ *   `xmlns` 声明通过 `@xmlns:ns` 属性字段保留；
+ * - Clark 模式（[XmlNamespaceMode.CLARK]）：字段名使用 `{uri}local`，写出时自动分配
+ *   前缀并生成 `xmlns` 声明；
+ * - 混合内容按 [XmlMixedContentPolicy] 保留到 `#text` 字段或拒绝。
  */
 public open class XmlMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
