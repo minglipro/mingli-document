@@ -34,6 +34,15 @@ Protobuf
 gradle :fuzz:test
 ```
 
+持续随机 fuzz：
+
+```bash
+gradle :fuzz:fuzzContinuous -PfuzzSeconds=60
+```
+
+`fuzzContinuous` 按时间持续生成文本/二进制畸形输入，遇到 StackOverflow 或 OOM
+会以非零退出码终止；普通异常视为被解析器拒绝。
+
 ## 语料目录
 
 ```text

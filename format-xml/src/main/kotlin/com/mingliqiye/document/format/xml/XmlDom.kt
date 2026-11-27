@@ -37,7 +37,17 @@ internal object XmlDom {
         }
 
         val document = try {
-            factory.newDocumentBuilder().parse(InputSource(StringReader(source)))
+            val builder = factory.newDocumentBuilder()
+            builder.setErrorHandler(
+                object : org.xml.sax.ErrorHandler {
+                    override fun warning(exception: org.xml.sax.SAXParseException) = Unit
+
+                    override fun error(exception: org.xml.sax.SAXParseException): Unit = throw exception
+
+                    override fun fatalError(exception: org.xml.sax.SAXParseException): Unit = throw exception
+                },
+            )
+            builder.parse(InputSource(StringReader(source)))
         } catch (e: Exception) {
             throw XmlParseException("Invalid XML: ${e.message}", e)
         }

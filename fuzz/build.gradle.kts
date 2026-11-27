@@ -28,3 +28,13 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+
+tasks.register<JavaExec>("fuzzContinuous") {
+    group = "verification"
+    description = "Run continuous random fuzzing for fuzzSeconds (default 10)."
+    classpath = sourceSets["main"].runtimeClasspath
+    mainClass.set("com.mingliqiye.document.fuzz.FuzzHarnessKt")
+    val seconds = providers.gradleProperty("fuzzSeconds").orElse("10").get()
+    args(seconds)
+    systemProperty("fuzz.seconds", seconds)
+}
