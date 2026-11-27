@@ -1,11 +1,11 @@
 # document
 
-格式无关的文档树模型 + JSON/YAML 编解码 + Java Bean 映射。
+格式无关的文档树模型 + JSON/YAML/XML/Properties/TOML/CSV/Ion 编解码 + Java Bean 映射。
 
 `com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
 
 - **格式无关**：`core` 只定义节点树与类型引用，不依赖任何具体格式；
-- **JSON/YAML/XML/Properties Mapper**：`format-json` 提供 `JsonMapper`，`format-yaml` 提供 `YamlMapper`，`format-xml` 提供 `XmlMapper`，`format-properties` 提供 `PropertiesMapper`，均继承通用 `DocumentMapper`；
+- **JSON/YAML/XML/Properties/TOML/CSV/Ion Mapper**：`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion` 分别提供对应 Mapper，均继承通用 `DocumentMapper`；
 - **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
 
 ## 模块与依赖
@@ -19,6 +19,9 @@
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
 | `format-xml` | XML Mapper `XmlMapper`、`XmlReader` | `serialization`、`core` |
 | `format-properties` | Properties Mapper `PropertiesMapper`、`PropertiesReader` | `serialization`、`core` |
+| `format-toml` | TOML Mapper `TomlMapper`、`TomlReader` | `serialization`、`core`、Tomlj |
+| `format-csv` | CSV Mapper `CsvMapper`、`CsvReader` | `serialization`、`core`、Commons CSV |
+| `format-ion` | Ion Mapper `IonMapper`、`IonReader`（文本 Ion） | `serialization`、`core`、Ion Java |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 | `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 
@@ -29,6 +32,9 @@ format-json ──► serialization ──► core ──► exception ──►
 format-yaml ──► serialization
 format-xml  ──► serialization
 format-properties ──► serialization
+format-toml ──► serialization
+format-csv  ──► serialization
+format-ion  ──► serialization
 serialization-kotlin ──► serialization
 serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
@@ -36,7 +42,7 @@ annotation：项目内无依赖
 ```
 
 - `benchmarks` 是开发工具模块，不对外发布；
-- `core` 不依赖任何具体格式；`format-json` / `format-yaml` / `format-xml` / `format-properties` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
+- `core` 不依赖任何具体格式；`format-json` / `format-yaml` / `format-xml` / `format-properties` / `format-toml` / `format-csv` / `format-ion` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
 - 外部使用方只需要引入对应格式模块（如 `format-json`）即可获得 `JsonMapper`；不需要接触内部 Codec 实现。
 
 ## 坐标
@@ -54,6 +60,9 @@ dependencies {
     implementation("com.mingliqiye.document:format-yaml:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-xml:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-properties:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-toml:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-csv:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-ion:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
     // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
     implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
@@ -116,7 +125,7 @@ fun main() {
 | `format(value)` / `formatPretty(value)` | Java 实体 → 紧凑 / 格式化文本 |
 | `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
 
-> `JsonMapper` / `YamlMapper` 继承 `DocumentMapper`；格式模块内部 Codec 不对外暴露。
+> `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` 继承 `DocumentMapper`；格式模块内部 Codec 不对外暴露。
 
 ## Kotlin data class
 
@@ -812,6 +821,84 @@ user%2Ename     -> 字段名 "user.name"
 - 空对象、空数组不会写出；`null` 字段会写成空值；
 - 不保留 Java Properties 的注释与原始顺序。
 
+## TOML 支持
+
+`TomlMapper` 使用 [Tomlj](https://github.com/tomlj/tomlj) 解析，并内置内联 table/array 写出：
+
+```kotlin
+import com.mingliqiye.document.format.toml.TomlMapper
+import com.mingliqiye.document.format.toml.toTomlNode
+import com.mingliqiye.document.format.toml.toTomlString
+
+val node = """
+    name = "小于"
+    age = 18
+    user = { city = "杭州" }
+""".trimIndent().toTomlNode()
+
+println(node.toTomlString())
+
+val mapper = TomlMapper()
+val restored = mapper.parse(mapper.format(user), User::class.java)
+```
+
+限制：
+
+- TOML 没有 null；对象 null 字段省略，数组 null 元素报错；
+- 日期时间读取为 ISO 字符串；
+- 使用 inline table 输出，不输出 `[table]` 分节；
+- Tomlj 1.0.0 对嵌套空数组的回读存在限制。
+
+## CSV 支持
+
+`CsvMapper` 面向平坦表格：
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvConfig
+import com.mingliqiye.document.format.csv.CsvMapper
+import com.mingliqiye.document.format.csv.toCsvNode
+import com.mingliqiye.document.format.csv.toCsvString
+
+val rows = """
+    name,age
+    小于,18
+    小明,20
+""".trimIndent().toCsvNode()
+
+println(rows.toCsvString())
+
+val mapper = CsvMapper(CsvConfig.builder().delimiter(',').header(true).build())
+val text = mapper.format(users)
+```
+
+限制：
+
+- CSV 没有类型，读取时按 `true` / `false` / 数字 / 字符串推断；
+- 只支持平坦对象行，嵌套对象/数组单元格抛 `CsvException`；
+- 读取根固定为数组；单 Bean 建议用 `DocumentTypeReference.listType(Bean::class.java)`。
+
+## Ion 支持
+
+`IonMapper` 先支持文本 Ion：
+
+```kotlin
+import com.mingliqiye.document.format.ion.IonMapper
+import com.mingliqiye.document.format.ion.toIonNode
+import com.mingliqiye.document.format.ion.toIonString
+
+val node = """{ name: "小于", age: 18 }""".toIonNode()
+println(node.toIonString(pretty = true))
+
+val mapper = IonMapper()
+val restored = mapper.parse(mapper.format(user), User::class.java)
+```
+
+限制：
+
+- 当前使用 String API，只支持文本 Ion，暂不支持二进制 Ion；
+- Ion BLOB/CLOB 暂时映射为 Base64 字符串；
+- symbol/timestamp 写出为字符串，Ion 注解忽略。
+
 ## 性能基准
 
 `benchmarks` 模块提供 JMH 基准。JDK8、1000 个 Bean（约 128 KB JSON）的结果：
@@ -849,6 +936,9 @@ gradle :format-json:test
 gradle :format-yaml:test
 gradle :format-xml:test
 gradle :format-properties:test
+gradle :format-toml:test
+gradle :format-csv:test
+gradle :format-ion:test
 gradle :serialization-kotlin:test
 
 # 自动格式化 Kotlin 代码
@@ -864,10 +954,10 @@ gradle ktlintFormat
 
 当前已实现的范围：
 
-- 格式实现有 JSON（`format-json`）、YAML（`format-yaml`）、XML（`format-xml`）和 Properties（`format-properties`）；
+- 格式实现有 JSON（`format-json`）、YAML（`format-yaml`）、XML（`format-xml`）、Properties（`format-properties`）、TOML（`format-toml`）、CSV（`format-csv`）和文本 Ion（`format-ion`）；
 - Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
 - Java Bean 需要无参构造器；Kotlin data class 可配合 `serialization-kotlin` 使用主构造器反序列化；
-- `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
+- `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
 - 序列化检测循环引用，最大嵌套深度为 128；JSON 解析最大嵌套深度为 512。
 
 **尚未实现 / 限制**：
@@ -888,5 +978,8 @@ gradle ktlintFormat
 | `YamlParseException` | `format-yaml`（`com.mingliqiye.document.format.yaml.exception`） | YAML 语法错误或不支持的类型 |
 | `XmlParseException` | `format-xml`（`com.mingliqiye.document.format.xml.exception`） | XML 语法错误或不支持的内容 |
 | `PropertiesParseException` | `format-properties`（`com.mingliqiye.document.format.properties.exception`） | Properties 语法错误或路径冲突 |
+| `TomlParseException` | `format-toml`（`com.mingliqiye.document.format.toml.exception`） | TOML 语法错误 |
+| `CsvParseException` | `format-csv`（`com.mingliqiye.document.format.csv.exception`） | CSV 语法错误 |
+| `IonParseException` | `format-ion`（`com.mingliqiye.document.format.ion.exception`） | Ion 文本错误或根值数量不对 |
 
 更多代码规范、提交规范与模块约束见 [CONTRIBUTING.md](CONTRIBUTING.md)。
