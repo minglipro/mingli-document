@@ -45,6 +45,7 @@ val result = YamlMapper().formatAll(nodes)
 - `!!binary` -> `BinaryNode`
 - Token 直读 Bean
 - SnakeYAML SafeConstructor
+- 解析深度限制
 - 文件/流读写
 
 ## 限制
