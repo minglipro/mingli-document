@@ -15,6 +15,7 @@ import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.jvm.isAccessible
+import kotlin.reflect.jvm.javaConstructor
 import kotlin.reflect.jvm.javaType
 
 /**
@@ -39,8 +40,9 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
         }
         val metadata = cache.computeIfAbsent(type, ::createMetadata)
         val arguments = LinkedHashMap<KParameter, Any?>()
+        val argumentArray = arrayOfNulls<Any?>(metadata.parameters.size)
 
-        for (parameterMetadata in metadata.parameters) {
+        for ((index, parameterMetadata) in metadata.parameters.withIndex()) {
             val parameter = parameterMetadata.parameter
             if (parameterMetadata.ignored) {
                 continue
@@ -54,11 +56,17 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
                     "Missing required data class parameter '${parameter.name}' at ${context.path}",
                 )
             }
-            arguments[parameter] = context.deserialize(valueNode, parameter.type.javaType)
+            val value = context.deserialize(valueNode, parameterMetadata.javaType)
+            arguments[parameter] = value
+            argumentArray[index] = value
         }
 
         return try {
-            metadata.constructor.callBy(arguments)
+            if (metadata.directConstruction) {
+                metadata.javaConstructor!!.newInstance(*argumentArray)
+            } else {
+                metadata.constructor.callBy(arguments)
+            }
         } catch (e: Exception) {
             throw DocumentSerializationException("Cannot instantiate data class ${type.name}", e)
         }
@@ -70,6 +78,7 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
         val constructor = kClass.primaryConstructor as KFunction<Any>?
             ?: throw DocumentSerializationException("Data class ${type.name} has no primary constructor")
         constructor.isAccessible = true
+        val javaConstructor = constructor.javaConstructor?.apply { isAccessible = true }
         val properties = kClass.memberProperties.associateBy { it.name }
         val parameters = constructor.parameters
             .filter { it.kind == KParameter.Kind.VALUE }
@@ -81,9 +90,14 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
                     parameter = parameter,
                     fieldName = documentName(type, property, parameter, propertyName),
                     ignored = isIgnored(type, property, propertyName),
+                    javaType = parameter.type.javaType,
                 )
             }
-        return DataClassMetadata(constructor, parameters)
+        val directConstruction = javaConstructor != null &&
+            parameters.none {
+                it.ignored || it.parameter.isOptional
+            }
+        return DataClassMetadata(constructor, javaConstructor, directConstruction, parameters)
     }
 
     private fun documentName(

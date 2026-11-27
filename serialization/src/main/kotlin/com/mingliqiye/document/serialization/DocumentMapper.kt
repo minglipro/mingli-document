@@ -73,6 +73,8 @@ public abstract class DocumentMapper protected constructor(
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
+    private val propertyConverterCache = ConcurrentHashMap<DocumentProperty, Any>()
+    private val noConverter = Any()
 
     /**
      * 将 Java 对象序列化为文档树。
@@ -214,11 +216,21 @@ public abstract class DocumentMapper protected constructor(
         if (property == null) {
             return null
         }
-        val annotation = property.getAnnotation(DocumentConverter::class.java) ?: return null
+        val cached = propertyConverterCache[property]
+        if (cached != null) {
+            return if (cached === noConverter) null else cached
+        }
+        val annotation = property.getAnnotation(DocumentConverter::class.java)
+        if (annotation == null) {
+            propertyConverterCache[property] = noConverter
+            return null
+        }
         val converterType = annotation.value.java
-        return converterCache.computeIfAbsent(converterType) {
+        val converter = converterCache.computeIfAbsent(converterType) {
             instantiateConverter(property, converterType)
         }
+        propertyConverterCache[property] = converter
+        return converter
     }
 
     private fun propertySerializer(property: DocumentProperty?): JsonSerializer<*>? {
@@ -891,13 +903,16 @@ public abstract class DocumentMapper protected constructor(
             val writeMethod = property.writeMethod
                 ?.takeIf { !Modifier.isStatic(it.modifiers) && it.parameterCount == 1 }
 
+            readMethod?.isAccessible = true
+            writeMethod?.isAccessible = true
+            field?.isAccessible = true
             val getter: ((Any) -> Any?)? = when {
-                readMethod != null -> { bean -> invoke(readMethod, bean) }
+                readMethod != null -> { bean -> readMethod.invoke(bean) }
                 field != null && !Modifier.isStatic(field.modifiers) && !field.isSynthetic -> { bean -> readField(field, bean) }
                 else -> null
             }
             val setter: ((Any, Any?) -> Unit)? = when {
-                writeMethod != null -> { bean, value -> invoke(writeMethod, bean, value) }
+                writeMethod != null -> { bean, value -> writeMethod.invoke(bean, value) }
                 field != null &&
                     !Modifier.isStatic(field.modifiers) &&
                     !Modifier.isFinal(field.modifiers) &&
@@ -925,6 +940,7 @@ public abstract class DocumentMapper protected constructor(
             if (metadata.isIgnored()) {
                 continue
             }
+            field.isAccessible = true
             val setter: ((Any, Any?) -> Unit)? =
                 if (Modifier.isFinal(field.modifiers)) {
                     null
@@ -943,7 +959,6 @@ public abstract class DocumentMapper protected constructor(
     }
 
     private fun readField(field: Field, bean: Any): Any? = try {
-        field.isAccessible = true
         field.get(bean)
     } catch (e: Exception) {
         throw DocumentSerializationException("Cannot read field ${field.name}", e)
@@ -951,7 +966,6 @@ public abstract class DocumentMapper protected constructor(
 
     private fun writeField(field: Field, bean: Any, value: Any?) {
         try {
-            field.isAccessible = true
             field.set(bean, value)
         } catch (e: Exception) {
             throw DocumentSerializationException("Cannot write field ${field.name}", e)

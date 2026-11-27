@@ -147,16 +147,32 @@ internal class JsonParser(
 
     private fun parseString(): String {
         expect('"')
-        val builder = StringBuilder()
+        val start = position
+        var index = position
+        while (index < source.length) {
+            val ch = source[index]
+            when {
+                ch == '"' -> {
+                    position = index + 1
+                    return source.substring(start, index)
+                }
+
+                ch == '\\' -> break
+                ch < ' ' -> throw error("Unescaped control character in string")
+                else -> index++
+            }
+        }
+
+        position = index
+        val builder = StringBuilder(index - start + 16)
+        builder.append(source, start, index)
         while (true) {
             if (!hasNext()) {
                 throw error("Unterminated string")
             }
             when (val ch = source[position++]) {
                 '"' -> return builder.toString()
-
                 '\\' -> builder.append(parseEscape())
-
                 else -> {
                     if (ch < ' ') {
                         throw error("Unescaped control character in string")

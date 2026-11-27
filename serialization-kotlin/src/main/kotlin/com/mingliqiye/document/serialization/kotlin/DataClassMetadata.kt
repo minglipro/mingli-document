@@ -1,5 +1,6 @@
 package com.mingliqiye.document.serialization.kotlin
 
+import java.lang.reflect.Constructor
 import kotlin.reflect.KFunction
 
 /**
@@ -7,5 +8,7 @@ import kotlin.reflect.KFunction
  */
 internal class DataClassMetadata(
     val constructor: KFunction<Any>,
+    val javaConstructor: Constructor<*>?,
+    val directConstruction: Boolean,
     val parameters: List<DataClassParameterMetadata>,
 )
