@@ -12,19 +12,20 @@ gradle :benchmarks:jmh
 
 - JDK8 toolchain
 - JMH 1.37
-- 1000 个 Java Bean，JSON 约 128 KB
+- 1000 个 Java Bean / Kotlin data class，JSON 约 128 KB
 - 3 轮 warmup + 5 轮测量，单 fork
 
 ## 当前结果
 
 ```text
 Benchmark                             Mode  Cnt  Score   Error  Units
-JsonMapperBenchmark.jacksonFormat     avgt    5  0.201 ± 0.010  ms/op
-JsonMapperBenchmark.jacksonParseData  avgt    5  0.291 ± 0.010  ms/op
-JsonMapperBenchmark.jacksonParseTree  avgt    5  0.305 ± 0.030  ms/op
-JsonMapperBenchmark.ourFormat         avgt    5  0.696 ± 0.013  ms/op
-JsonMapperBenchmark.ourParseData      avgt    5  0.948 ± 0.011  ms/op
-JsonMapperBenchmark.ourParseTree      avgt    5  0.469 ± 0.020  ms/op
+JsonMapperBenchmark.jacksonFormat       avgt    5  0.201 ± 0.010  ms/op
+JsonMapperBenchmark.jacksonParseData    avgt    5  0.293 ± 0.006  ms/op
+JsonMapperBenchmark.jacksonParseTree    avgt    5  0.315 ± 0.022  ms/op
+JsonMapperBenchmark.ourFormat           avgt    5  0.711 ± 0.018  ms/op
+JsonMapperBenchmark.ourParseData        avgt    5  0.827 ± 0.075  ms/op
+JsonMapperBenchmark.ourParseKotlinData  avgt    5  0.936 ± 0.041  ms/op
+JsonMapperBenchmark.ourParseTree        avgt    5  0.475 ± 0.020  ms/op
 ```
 
 说明：
