@@ -1,5 +1,6 @@
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 
 plugins {
     kotlin("jvm") version "2.0.0" apply false
@@ -50,6 +51,18 @@ configure(publishableProjects) {
                         }
                     }
                 }
+            }
+        }
+
+        // 推送仓库由 init.gradle 提供；这里只按版本选择 release/snapshot 仓库，
+        // 并跳过 Gradle Plugin 专用仓库。
+        tasks.withType<PublishToMavenRepository>().configureEach {
+            val repositoryName = repository.name
+            val snapshot = project.version.toString().endsWith("-SNAPSHOT")
+            enabled = when {
+                repositoryName.contains("GradlePlugin", ignoreCase = true) -> false
+                snapshot -> repositoryName.contains("Snapshot", ignoreCase = true)
+                else -> repositoryName.contains("Release", ignoreCase = true)
             }
         }
     }

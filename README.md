@@ -96,8 +96,18 @@ dependencies {
 发布：
 
 ```bash
+# 发布到本地 Maven 仓库
 gradle publishToMavenLocal
+
+# 发布到远程仓库：地址与凭据由 Gradle init.gradle 提供
+gradle publish
 ```
+
+远程发布规则：
+
+- `projectVersion` 以 `-SNAPSHOT` 结尾时只推送 snapshot 仓库
+- 正式版本只推送 release 仓库
+- Gradle Plugin 专用仓库不参与本项目发布
 
 `benchmarks` 和 `fuzz` 是开发工具模块，不发布。
 
