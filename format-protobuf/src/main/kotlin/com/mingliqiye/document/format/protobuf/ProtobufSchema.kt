@@ -1,5 +1,11 @@
 package com.mingliqiye.document.format.protobuf
 
+import com.google.protobuf.DescriptorProtos
+import com.google.protobuf.Descriptors.Descriptor
+import com.google.protobuf.Descriptors.DescriptorValidationException
+import com.google.protobuf.Descriptors.FieldDescriptor
+import com.google.protobuf.Descriptors.FileDescriptor
+import com.mingliqiye.document.format.protobuf.exception.ProtobufException
 import com.mingliqiye.document.schema.DocumentSchema
 import com.mingliqiye.document.schema.SchemaField
 import com.mingliqiye.document.schema.SchemaType
@@ -84,6 +90,52 @@ public class ProtobufSchema(
     public fun protobufField(fieldNumber: Int): ProtobufSchemaField? = protobufFieldByNumber[fieldNumber]
 
     /**
+     * 转换为 Protobuf [Descriptor]。
+     *
+     * 生成 proto2 语法的单 message 临时文件：标量字段按 [ProtobufType] 映射为对应的
+     * `FieldDescriptorProto.Type`，repeated/required/optional 映射为 field label，
+     * [messageName] 中的嵌套点号（如 `Outer.Inner`）映射为嵌套 message。
+     *
+     * 该 Schema 适配层只保存标量类型，无法表达自定义 enum/message/map 的类型名，因此包含
+     * [ProtobufType.ENUM]、[ProtobufType.MESSAGE] 或 [ProtobufType.MAP] 字段时会抛出
+     * [ProtobufException]；这类场景请直接使用外部构造好的 [Descriptor]。
+     *
+     * @return Protobuf message 描述符
+     * @throws ProtobufException 字段类型无法还原或 Descriptor 构建失败时抛出
+     */
+    public fun toDescriptor(): Descriptor {
+        val messageParts = messageName.split('.')
+        val innermostMessage = DescriptorProtos.DescriptorProto.newBuilder().setName(messageParts.last())
+        protobufFields.forEach { field -> innermostMessage.addField(toFieldDescriptorProto(field)) }
+        var messageProto = innermostMessage.build()
+        for (index in messageParts.size - 2 downTo 0) {
+            messageProto = DescriptorProtos.DescriptorProto.newBuilder()
+                .setName(messageParts[index])
+                .addNestedType(messageProto)
+                .build()
+        }
+        val packageName = this.packageName
+        val fileProtoBuilder = DescriptorProtos.FileDescriptorProto.newBuilder()
+            .setName(fileName(messageName, packageName))
+            .addMessageType(messageProto)
+        if (!packageName.isNullOrEmpty()) {
+            fileProtoBuilder.setPackage(packageName)
+        }
+        val fileDescriptor = try {
+            FileDescriptor.buildFrom(fileProtoBuilder.build(), emptyArray())
+        } catch (e: DescriptorValidationException) {
+            throw ProtobufException("构建 Protobuf Descriptor 失败: ${e.message}", e)
+        }
+        var descriptor = fileDescriptor.findMessageTypeByName(messageParts.first())
+            ?: throw ProtobufException("未找到 Protobuf message: $messageName")
+        for (index in 1 until messageParts.size) {
+            descriptor = descriptor.findNestedTypeByName(messageParts[index])
+                ?: throw ProtobufException("未找到嵌套 Protobuf message: $messageName")
+        }
+        return descriptor
+    }
+
+    /**
      * 转换为 JSON 风格描述。
      */
     public fun toJsonDescription(): Map<String, Any?> = linkedMapOf(
@@ -141,6 +193,96 @@ public class ProtobufSchema(
                 )
             }
             return builder.build()
+        }
+
+        /**
+         * 从 Protobuf [Descriptor] 还原 Schema。
+         *
+         * 字段类型映射为 [ProtobufType]（map 字段映射为 [ProtobufType.MAP]），字段编号、repeated、
+         * required 与 presence（nullable）保持不变；package 与嵌套 message 名称从
+         * [Descriptor.fullName]、[Descriptor.file] 推导。
+         *
+         * @param descriptor Protobuf message 描述符
+         * @return Protobuf Schema
+         * @throws IllegalArgumentException 字段编号或名称不合法时抛出
+         */
+        @JvmStatic
+        public fun fromDescriptor(descriptor: Descriptor): ProtobufSchema {
+            val packageName = descriptor.file.getPackage().takeIf { it.isNotEmpty() }
+            val messageName = if (packageName == null) {
+                descriptor.fullName
+            } else {
+                descriptor.fullName.removePrefix("$packageName.")
+            }
+            val builder = builder(messageName, packageName)
+            for (field in descriptor.fields) {
+                builder.field(
+                    name = field.name,
+                    fieldNumber = field.number,
+                    type = protobufTypeOf(field),
+                    repeated = field.isRepeated && !field.isMapField,
+                    required = field.isRequired,
+                    nullable = field.hasPresence() && !field.isRequired,
+                    description = null,
+                )
+            }
+            return builder.build()
+        }
+
+        private fun protobufTypeOf(field: FieldDescriptor): ProtobufType {
+            if (field.isMapField) {
+                return ProtobufType.MAP
+            }
+            if (field.type == FieldDescriptor.Type.GROUP) {
+                return ProtobufType.MESSAGE
+            }
+            return ProtobufType.fromTypeName(field.type.name.lowercase())
+                ?: throw ProtobufException("不支持的 Protobuf 字段类型: ${field.type}")
+        }
+
+        private fun fileName(messageName: String, packageName: String?): String {
+            val messagePath = messageName.replace('.', '/')
+            val prefix = packageName?.replace('.', '/')
+            return if (prefix.isNullOrEmpty()) "$messagePath.proto" else "$prefix/$messagePath.proto"
+        }
+
+        private fun toFieldDescriptorProto(field: ProtobufSchemaField): DescriptorProtos.FieldDescriptorProto {
+            val label = when {
+                field.repeated -> DescriptorProtos.FieldDescriptorProto.Label.LABEL_REPEATED
+                field.required -> DescriptorProtos.FieldDescriptorProto.Label.LABEL_REQUIRED
+                else -> DescriptorProtos.FieldDescriptorProto.Label.LABEL_OPTIONAL
+            }
+            return DescriptorProtos.FieldDescriptorProto.newBuilder()
+                .setName(field.name)
+                .setNumber(field.fieldNumber)
+                .setLabel(label)
+                .setType(toFieldDescriptorType(field))
+                .build()
+        }
+
+        private fun toFieldDescriptorType(field: ProtobufSchemaField): DescriptorProtos.FieldDescriptorProto.Type = when (field.protobufType) {
+            ProtobufType.DOUBLE -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_DOUBLE
+            ProtobufType.FLOAT -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_FLOAT
+            ProtobufType.INT32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT32
+            ProtobufType.INT64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_INT64
+            ProtobufType.UINT32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_UINT32
+            ProtobufType.UINT64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_UINT64
+            ProtobufType.SINT32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SINT32
+            ProtobufType.SINT64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SINT64
+            ProtobufType.FIXED32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_FIXED32
+            ProtobufType.FIXED64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_FIXED64
+            ProtobufType.SFIXED32 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SFIXED32
+            ProtobufType.SFIXED64 -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_SFIXED64
+            ProtobufType.BOOL -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_BOOL
+            ProtobufType.STRING -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_STRING
+            ProtobufType.BYTES -> DescriptorProtos.FieldDescriptorProto.Type.TYPE_BYTES
+            ProtobufType.ENUM,
+            ProtobufType.MESSAGE,
+            ProtobufType.MAP,
+            -> throw ProtobufException(
+                "字段 '${field.name}' 的类型 '${field.protobufTypeName}' 需要显式 Descriptor，" +
+                    "无法从 ProtobufSchema 还原",
+            )
         }
 
         /**
