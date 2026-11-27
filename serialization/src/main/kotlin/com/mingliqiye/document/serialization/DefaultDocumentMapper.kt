@@ -228,19 +228,11 @@ class DefaultDocumentMapper internal constructor(
     private fun propertySerializer(property: DocumentProperty?): JsonSerializer<*>? {
         val converter = propertyConverter(property) ?: return null
         return converter as? JsonSerializer<*>
-            ?: throw DocumentSerializationException(
-                "Converter ${converter.javaClass.name} for " +
-                    "${property?.declaringClass?.name}.${property?.name} does not implement JsonSerializer",
-            )
     }
 
     private fun propertyDeserializer(property: DocumentProperty?): JsonDeserializer<*>? {
         val converter = propertyConverter(property) ?: return null
         return converter as? JsonDeserializer<*>
-            ?: throw DocumentSerializationException(
-                "Converter ${converter.javaClass.name} for " +
-                    "${property?.declaringClass?.name}.${property?.name} does not implement JsonDeserializer",
-            )
     }
 
     private fun instantiateConverter(property: DocumentProperty, converterType: Class<*>): Any {
@@ -254,14 +246,22 @@ class DefaultDocumentMapper internal constructor(
         return instance
     }
 
-    private fun objectInstance(type: Class<*>): Any? = try {
-        val field = type.getDeclaredField("INSTANCE")
-        field.isAccessible = true
-        field.get(null)
-    } catch (_: NoSuchFieldException) {
-        null
-    } catch (e: ReflectiveOperationException) {
-        throw DocumentSerializationException("Cannot access converter instance ${type.name}", e)
+    private fun objectInstance(type: Class<*>): Any? {
+        val field = try {
+            type.getDeclaredField("INSTANCE")
+        } catch (_: NoSuchFieldException) {
+            return null
+        }
+        if (!Modifier.isStatic(field.modifiers)) {
+            return null
+        }
+        return try {
+            field.isAccessible = true
+            val instance = field.get(null)
+            instance.takeIf { type.isInstance(it) }
+        } catch (e: ReflectiveOperationException) {
+            throw DocumentSerializationException("Cannot access converter instance ${type.name}", e)
+        }
     }
 
     private fun constructorInstance(property: DocumentProperty, type: Class<*>): Any {

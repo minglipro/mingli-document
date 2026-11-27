@@ -15,6 +15,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class DefaultDocumentMapperTest {
 
@@ -110,6 +111,52 @@ class DefaultDocumentMapperTest {
 
         val node = mapper.toNode(wallet).asObject()
         assertEquals("12 CNY", node["money"]?.asString())
+
+        val restored = mapper.fromNode(node, Wallet::class.java)
+        assertEquals(12, restored.money.amount)
+    }
+
+    @Test
+    fun fieldConverterWithoutUseSiteTarget() {
+        val mapper = DocumentMapperApi.builder().build()
+        val wallet = NaturalWallet().apply { money = Money(12) }
+
+        val node = mapper.toNode(wallet).asObject()
+        assertEquals("12 CNY", node["money"]?.asString())
+        val restored = mapper.fromNode(node, NaturalWallet::class.java)
+        assertEquals(12, restored.money.amount)
+    }
+
+    @Test
+    fun fieldConverterOnGetterTarget() {
+        val mapper = DocumentMapperApi.builder().build()
+        val wallet = GetterWallet().apply { money = Money(12) }
+
+        val node = mapper.toNode(wallet).asObject()
+        assertEquals("12 CNY", node["money"]?.asString())
+        val restored = mapper.fromNode(node, GetterWallet::class.java)
+        assertEquals(12, restored.money.amount)
+    }
+
+    @Test
+    fun serializerOnlyFieldConverterFallsBackForDeserialization() {
+        val mapper = DocumentMapperApi.builder().build()
+        val source = UpperStringBean().apply { name = "abc" }
+
+        val node = mapper.toNode(source).asObject()
+        assertEquals("ABC", node["name"]?.asString())
+        val restored = mapper.fromNode(node, UpperStringBean::class.java)
+        assertEquals("ABC", restored.name)
+    }
+
+    @Test
+    fun invalidFieldConverterThrows() {
+        val mapper = DocumentMapperApi.builder().build()
+
+        val exception = assertFailsWith<DocumentSerializationException> {
+            mapper.toNode(InvalidConverterBean())
+        }
+        assertTrue(exception.message.orEmpty().contains("must implement JsonSerializer or JsonDeserializer"))
     }
 
     @Test
@@ -215,6 +262,34 @@ class DefaultDocumentMapperTest {
     private class Wallet {
         @field:DocumentConverter(MoneyConverter::class)
         var money: Money = Money(0)
+    }
+
+    private class NaturalWallet {
+        @DocumentConverter(MoneyConverter::class)
+        var money: Money = Money(0)
+    }
+
+    private class GetterWallet {
+        @get:DocumentConverter(MoneyConverter::class)
+        var money: Money = Money(0)
+    }
+
+    private class UpperStringSerializer : JsonSerializer<String> {
+        override fun getType(): DocumentTypeReference<String> = DocumentTypeReference.of()
+
+        override fun serialize(value: String, context: SerializationContext): Node = StringNode.of(value.uppercase())
+    }
+
+    private class UpperStringBean {
+        @field:DocumentConverter(UpperStringSerializer::class)
+        var name: String = ""
+    }
+
+    private class InvalidConverter
+
+    private class InvalidConverterBean {
+        @field:DocumentConverter(InvalidConverter::class)
+        var name: String = ""
     }
 
     private class GlobalMoneyConverter : JsonConverter<Money> {

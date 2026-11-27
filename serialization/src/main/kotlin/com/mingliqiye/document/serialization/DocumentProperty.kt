@@ -4,7 +4,11 @@ import com.mingliqiye.document.annotation.DocumentIgnore
 import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.utils.aliasfor.AnnotationGetter
 import java.lang.reflect.AnnotatedElement
+import java.lang.reflect.GenericArrayType
+import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
+import java.lang.reflect.TypeVariable
+import java.lang.reflect.WildcardType
 
 /**
  * Java 实体字段/属性的元数据，提供给转换器读取字段信息与注解。
@@ -72,9 +76,18 @@ internal class DefaultDocumentProperty(
 
     override fun hasAnnotation(annotationClass: Class<out Annotation>): Boolean = elements.any { AnnotationGetter.getAnnotation(it, annotationClass) != null }
 
-    override fun getRawType(): Class<*> {
-        val rawType = if (type is java.lang.reflect.ParameterizedType) type.rawType else type
-        require(rawType is Class<*>) { "Cannot resolve raw type from $type" }
-        return rawType
+    override fun getRawType(): Class<*> = resolveRawType(type)
+
+    private fun resolveRawType(type: Type): Class<*> = when (type) {
+        is Class<*> -> type
+        is ParameterizedType -> resolveRawType(type.rawType)
+        is WildcardType -> resolveRawType(type.upperBounds.firstOrNull() ?: Any::class.java)
+        is TypeVariable<*> -> resolveRawType(type.bounds.firstOrNull() ?: Any::class.java)
+        is GenericArrayType ->
+            java.lang.reflect.Array
+                .newInstance(resolveRawType(type.genericComponentType), 0)
+                .javaClass
+
+        else -> throw DocumentSerializationException("Cannot resolve raw type from $type")
     }
 }
