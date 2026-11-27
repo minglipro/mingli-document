@@ -39,13 +39,27 @@ mapper.format(value, outputStream)
 ```kotlin
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.MissingFieldPolicy
+import com.mingliqiye.document.serialization.PropertyNamingStrategy
 
 val config = DocumentMapperConfig.builder()
     .missingFieldPolicy(MissingFieldPolicy.FAIL)
     .failOnUnknownFields(true)
     .writeNulls(false)
+    .namingStrategy(PropertyNamingStrategy.SNAKE_CASE)
     .build()
 ```
+
+`PropertyNamingStrategy` 支持：
+
+```text
+AS_IS（默认）
+SNAKE_CASE
+KEBAB_CASE
+UPPER_CAMEL
+LOWER_CAMEL
+```
+
+`@DocumentName` 显式注解优先于命名策略。
 
 ## 转换器
 

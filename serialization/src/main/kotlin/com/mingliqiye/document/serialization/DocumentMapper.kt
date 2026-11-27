@@ -1782,6 +1782,7 @@ public abstract class DocumentMapper protected constructor(
             propertyType,
             elements,
             propertyMetadataResolver?.resolve(type, property.name).orEmpty(),
+            config.namingStrategy,
         )
     }
 
@@ -1791,6 +1792,7 @@ public abstract class DocumentMapper protected constructor(
         field.genericType,
         listOf(field),
         propertyMetadataResolver?.resolve(type, field.name).orEmpty(),
+        config.namingStrategy,
     )
 
     private fun beanMetadata(type: Class<*>): BeanMetadata = beanMetadataCache.computeIfAbsent(type, ::createBeanMetadata)

@@ -11,6 +11,7 @@ public class DocumentMapperConfigBuilder {
     private var missingFieldPolicy = MissingFieldPolicy.KEEP_DEFAULT
     private var failOnUnknownFields = false
     private var writeNulls = true
+    private var namingStrategy = PropertyNamingStrategy.AS_IS
 
     /**
      * 为指定字段绑定转换器。
@@ -63,6 +64,17 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置未标注 [com.mingliqiye.document.annotation.DocumentName] 的字段命名策略。
+     *
+     * @param strategy 字段命名策略
+     * @return 当前构建器
+     */
+    public fun namingStrategy(strategy: PropertyNamingStrategy): DocumentMapperConfigBuilder {
+        this.namingStrategy = strategy
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      */
     public fun build(): DocumentMapperConfig = DocumentMapperConfig.from(
@@ -70,5 +82,6 @@ public class DocumentMapperConfigBuilder {
         missingFieldPolicy,
         failOnUnknownFields,
         writeNulls,
+        namingStrategy,
     )
 }

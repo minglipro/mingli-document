@@ -3,7 +3,8 @@ package com.mingliqiye.document.serialization
 /**
  * Mapper 配置。
  *
- * 支持字段级转换器、缺字段策略、未知字段策略与 null 字段写出策略。
+ * 支持字段级转换器、缺字段策略、未知字段策略、null 字段写出策略与
+ * 字段命名策略。
  */
 public open class DocumentMapperConfig protected constructor(
     private val fieldConverters: Map<FieldKey, JsonConverter<*>>,
@@ -13,6 +14,11 @@ public open class DocumentMapperConfig protected constructor(
     public val failOnUnknownFields: Boolean = false,
     /** Bean 字段为 null 时是否写出。 */
     public val writeNulls: Boolean = true,
+    /**
+     * 未标注 [com.mingliqiye.document.annotation.DocumentName] 的字段使用的
+     * 文档字段命名策略，默认 [PropertyNamingStrategy.AS_IS]。
+     */
+    public val namingStrategy: PropertyNamingStrategy = PropertyNamingStrategy.AS_IS,
 ) {
 
     /**
@@ -23,6 +29,7 @@ public open class DocumentMapperConfig protected constructor(
         other.missingFieldPolicy,
         other.failOnUnknownFields,
         other.writeNulls,
+        other.namingStrategy,
     )
 
     internal fun fieldConverter(property: DocumentProperty): JsonConverter<*>? = fieldConverters[FieldKey(property.declaringClass, property.name)]
@@ -49,11 +56,13 @@ public open class DocumentMapperConfig protected constructor(
             missingFieldPolicy: MissingFieldPolicy,
             failOnUnknownFields: Boolean,
             writeNulls: Boolean,
+            namingStrategy: PropertyNamingStrategy,
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
             missingFieldPolicy,
             failOnUnknownFields,
             writeNulls,
+            namingStrategy,
         )
     }
 }
