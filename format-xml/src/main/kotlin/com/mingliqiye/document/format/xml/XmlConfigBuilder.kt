@@ -19,6 +19,7 @@ public class XmlConfigBuilder {
     private var namespaceMode = XmlNamespaceMode.PREFIX
     private var textKey = XmlConfig.DEFAULT_TEXT_KEY
     private var itemsKey = XmlConfig.DEFAULT_ITEMS_KEY
+    private var contentKey = XmlConfig.DEFAULT_CONTENT_KEY
     private var mixedContentPolicy = XmlMixedContentPolicy.PRESERVE
 
     /**
@@ -159,7 +160,23 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 设置有序混合内容的数组字段名，默认 `#content`。
+     *
+     * @param contentKey 有序内容字段名；不能为空
+     * @return 当前构建器
+     * @throws IllegalArgumentException 字段名为空时抛出
+     */
+    public fun contentKey(contentKey: String): XmlConfigBuilder {
+        require(contentKey.isNotEmpty()) { "contentKey must not be empty" }
+        this.contentKey = contentKey
+        return this
+    }
+
+    /**
      * 设置混合内容处理策略，默认 [XmlMixedContentPolicy.PRESERVE]。
+     *
+     * 使用 [XmlMixedContentPolicy.PRESERVE_ORDERED] 时额外输出 `contentKey` 有序数组，
+     * 写出时按该数组顺序交错输出文本与子元素。
      *
      * @param policy 混合内容策略
      * @return 当前构建器
@@ -179,11 +196,17 @@ public class XmlConfigBuilder {
             effectiveAware -> XmlConfig.DEFAULT_ATTRIBUTE_PREFIX
             else -> null
         }
-        require(textKey != itemsKey) { "textKey and itemsKey must be different" }
+        require(textKey != itemsKey && textKey != contentKey && itemsKey != contentKey) {
+            "textKey, itemsKey and contentKey must be different"
+        }
         require(
             effectivePrefix == null ||
-                (!textKey.startsWith(effectivePrefix) && !itemsKey.startsWith(effectivePrefix)),
-        ) { "textKey and itemsKey must not start with attributePrefix" }
+                (
+                    !textKey.startsWith(effectivePrefix) &&
+                        !itemsKey.startsWith(effectivePrefix) &&
+                        !contentKey.startsWith(effectivePrefix)
+                    ),
+        ) { "textKey, itemsKey and contentKey must not start with attributePrefix" }
         return XmlConfig(
             base.build(),
             rootName,
@@ -192,6 +215,7 @@ public class XmlConfigBuilder {
             namespaceMode,
             textKey,
             itemsKey,
+            contentKey,
             mixedContentPolicy,
         )
     }

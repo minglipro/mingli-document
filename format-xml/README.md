@@ -48,13 +48,14 @@ val mapper = XmlMapper(
 - `type` / `nil` 协议
 - XML 属性映射
 - `PREFIX` / `CLARK` 命名空间
-- 混合内容 `PRESERVE` / `REJECT`
+- 混合内容 `PRESERVE` / `PRESERVE_ORDERED` / `REJECT`
+- `PRESERVE_ORDERED` 使用 `#content` 数组保留文本与子元素顺序
 - XXE 防护
 - Token 直读 Bean
 
 ## 限制
 
-- 混合内容不保留文本与子元素相对顺序
+- 默认混合内容模式不保留文本与子元素相对顺序
 - Clark 模式的所有声明集中到根元素
 
 ## 构建
