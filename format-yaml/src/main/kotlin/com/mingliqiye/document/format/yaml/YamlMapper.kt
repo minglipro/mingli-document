@@ -13,7 +13,7 @@ import java.util.LinkedHashMap
  * 与 Jackson 的 `YAMLMapper` 类似：继承通用 [DocumentMapper]，内置 YAML 编解码能力。
  * 外部只使用这个 Mapper，不需要接触内部 Codec SPI。
  */
-public class YamlMapper private constructor(
+public open class YamlMapper private constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
     deserializers: Map<Class<*>, JsonDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
@@ -30,6 +30,12 @@ public class YamlMapper private constructor(
      * 创建默认 YAML 映射器。
      */
     public constructor() : this(emptyMap(), emptyMap(), null)
+
+    /**
+     * 供格式专用 Mapper 子类使用的构造器。
+     */
+    protected constructor(objectInstantiator: ObjectInstantiator?) :
+        this(emptyMap(), emptyMap(), objectInstantiator)
 
     public companion object {
 

@@ -1,8 +1,6 @@
 package com.mingliqiye.document.serialization.kotlin
 
 import com.mingliqiye.document.annotation.DocumentName
-import com.mingliqiye.document.format.json.JsonMapper
-import com.mingliqiye.document.format.yaml.YamlMapper
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -10,9 +8,7 @@ import kotlin.test.assertFailsWith
 
 class KotlinDataClassTest {
 
-    private val jsonMapper = JsonMapper.builder()
-        .objectInstantiator(KotlinDataClassInstantiator)
-        .build()
+    private val jsonMapper = KotlinJsonMapper()
 
     @Test
     fun jsonRoundTrip() {
@@ -73,9 +69,7 @@ class KotlinDataClassTest {
 
     @Test
     fun yamlMapperUsesKotlinInstantiator() {
-        val mapper = YamlMapper.builder()
-            .objectInstantiator(KotlinDataClassInstantiator)
-            .build()
+        val mapper = KotlinYamlMapper()
 
         val user = mapper.parse("name: 小于\nage: 18\n", User::class.java)
         assertEquals(User("小于", 18), user)

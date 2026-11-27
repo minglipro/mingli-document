@@ -20,14 +20,16 @@
 | `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
-| `serialization-kotlin` | Kotlin data class 实例化（主构造器） | `serialization`、`annotation`、`kotlin-reflect` |
+| `serialization-kotlin` | Kotlin data class Mapper（`KotlinJsonMapper` / `KotlinYamlMapper`） | `serialization`、`format-json`、`format-yaml`、`annotation`、`kotlin-reflect` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
 
 ```text
 format-json ──► serialization ──► core ──► exception ──► mingli-exception
 format-yaml ──► serialization
-serialization-kotlin ──► serialization
+serialization-kotlin ──► format-json
+                   ──► format-yaml
+                   ──► serialization
 serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
 annotation：项目内无依赖
@@ -118,20 +120,19 @@ fun main() {
 Java Bean 需要无参构造器；Kotlin data class 可以通过 `serialization-kotlin` 使用主构造器反序列化。
 
 ```kotlin
-import com.mingliqiye.document.format.json.JsonMapper
-import com.mingliqiye.document.serialization.kotlin.KotlinDataClassInstantiator
+import com.mingliqiye.document.serialization.kotlin.KotlinJsonMapper
 
 data class User(val name: String, val age: Int)
 
 fun main() {
-    val mapper = JsonMapper.builder()
-        .objectInstantiator(KotlinDataClassInstantiator)
-        .build()
+    val mapper = KotlinJsonMapper()
 
     val user = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
     println(mapper.formatPretty(user))
 }
 ```
+
+YAML 使用 `KotlinYamlMapper`。
 
 支持：
 
@@ -143,6 +144,8 @@ fun main() {
 - 非 data class 自动回退到默认 Java Bean 逻辑
 
 > `serialization-kotlin` 依赖 `kotlin-reflect`；不需要 Kotlin 反射时可以不引入该模块。
+>
+> 低层扩展点 `KotlinDataClassInstantiator` 仍可配合任意 `JsonMapper.builder().objectInstantiator(...)` 使用。
 
 ## 自定义转换器
 
