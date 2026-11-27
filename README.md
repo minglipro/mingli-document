@@ -511,10 +511,10 @@ fun main() {
 
 | Benchmark | 本项目 | Jackson |
 |---|---:|---:|
-| JSON 解析树 | 0.475 ms | 0.315 ms |
-| JSON → Bean | 0.827 ms | 0.293 ms |
-| JSON → data class | 0.936 ms | 0.293 ms |
-| Bean → JSON | 0.711 ms | 0.201 ms |
+| JSON 解析树 | 0.492 ms | 0.329 ms |
+| JSON → Bean | 0.724 ms | 0.298 ms |
+| JSON → data class | 0.819 ms | 0.298 ms |
+| Bean → JSON | 0.727 ms | 0.207 ms |
 
 运行：
 

@@ -205,9 +205,31 @@ public abstract class DocumentMapper protected constructor(
         )
     }
 
-    private fun findSerializer(type: Class<*>): JsonSerializer<*>? = serializers[type] ?: serializers.entries.firstOrNull { it.key.isAssignableFrom(type) }?.value
+    private fun findSerializer(type: Class<*>): JsonSerializer<*>? {
+        val boxed = boxedType(type)
+        return serializers[type]
+            ?: serializers[boxed]
+            ?: serializers.entries.firstOrNull { it.key.isAssignableFrom(boxed) }?.value
+    }
 
-    private fun findDeserializer(type: Class<*>): JsonDeserializer<*>? = deserializers[type] ?: deserializers.entries.firstOrNull { it.key.isAssignableFrom(type) }?.value
+    private fun findDeserializer(type: Class<*>): JsonDeserializer<*>? {
+        val boxed = boxedType(type)
+        return deserializers[type]
+            ?: deserializers[boxed]
+            ?: deserializers.entries.firstOrNull { it.key.isAssignableFrom(boxed) }?.value
+    }
+
+    private fun boxedType(type: Class<*>): Class<*> = when (type) {
+        java.lang.Boolean.TYPE -> java.lang.Boolean::class.java
+        java.lang.Byte.TYPE -> java.lang.Byte::class.java
+        java.lang.Short.TYPE -> java.lang.Short::class.java
+        java.lang.Integer.TYPE -> java.lang.Integer::class.java
+        java.lang.Long.TYPE -> java.lang.Long::class.java
+        java.lang.Float.TYPE -> java.lang.Float::class.java
+        java.lang.Double.TYPE -> java.lang.Double::class.java
+        java.lang.Character.TYPE -> java.lang.Character::class.java
+        else -> type
+    }
 
     /**
      * 解析字段级 [DocumentConverter] 注解。
@@ -423,17 +445,41 @@ public abstract class DocumentMapper protected constructor(
         return value[0]
     }
 
-    private fun readNumberValue(reader: DocumentValueReader, type: Class<*>): Any {
-        val raw = reader.readNumberRaw()
-        return when (type) {
-            Byte::class.java, java.lang.Byte::class.java -> raw.toByteOrNull() ?: BigDecimal(raw).byteValueExact()
-            Short::class.java, java.lang.Short::class.java -> raw.toShortOrNull() ?: BigDecimal(raw).shortValueExact()
-            Int::class.java, java.lang.Integer::class.java -> raw.toIntOrNull() ?: BigDecimal(raw).intValueExact()
-            Long::class.java, java.lang.Long::class.java -> raw.toLongOrNull() ?: BigDecimal(raw).longValueExact()
-            Float::class.java, java.lang.Float::class.java -> raw.toFloatOrNull() ?: BigDecimal(raw).toFloat()
-            Double::class.java, java.lang.Double::class.java -> raw.toDoubleOrNull() ?: BigDecimal(raw).toDouble()
-            BigInteger::class.java -> raw.toBigIntegerOrNull() ?: BigDecimal(raw).toBigIntegerExact()
-            else -> BigDecimal(raw)
+    private fun readNumberValue(reader: DocumentValueReader, type: Class<*>): Any = when (type) {
+        Int::class.java, java.lang.Integer::class.java -> reader.readInt()
+        Long::class.java, java.lang.Long::class.java -> reader.readLong()
+        Double::class.java, java.lang.Double::class.java -> reader.readDouble()
+        Byte::class.java, java.lang.Byte::class.java -> {
+            val raw = reader.readNumberRaw()
+            raw.toByteOrNull() ?: BigDecimal(raw).byteValueExact()
+        }
+
+        Short::class.java, java.lang.Short::class.java -> {
+            val raw = reader.readNumberRaw()
+            raw.toShortOrNull() ?: BigDecimal(raw).shortValueExact()
+        }
+
+        Float::class.java, java.lang.Float::class.java -> {
+            val raw = reader.readNumberRaw()
+            raw.toFloatOrNull() ?: BigDecimal(raw).toFloat()
+        }
+
+        BigInteger::class.java -> {
+            val raw = reader.readNumberRaw()
+            raw.toBigIntegerOrNull() ?: BigDecimal(raw).toBigIntegerExact()
+        }
+
+        else -> BigDecimal(reader.readNumberRaw())
+    }
+
+    private fun writeNumberValue(value: Number, writer: DocumentValueWriter) {
+        when (value) {
+            is Int -> writer.writeInt(value)
+            is Long -> writer.writeLong(value)
+            is Short -> writer.writeInt(value.toInt())
+            is Byte -> writer.writeInt(value.toInt())
+            is Double -> writer.writeDouble(value)
+            else -> writer.writeNumber(serializeNumberRaw(value))
         }
     }
 
@@ -626,7 +672,7 @@ public abstract class DocumentMapper protected constructor(
             is CharSequence -> writer.writeString(value.toString())
             is Char -> writer.writeString(value.toString())
             is Boolean -> writer.writeBoolean(value)
-            is Number -> writer.writeNumber(serializeNumberRaw(value))
+            is Number -> writeNumberValue(value, writer)
             is Enum<*> -> writer.writeString(value.name)
             is Map<*, *> -> {
                 writer.startObject()

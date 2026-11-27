@@ -18,6 +18,15 @@ public interface DocumentValueWriter {
     /** 写出数字原始文本。 */
     public fun writeNumber(raw: String)
 
+    /** 写出 int。 */
+    public fun writeInt(value: Int)
+
+    /** 写出 long。 */
+    public fun writeLong(value: Long)
+
+    /** 写出 double。 */
+    public fun writeDouble(value: Double)
+
     /** 写出布尔值。 */
     public fun writeBoolean(value: Boolean)
 

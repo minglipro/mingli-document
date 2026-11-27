@@ -19,6 +19,15 @@ public interface DocumentValueReader {
     /** 读取数字原始文本。 */
     public fun readNumberRaw(): String
 
+    /** 直接读取 int，不创建中间字符串。 */
+    public fun readInt(): Int
+
+    /** 直接读取 long，不创建中间字符串。 */
+    public fun readLong(): Long
+
+    /** 直接读取 double。 */
+    public fun readDouble(): Double
+
     /** 读取布尔值。 */
     public fun readBoolean(): Boolean
 

@@ -9,6 +9,7 @@ import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.json.exception.JsonParseException
 import com.mingliqiye.document.serialization.DocumentValueReader
+import java.math.BigDecimal
 import java.util.LinkedHashMap
 
 /**
@@ -41,6 +42,31 @@ internal class JsonValueReader(
     }
 
     override fun readNumberRaw(): String {
+        val start = scanNumber()
+        return source.substring(start, position)
+    }
+
+    override fun readInt(): Int {
+        val start = scanNumber()
+        val value = parseLong(start)
+        if (value != null && value >= Int.MIN_VALUE && value <= Int.MAX_VALUE) {
+            return value.toInt()
+        }
+        return BigDecimal(source.substring(start, position)).intValueExact()
+    }
+
+    override fun readLong(): Long {
+        val start = scanNumber()
+        return parseLong(start) ?: BigDecimal(source.substring(start, position)).longValueExact()
+    }
+
+    override fun readDouble(): Double {
+        val start = scanNumber()
+        val value = parseLong(start)
+        return value?.toDouble() ?: source.substring(start, position).toDouble()
+    }
+
+    private fun scanNumber(): Int {
         skipWhitespace()
         val start = position
         consume('-')
@@ -74,7 +100,29 @@ internal class JsonValueReader(
             }
             consumeDigits()
         }
-        return source.substring(start, position)
+        return start
+    }
+
+    private fun parseLong(start: Int): Long? {
+        var index = start
+        val negative = source[index] == '-'
+        if (negative) {
+            index++
+        }
+        var value = 0L
+        while (index < position) {
+            val ch = source[index]
+            if (ch == '.' || ch == 'e' || ch == 'E') {
+                return null
+            }
+            val digit = ch - '0'
+            if (value > (Long.MAX_VALUE - digit) / 10) {
+                return null
+            }
+            value = value * 10 + digit
+            index++
+        }
+        return if (negative) -value else value
     }
 
     override fun readBoolean(): Boolean {

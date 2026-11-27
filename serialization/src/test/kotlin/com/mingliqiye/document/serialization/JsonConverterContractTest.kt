@@ -3,6 +3,7 @@ package com.mingliqiye.document.serialization
 import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
+import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.json.JsonMapper
 import kotlin.test.Test
@@ -83,6 +84,17 @@ class JsonConverterContractTest {
     }
 
     @Test
+    fun numericConverterCanReadAndWriteNumbers() {
+        val mapper = JsonMapper.builder().addConverter(NumericConverter()).build()
+
+        val restored = mapper.parse("""{"value":1}""", NumericHolder::class.java)
+        assertEquals(101, restored.value)
+
+        val node = mapper.toNode(NumericHolder().apply { value = 1 }).asObject()
+        assertEquals(101, node["value"]?.asNumber()?.toInt())
+    }
+
+    @Test
     fun rootValueHasNoPropertyContext() {
         val converter = LabelConverter()
         val mapper = JsonMapper.builder().addConverter(converter).build()
@@ -108,6 +120,25 @@ class JsonConverterContractTest {
 
         assertNull(mapper.fromNode(StringNode.of("anything"), Label::class.java))
     }
+}
+
+/**
+ * 测试用数字转换器：写入和读取时都 +100。
+ */
+private class NumericConverter : JsonConverter<Int> {
+
+    override fun getType(): DocumentTypeReference<Int> = DocumentTypeReference.of()
+
+    override fun serialize(value: Int, context: SerializationContext): Node = NumberNode.of(value + 100)
+
+    override fun deserialize(node: Node, context: DeserializationContext): Int = node.asNumber().toInt() + 100
+}
+
+/**
+ * 数字转换器测试 Bean。
+ */
+private class NumericHolder {
+    var value: Int = 0
 }
 
 /**

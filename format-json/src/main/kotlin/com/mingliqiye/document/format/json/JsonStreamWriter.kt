@@ -41,6 +41,22 @@ internal class JsonStreamWriter(
         builder.append(raw)
     }
 
+    override fun writeInt(value: Int) {
+        beforeValue()
+        builder.append(value)
+    }
+
+    override fun writeLong(value: Long) {
+        beforeValue()
+        builder.append(value)
+    }
+
+    override fun writeDouble(value: Double) {
+        require(value.isFinite()) { "NaN and Infinity cannot be serialized" }
+        beforeValue()
+        builder.append(value)
+    }
+
     override fun writeBoolean(value: Boolean) {
         beforeValue()
         builder.append(if (value) "true" else "false")
