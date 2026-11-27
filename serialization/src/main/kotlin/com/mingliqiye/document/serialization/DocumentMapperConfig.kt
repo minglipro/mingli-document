@@ -35,6 +35,15 @@ public open class DocumentMapperConfig protected constructor(
     public val maxNodeCount: Long = 0L,
     /** 是否在反序列化前解析本地 `$ref`。 */
     public val resolveReferences: Boolean = false,
+    /**
+     * 是否在 [DocumentMapper.toNode] 序列化时按对象身份写出本地 `$ref`。
+     *
+     * 开启后同一对象（按引用身份而非 equals）只在首次出现处展开，再次出现时
+     * 写出 `{"$ref":"#/首次路径"}`，循环引用也会以引用代替环形展开。
+     * 引用属性名固定为 `$ref`，与输入侧本地 `$ref` 解析保持一致；
+     * 流式 `writeTo` 路径不参与引用写出。默认关闭，关闭时保持原有循环检测行为。
+     */
+    public val writeReferences: Boolean = false,
     private val subtypeRegistries: Map<Class<*>, SubtypeRegistry> = emptyMap(),
 ) {
 
@@ -56,6 +65,7 @@ public open class DocumentMapperConfig protected constructor(
         other.maxNodeDepth,
         other.maxNodeCount,
         other.resolveReferences,
+        other.writeReferences,
         other.subtypeRegistries,
     )
 
@@ -107,6 +117,7 @@ public open class DocumentMapperConfig protected constructor(
             maxNodeDepth: Int,
             maxNodeCount: Long,
             resolveReferences: Boolean,
+            writeReferences: Boolean = false,
             subtypes: SubtypeRegistries = SubtypeRegistries.EMPTY,
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
@@ -121,6 +132,7 @@ public open class DocumentMapperConfig protected constructor(
             maxNodeDepth,
             maxNodeCount,
             resolveReferences,
+            writeReferences,
             subtypes.toMap(),
         )
     }

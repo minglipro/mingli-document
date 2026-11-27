@@ -127,12 +127,18 @@ public abstract class DocumentMapper protected constructor(
     /**
      * 将 Java 对象序列化为文档树。
      *
+     * [DocumentMapperConfig.writeReferences] 开启时按对象身份写出本地 `$ref`：
+     * 同一对象只在首次出现处展开，再次出现时写出 `{"$ref":"#/首次路径"}`，循环引用
+     * 也会以引用代替环形展开。关闭时保持原有循环检测行为。该能力只作用于
+     * Node/[toNode] 路径，流式 [writeTo] 路径不参与引用写出。
+     *
      * @param value Java 对象
      * @return 文档树
      * @throws DocumentSerializationException 序列化失败或存在循环引用时抛出
      */
     override fun toNode(value: Any?): Node {
-        val node = serializeValue(value, IdentityHashMap(), 0, null, "$")
+        val references = if (config.writeReferences) IdentityReferenceTracker() else null
+        val node = serializeValue(value, IdentityHashMap(), 0, null, "$", references = references)
         NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
         return node
     }
@@ -1521,9 +1527,16 @@ public abstract class DocumentMapper protected constructor(
         path: String = "$",
         declaredType: Type? = property?.type,
         polymorphic: Boolean = true,
+        pointer: String = "",
+        references: IdentityReferenceTracker? = null,
     ): Node {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
+        }
+        if (references != null && value != null && value !is Node) {
+            references.pointerOf(value)?.let { firstPointer ->
+                return JsonReference.referenceNode(firstPointer)
+            }
         }
         if (value != null && value !is Node) {
             propertySerializer(property)?.let { serializer ->
@@ -1531,7 +1544,17 @@ public abstract class DocumentMapper protected constructor(
             }
             if (polymorphic && config.hasSubtypes) {
                 polymorphicRegistry(declaredType, value.javaClass)?.let { registry ->
-                    return serializePolymorphic(value, registry, declaredType, seen, depth, property, path)
+                    return serializePolymorphic(
+                        value,
+                        registry,
+                        declaredType,
+                        seen,
+                        depth,
+                        property,
+                        path,
+                        pointer,
+                        references,
+                    )
                 }
             }
             val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
@@ -1549,15 +1572,15 @@ public abstract class DocumentMapper protected constructor(
             is Boolean -> BooleanNode.of(value)
             is Number -> serializeNumber(value)
             is Enum<*> -> StringNode.of(value.name)
-            is Map<*, *> -> serializeMap(value, seen, depth, declaredType, path)
-            is Iterable<*> -> serializeIterable(value, seen, depth, declaredType, path)
-            is Array<*> -> serializeArray(value, seen, depth, declaredType, path)
+            is Map<*, *> -> serializeMap(value, seen, depth, declaredType, path, pointer, references)
+            is Iterable<*> -> serializeIterable(value, seen, depth, declaredType, path, pointer, references)
+            is Array<*> -> serializeArray(value, seen, depth, declaredType, path, pointer, references)
             else -> {
                 val type = value.javaClass
                 if (type.isArray) {
-                    serializeReflectArray(value, seen, depth, declaredType, path)
+                    serializeReflectArray(value, seen, depth, declaredType, path, pointer, references)
                 } else {
-                    serializeBean(value, seen, depth, path)
+                    serializeBean(value, seen, depth, path, pointer, references)
                 }
             }
         }
@@ -1618,6 +1641,8 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         property: DocumentProperty?,
         path: String,
+        pointer: String = "",
+        references: IdentityReferenceTracker? = null,
     ): Node {
         val typeName = registry.typeName(value.javaClass)
             ?: throw DocumentSerializationException(
@@ -1632,6 +1657,8 @@ public abstract class DocumentMapper protected constructor(
             path,
             declaredType = value.javaClass,
             polymorphic = false,
+            pointer = pointer,
+            references = references,
         )
         if (payload !is ObjectNode) {
             throw DocumentSerializationException(
@@ -1703,6 +1730,11 @@ public abstract class DocumentMapper protected constructor(
 
     /**
      * 直接写出实体，不构建完整文档树。
+     *
+     * 流式路径不支持对象身份引用：即使配置了
+     * [DocumentMapperConfig.writeReferences]，本方法仍按原有行为直接展开每个对象，
+     * 循环引用继续抛出 [DocumentSerializationException]。需要 `$ref` 写出时使用
+     * [toNode] 路径。
      *
      * @param value 任意实体、集合、Map 或 [Node]
      * @param writer 格式写出器
@@ -1866,14 +1898,28 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         declaredType: Type?,
         path: String,
-    ): Node = withCycleCheck(map, seen) {
-        val valueType = mapValueType(declaredType)
-        val fields = LinkedHashMap<String, Node>(map.size)
-        for ((key, value) in map) {
-            val fieldName = key?.toString() ?: "null"
-            fields[fieldName] = serializeValue(value, seen, depth + 1, null, "$path.$fieldName", valueType)
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(map, pointer)
+        return withCycleCheck(map, seen) {
+            val valueType = mapValueType(declaredType)
+            val fields = LinkedHashMap<String, Node>(map.size)
+            for ((key, value) in map) {
+                val fieldName = key?.toString() ?: "null"
+                fields[fieldName] = serializeValue(
+                    value,
+                    seen,
+                    depth + 1,
+                    null,
+                    "$path.$fieldName",
+                    valueType,
+                    pointer = JsonReference.fieldPointer(pointer, fieldName),
+                    references = references,
+                )
+            }
+            ObjectNode.from(fields)
         }
-        ObjectNode.from(fields)
     }
 
     private fun serializeIterable(
@@ -1882,15 +1928,31 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         declaredType: Type?,
         path: String,
-    ): Node = withCycleCheck(iterable, seen) {
-        val elementType = elementType(declaredType)
-        val elements = ArrayList<Node>()
-        var index = 0
-        for (element in iterable) {
-            elements.add(serializeValue(element, seen, depth + 1, null, "$path[$index]", elementType))
-            index++
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(iterable, pointer)
+        return withCycleCheck(iterable, seen) {
+            val elementType = elementType(declaredType)
+            val elements = ArrayList<Node>()
+            var index = 0
+            for (element in iterable) {
+                elements.add(
+                    serializeValue(
+                        element,
+                        seen,
+                        depth + 1,
+                        null,
+                        "$path[$index]",
+                        elementType,
+                        pointer = JsonReference.indexPointer(pointer, index),
+                        references = references,
+                    ),
+                )
+                index++
+            }
+            ArrayNode.from(elements)
         }
-        ArrayNode.from(elements)
     }
 
     private fun serializeArray(
@@ -1899,15 +1961,31 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         declaredType: Type?,
         path: String,
-    ): Node = withCycleCheck(array, seen) {
-        val componentType = elementType(declaredType) ?: array.javaClass.componentType
-        val elements = ArrayList<Node>(array.size)
-        var index = 0
-        for (element in array) {
-            elements.add(serializeValue(element, seen, depth + 1, null, "$path[$index]", componentType))
-            index++
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(array, pointer)
+        return withCycleCheck(array, seen) {
+            val componentType = elementType(declaredType) ?: array.javaClass.componentType
+            val elements = ArrayList<Node>(array.size)
+            var index = 0
+            for (element in array) {
+                elements.add(
+                    serializeValue(
+                        element,
+                        seen,
+                        depth + 1,
+                        null,
+                        "$path[$index]",
+                        componentType,
+                        pointer = JsonReference.indexPointer(pointer, index),
+                        references = references,
+                    ),
+                )
+                index++
+            }
+            ArrayNode.from(elements)
         }
-        ArrayNode.from(elements)
     }
 
     private fun serializeReflectArray(
@@ -1916,7 +1994,10 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         declaredType: Type?,
         path: String,
+        pointer: String,
+        references: IdentityReferenceTracker?,
     ): Node {
+        references?.register(array, pointer)
         val size = ReflectArray.getLength(array)
         val componentType = elementType(declaredType) ?: array.javaClass.componentType
         val elements = ArrayList<Node>(size)
@@ -1930,6 +2011,8 @@ public abstract class DocumentMapper protected constructor(
                         null,
                         "$path[$index]",
                         componentType,
+                        pointer = JsonReference.indexPointer(pointer, index),
+                        references = references,
                     ),
                 )
             }
@@ -1942,25 +2025,33 @@ public abstract class DocumentMapper protected constructor(
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
         path: String,
-    ): Node = withCycleCheck(bean, seen) {
-        val fields = LinkedHashMap<String, Node>()
-        val creator = beanCreator(bean.javaClass)
-        for (accessor in beanMetadata(bean.javaClass).readableProperties) {
-            val metadata = accessor.metadata
-            val value = accessor.read(bean)
-            if (!config.writeNulls && value == null) {
-                continue
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(bean, pointer)
+        return withCycleCheck(bean, seen) {
+            val fields = LinkedHashMap<String, Node>()
+            val creator = beanCreator(bean.javaClass)
+            for (accessor in beanMetadata(bean.javaClass).readableProperties) {
+                val metadata = accessor.metadata
+                val value = accessor.read(bean)
+                if (!config.writeNulls && value == null) {
+                    continue
+                }
+                val documentName = serializedDocumentName(creator, metadata)
+                fields[documentName] = serializeValue(
+                    value,
+                    seen,
+                    depth + 1,
+                    metadata,
+                    "$path.${metadata.name}",
+                    metadata.type,
+                    pointer = JsonReference.fieldPointer(pointer, documentName),
+                    references = references,
+                )
             }
-            fields[serializedDocumentName(creator, metadata)] = serializeValue(
-                value,
-                seen,
-                depth + 1,
-                metadata,
-                "$path.${metadata.name}",
-                metadata.type,
-            )
+            ObjectNode.from(fields)
         }
-        ObjectNode.from(fields)
     }
 
     private fun deserializeValue(

@@ -25,6 +25,7 @@ public class DocumentMapperConfigBuilder {
     private var maxNodeDepth = 0
     private var maxNodeCount = 0L
     private var resolveReferences = false
+    private var writeReferences = false
 
     /**
      * 为指定字段绑定转换器。
@@ -240,6 +241,22 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置 [com.mingliqiye.document.serialization.DocumentMapper.toNode] 序列化时
+     * 是否按对象身份写出本地 `$ref`。
+     *
+     * 开启后同一对象只在首次出现处展开，再次出现时写出 `{"$ref":"#/首次路径"}`，
+     * 循环引用也会自然变成引用而不再抛出循环引用异常。流式 `writeTo` 路径不受影响。
+     * 默认关闭。
+     *
+     * @param write 是否写出对象身份引用
+     * @return 当前构建器
+     */
+    public fun writeReferences(write: Boolean): DocumentMapperConfigBuilder {
+        this.writeReferences = write
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      *
      * @throws IllegalArgumentException 子类型注册项非法（如子类不可赋值给基类、
@@ -258,6 +275,7 @@ public class DocumentMapperConfigBuilder {
         maxNodeDepth,
         maxNodeCount,
         resolveReferences,
+        writeReferences,
         SubtypeRegistries.build(subtypeRegistrations, subtypeTypeProperties),
     )
 }

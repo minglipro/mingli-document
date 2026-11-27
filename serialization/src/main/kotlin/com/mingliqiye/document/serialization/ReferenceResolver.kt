@@ -8,10 +8,16 @@ import com.mingliqiye.document.serialization.exception.DocumentSerializationExce
 
 /**
  * 本地 `$ref`（JSON Pointer）解析器。
+ *
+ * 除普通引用外，还支持 [DocumentMapperConfig.writeReferences] 产生的**结构性循环**
+ * 引用：当引用的目标位于当前解析链上（结构循环）时，按目标结构展开一次，环上的
+ * 回边保留为 `$ref` 节点。Node 树是不可变树模型，无法表达真正的环，因此环回边
+ * 只能以 `$ref` 标记的形式保留。
+ *
+ * 纯别名环（`$ref` 目标本身仍是一个 `$ref` 对象，如 `{"a": {"$ref": "#/a"}}`）
+ * 无法展开，仍抛出 [DocumentSerializationException]；远程引用与缺失引用同样报错。
  */
 internal object ReferenceResolver {
-
-    private const val REF_KEY = "\$ref"
 
     fun resolve(root: Node): Node = resolveNode(root, root, emptySet())
 
@@ -22,16 +28,21 @@ internal object ReferenceResolver {
     }
 
     private fun resolveObject(node: ObjectNode, root: Node, activeRefs: Set<String>): Node {
-        val reference = node[REF_KEY]
+        val reference = node[JsonReference.PROPERTY]
         if (reference != null) {
             if (reference.type != NodeType.STRING) {
-                throw DocumentSerializationException("$REF_KEY must be a string")
+                throw DocumentSerializationException("${JsonReference.PROPERTY} must be a string")
             }
             val pointer = reference.asString()
-            if (pointer in activeRefs) {
-                throw DocumentSerializationException("Circular \$ref detected: $pointer")
-            }
             val target = resolvePointer(root, pointer)
+            if (pointer in activeRefs) {
+                if (target is ObjectNode && target.containsKey(JsonReference.PROPERTY)) {
+                    throw DocumentSerializationException(
+                        "Circular ${JsonReference.PROPERTY} detected: $pointer",
+                    )
+                }
+                return node
+            }
             return resolveNode(target, root, activeRefs + pointer)
         }
         return ObjectNode.from(

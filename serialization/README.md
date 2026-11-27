@@ -78,6 +78,7 @@ maxInputSize            单次输入最大字节数，0 表示不限制
 maxNodeDepth            Node 树最大深度，0 表示不限制
 maxNodeCount            Node 树最大节点数，0 表示不限制
 resolveReferences       反序列化前解析本地 $ref，默认 false
+writeReferences         序列化时输出对象身份 $ref，默认 false
 ```
 
 本地 `$ref`：
@@ -93,6 +94,24 @@ val node = mapper.fromNode(JsonReader.parse(document), Map::class.java)
 ```
 
 支持 `#/...` JSON Pointer、循环检测；只支持本地引用。
+
+对象身份引用：
+
+```kotlin
+val mapper = JsonMapper(
+    DocumentMapperConfig.builder()
+        .writeReferences(true)
+        .build(),
+)
+```
+
+同一个可变对象第二次出现时写成：
+
+```json
+{"$ref": "#/first"}
+```
+
+仅 `toNode` / Node 路径支持；流式 `format` 仍保持原行为。
 
 ## 转换器
 
