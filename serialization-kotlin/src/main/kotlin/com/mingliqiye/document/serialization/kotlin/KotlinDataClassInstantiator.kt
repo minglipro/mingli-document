@@ -39,10 +39,45 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
             return null
         }
         val metadata = cache.computeIfAbsent(type, ::createMetadata)
-        val arguments = LinkedHashMap<KParameter, Any?>()
-        val argumentArray = arrayOfNulls<Any?>(metadata.parameters.size)
+        return if (metadata.directConstruction) {
+            instantiateDirect(metadata, node, context, type)
+        } else {
+            instantiateWithDefaults(metadata, node, context, type)
+        }
+    }
 
+    private fun instantiateDirect(
+        metadata: DataClassMetadata,
+        node: ObjectNode,
+        context: InstantiationContext,
+        type: Class<*>,
+    ): Any {
+        val arguments = arrayOfNulls<Any?>(metadata.parameters.size)
         for ((index, parameterMetadata) in metadata.parameters.withIndex()) {
+            val valueNode = node[parameterMetadata.fieldName]
+                ?: throw DocumentSerializationException(
+                    "Missing required data class parameter '${parameterMetadata.parameter.name}' at ${context.path}",
+                )
+            arguments[index] = context.deserialize(valueNode, parameterMetadata.javaType)
+        }
+        return try {
+            val constructor = requireNotNull(metadata.javaConstructor) {
+                "Data class ${type.name} has no Java constructor"
+            }
+            constructor.newInstance(*arguments)
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate data class ${type.name}", e)
+        }
+    }
+
+    private fun instantiateWithDefaults(
+        metadata: DataClassMetadata,
+        node: ObjectNode,
+        context: InstantiationContext,
+        type: Class<*>,
+    ): Any {
+        val arguments = LinkedHashMap<KParameter, Any?>()
+        for (parameterMetadata in metadata.parameters) {
             val parameter = parameterMetadata.parameter
             if (parameterMetadata.ignored) {
                 continue
@@ -56,17 +91,10 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
                     "Missing required data class parameter '${parameter.name}' at ${context.path}",
                 )
             }
-            val value = context.deserialize(valueNode, parameterMetadata.javaType)
-            arguments[parameter] = value
-            argumentArray[index] = value
+            arguments[parameter] = context.deserialize(valueNode, parameterMetadata.javaType)
         }
-
         return try {
-            if (metadata.directConstruction) {
-                metadata.javaConstructor!!.newInstance(*argumentArray)
-            } else {
-                metadata.constructor.callBy(arguments)
-            }
+            metadata.constructor.callBy(arguments)
         } catch (e: Exception) {
             throw DocumentSerializationException("Cannot instantiate data class ${type.name}", e)
         }

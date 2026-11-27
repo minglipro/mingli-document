@@ -80,7 +80,7 @@ internal class JsonParser(
         expect('{')
         enter()
         try {
-            val fields = LinkedHashMap<String, Node>()
+            val fields = LinkedHashMap<String, Node>(8)
             skipWhitespace()
             if (consume('}')) {
                 return ObjectNode.from(fields)
@@ -118,7 +118,7 @@ internal class JsonParser(
         expect('[')
         enter()
         try {
-            val elements = ArrayList<Node>()
+            val elements = ArrayList<Node>(8)
             skipWhitespace()
             if (consume(']')) {
                 return ArrayNode.from(elements)
@@ -289,14 +289,16 @@ internal class JsonParser(
      */
     private fun skipWhitespace() {
         while (hasNext()) {
+            val ch = source[position]
             when {
-                isWhitespace(source[position]) -> position++
-                allowComments && source[position] == '/' -> {
+                ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> position++
+                allowComments && ch == '/' -> {
                     if (!skipComment()) {
                         return
                     }
                 }
 
+                isWhitespace(ch) -> position++
                 else -> return
             }
         }

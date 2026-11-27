@@ -19,12 +19,12 @@ gradle :benchmarks:jmh
 
 ```text
 Benchmark                             Mode  Cnt  Score   Error  Units
-JsonMapperBenchmark.jacksonFormat     avgt    5  0.200 ± 0.038  ms/op
-JsonMapperBenchmark.jacksonParseData  avgt    5  0.290 ± 0.051  ms/op
-JsonMapperBenchmark.jacksonParseTree  avgt    5  0.328 ± 0.054  ms/op
-JsonMapperBenchmark.ourFormat         avgt    5  0.747 ± 0.095  ms/op
-JsonMapperBenchmark.ourParseData      avgt    5  1.155 ± 0.241  ms/op
-JsonMapperBenchmark.ourParseTree      avgt    5  0.467 ± 0.087  ms/op
+JsonMapperBenchmark.jacksonFormat     avgt    5  0.202 ± 0.004  ms/op
+JsonMapperBenchmark.jacksonParseData  avgt    5  0.285 ± 0.007  ms/op
+JsonMapperBenchmark.jacksonParseTree  avgt    5  0.303 ± 0.011  ms/op
+JsonMapperBenchmark.ourFormat         avgt    5  0.678 ± 0.027  ms/op
+JsonMapperBenchmark.ourParseData      avgt    5  1.183 ± 0.016  ms/op
+JsonMapperBenchmark.ourParseTree      avgt    5  0.468 ± 0.013  ms/op
 ```
 
 说明：

@@ -907,16 +907,24 @@ public abstract class DocumentMapper protected constructor(
             writeMethod?.isAccessible = true
             field?.isAccessible = true
             val getter: ((Any) -> Any?)? = when {
-                readMethod != null -> { bean -> readMethod.invoke(bean) }
-                field != null && !Modifier.isStatic(field.modifiers) && !field.isSynthetic -> { bean -> readField(field, bean) }
+                readMethod != null -> BeanAccessorFactory.getter(readMethod) ?: { bean -> invoke(readMethod, bean) }
+                field != null && !Modifier.isStatic(field.modifiers) && !field.isSynthetic ->
+                    BeanAccessorFactory.fieldGetter(field) ?: { bean -> readField(field, bean) }
+
                 else -> null
             }
             val setter: ((Any, Any?) -> Unit)? = when {
-                writeMethod != null -> { bean, value -> writeMethod.invoke(bean, value) }
+                writeMethod != null -> BeanAccessorFactory.setter(writeMethod) ?: { bean, value ->
+                    invoke(writeMethod, bean, value)
+                    Unit
+                }
                 field != null &&
                     !Modifier.isStatic(field.modifiers) &&
                     !Modifier.isFinal(field.modifiers) &&
-                    !field.isSynthetic -> { bean, value -> writeField(field, bean, value) }
+                    !field.isSynthetic ->
+                    BeanAccessorFactory.fieldSetter(field) ?: { bean, value ->
+                        writeField(field, bean, value)
+                    }
 
                 else -> null
             }

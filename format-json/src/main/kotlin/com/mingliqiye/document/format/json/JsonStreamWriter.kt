@@ -21,7 +21,9 @@ internal class JsonStreamWriter(
 ) : DocumentValueWriter {
 
     private val builder = StringBuilder()
-    private val firstElements = ArrayList<Boolean>()
+    private val quotedNames = HashMap<String, String>()
+    private var firstElements = BooleanArray(8)
+    private var depth = 0
     private var expectingValue = false
 
     override fun writeNull() {
@@ -47,13 +49,13 @@ internal class JsonStreamWriter(
     override fun startObject() {
         beforeValue()
         builder.append('{')
-        firstElements.add(true)
+        push(true)
     }
 
     override fun endObject() {
-        val first = firstElements.removeAt(firstElements.lastIndex)
+        val first = pop()
         if (!first && pretty) {
-            appendNewline(firstElements.size)
+            appendNewline(depth)
         }
         builder.append('}')
         expectingValue = false
@@ -62,28 +64,28 @@ internal class JsonStreamWriter(
     override fun startArray() {
         beforeValue()
         builder.append('[')
-        firstElements.add(true)
+        push(true)
     }
 
     override fun endArray() {
-        val first = firstElements.removeAt(firstElements.lastIndex)
+        val first = pop()
         if (!first && pretty) {
-            appendNewline(firstElements.size)
+            appendNewline(depth)
         }
         builder.append(']')
         expectingValue = false
     }
 
     override fun fieldName(name: String) {
-        val first = firstElements.removeAt(firstElements.lastIndex)
-        if (!first) {
+        val index = depth - 1
+        if (!firstElements[index]) {
             builder.append(',')
         }
-        firstElements.add(false)
+        firstElements[index] = false
         if (pretty) {
-            appendNewline(firstElements.size)
+            appendNewline(depth)
         }
-        appendString(name)
+        appendQuotedName(name)
         builder.append(if (pretty) ": " else ":")
         expectingValue = true
     }
@@ -121,17 +123,37 @@ internal class JsonStreamWriter(
             expectingValue = false
             return
         }
-        if (firstElements.isEmpty()) {
+        if (depth == 0) {
             return
         }
-        val first = firstElements.removeAt(firstElements.lastIndex)
-        if (!first) {
+        val index = depth - 1
+        if (!firstElements[index]) {
             builder.append(',')
         }
-        firstElements.add(false)
+        firstElements[index] = false
         if (pretty) {
-            appendNewline(firstElements.size)
+            appendNewline(depth)
         }
+    }
+
+    private fun push(first: Boolean) {
+        if (depth == firstElements.size) {
+            firstElements = firstElements.copyOf(firstElements.size * 2)
+        }
+        firstElements[depth++] = first
+    }
+
+    private fun pop(): Boolean = firstElements[--depth]
+
+    private fun appendQuotedName(name: String) {
+        val cached = quotedNames[name]
+        if (cached != null) {
+            builder.append(cached)
+            return
+        }
+        val start = builder.length
+        appendString(name)
+        quotedNames[name] = builder.substring(start)
     }
 
     private fun appendString(value: String) {
