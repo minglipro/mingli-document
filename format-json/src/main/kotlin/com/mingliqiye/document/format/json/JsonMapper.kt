@@ -86,7 +86,14 @@ public open class JsonMapper internal constructor(
      *
      * 等价于 [format] 结果的 UTF-8 字节；`pretty` 配置同样生效。
      */
-    override fun formatBytes(value: Any?): ByteArray = writeJson(value, pretty = prettyOutput).toByteArray(Charsets.UTF_8)
+    override fun formatBytes(value: Any?): ByteArray {
+        if (prettyOutput) {
+            return writeJson(value, pretty = true).toByteArray(Charsets.UTF_8)
+        }
+        val writer = JsonUtf8StreamWriter()
+        writeTo(value, writer)
+        return writer.toByteArray()
+    }
 
     private fun <T> parseDirect(source: String, targetType: DocumentTypeReference<T>): T = fromTokens(createJsonTokenReader(source), targetType)
 

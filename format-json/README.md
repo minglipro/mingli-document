@@ -63,6 +63,7 @@ val mapper = JsonMapper(
 - 文件/流读写
 - Token 直读 Bean
 - 轻量 JSON Schema 校验
+- 紧凑模式纯 UTF-8 字节写出（不经过中间 String）
 
 ## JSON Schema
 
