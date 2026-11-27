@@ -57,7 +57,7 @@ public class DocumentSerializationException @JvmOverloads constructor(
  *
  * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
-public class DefaultDocumentMapper internal constructor(
+internal class DefaultDocumentMapper internal constructor(
     /** 可选的文本格式编解码器；用于 [parse] / [format] 便捷方法。 */
     public val codec: DocumentCodec?,
     private val serializers: Map<Class<*>, JsonSerializer<*>>,
