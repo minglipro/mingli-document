@@ -10,7 +10,7 @@ import com.mingliqiye.document.core.Node
  *
  * @param T 需要反序列化的类型
  */
-public interface DocumentBaseDeserializer<T> {
+public interface DocumentBaseDeserializer<T> : com.mingliqiye.document.annotation.DocumentBaseDeserializer<T> {
 
     /**
      * 获取反序列化器负责的类型。

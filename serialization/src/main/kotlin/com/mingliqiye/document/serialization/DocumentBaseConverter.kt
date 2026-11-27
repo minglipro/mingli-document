@@ -10,4 +10,5 @@ package com.mingliqiye.document.serialization
  */
 public interface DocumentBaseConverter<T> :
     DocumentBaseSerializer<T>,
-    DocumentBaseDeserializer<T>
+    DocumentBaseDeserializer<T>,
+    com.mingliqiye.document.annotation.DocumentBaseConverter<T>

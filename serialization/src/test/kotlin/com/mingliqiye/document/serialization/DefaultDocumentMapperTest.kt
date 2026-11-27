@@ -1,6 +1,7 @@
 package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.annotation.DocumentConverter
+import com.mingliqiye.document.annotation.DocumentSerializer
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
@@ -282,14 +283,14 @@ class DefaultDocumentMapperTest {
     }
 
     private class UpperStringBean {
-        @field:DocumentConverter(UpperStringSerializer::class)
+        @field:DocumentSerializer(UpperStringSerializer::class)
         var name: String = ""
     }
 
-    private class InvalidConverter
+    private class MarkerOnlySerializer : com.mingliqiye.document.annotation.DocumentBaseSerializer<String>
 
     private class InvalidConverterBean {
-        @field:DocumentConverter(InvalidConverter::class)
+        @field:DocumentSerializer(MarkerOnlySerializer::class)
         var name: String = ""
     }
 

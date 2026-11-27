@@ -2,7 +2,9 @@ package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
+import com.mingliqiye.document.annotation.DocumentDeserializer
 import com.mingliqiye.document.annotation.DocumentNumberFormat
+import com.mingliqiye.document.annotation.DocumentSerializer
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
@@ -426,13 +428,41 @@ public abstract class DocumentMapper protected constructor(
     }
 
     private fun propertySerializer(property: DocumentProperty?): DocumentBaseSerializer<*>? {
+        if (property != null) {
+            val annotation = property.getAnnotation(DocumentSerializer::class.java)
+            if (annotation != null) {
+                val instance = annotationConverter(property, annotation.value.java)
+                return instance as? DocumentBaseSerializer<*>
+                    ?: throw DocumentSerializationException(
+                        "Serializer ${annotation.value.java.name} for " +
+                            "${property.declaringClass.name}.${property.name} " +
+                            "must implement DocumentBaseSerializer",
+                    )
+            }
+        }
         val converter = propertyConverter(property) ?: return null
         return converter as? DocumentBaseSerializer<*>
     }
 
     private fun propertyDeserializer(property: DocumentProperty?): DocumentBaseDeserializer<*>? {
+        if (property != null) {
+            val annotation = property.getAnnotation(DocumentDeserializer::class.java)
+            if (annotation != null) {
+                val instance = annotationConverter(property, annotation.value.java)
+                return instance as? DocumentBaseDeserializer<*>
+                    ?: throw DocumentSerializationException(
+                        "Deserializer ${annotation.value.java.name} for " +
+                            "${property.declaringClass.name}.${property.name} " +
+                            "must implement DocumentBaseDeserializer",
+                    )
+            }
+        }
         val converter = propertyConverter(property) ?: return null
         return converter as? DocumentBaseDeserializer<*>
+    }
+
+    private fun annotationConverter(property: DocumentProperty, converterType: Class<*>): Any = converterCache.computeIfAbsent(converterType) {
+        instantiateConverter(property, converterType)
     }
 
     private fun instantiateConverter(property: DocumentProperty, converterType: Class<*>): Any {

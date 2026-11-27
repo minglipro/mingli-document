@@ -12,7 +12,7 @@ dependencies {
     api(project(":core"))
     api(project(":exception"))
     api("com.mingliqiye.utils.aliasfor:alias-for:1.0.3")
-    implementation(project(":annotation"))
+    api(project(":annotation"))
     testImplementation(project(":format-json"))
     testImplementation(kotlin("test"))
 }

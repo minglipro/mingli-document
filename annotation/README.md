@@ -14,7 +14,9 @@ com.mingliqiye.document.annotation
 |---|---|
 | `@DocumentName("name")` | 指定文档字段名 |
 | `@DocumentIgnore` | 忽略字段 |
-| `@DocumentConverter(XxxConverter::class)` | 字段专用转换器 |
+| `@DocumentConverter(XxxConverter::class)` | 字段专用双向转换器 |
+| `@DocumentSerializer(XxxSerializer::class)` | 字段专用序列化器 |
+| `@DocumentDeserializer(XxxDeserializer::class)` | 字段专用反序列化器 |
 | `@DocumentDateTimeFormat(pattern, timezone)` | 日期时间格式 |
 | `@DocumentNumberFormat(pattern, locale)` | 数字格式 |
 | `@DocumentRootName("root")` | XML 根元素名 |
@@ -41,6 +43,10 @@ class User {
 ```
 
 注解不依赖任何具体格式；由 `serialization` 和各 `format-*` 模块读取。
+
+`annotation` 中的 `DocumentBaseConverter` / `DocumentBaseSerializer` /
+`DocumentBaseDeserializer` 是注解参数使用的标记接口；真正的功能接口位于
+`serialization` 模块并继承这些标记。
 
 ## 构建
 
