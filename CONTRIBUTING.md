@@ -32,6 +32,7 @@
 | `exception` | 文档处理异常 | `mingli-exception` |
 | `core` | 文档树、Codec/SPI 契约 | `exception` |
 | `format-json` | JSON 编解码实现 | `core` |
+| `format-yaml` | YAML 编解码实现 | `core`、SnakeYAML |
 | `serialization` | Java 实体与树之间的映射 | `core` |
 
 允许的依赖方向：
@@ -43,13 +44,14 @@ exception
     ↑
 core
  ├── format-json
+ ├── format-yaml
  └── serialization
 ```
 
 规则：
 
 - `core` 不能依赖任何具体格式模块。
-- `annotation` 不能依赖 `core`、`format-json`、`serialization`。
+- `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`serialization`。
 - `format-*` 只能依赖 `core` 及其 API。
 - `serialization` 主代码不依赖具体格式。
 - 测试可以临时依赖其他模块做集成验证，但不能把测试依赖带入主代码 API。
@@ -418,12 +420,15 @@ build(serialization): 补充 format-json 测试依赖
 
 ## 13. 当前待重构清单
 
-- [ ] 当前工作区按模块拆成原子提交
-- [ ] `core` 树节点改为接口 + Default 实现
-- [ ] `DocumentTypeReference` 改为接口 + 默认实现
-- [ ] `format-json` 的 parser/writer 收起实现细节
-- [ ] `serialization` 拆出 `DefaultDocumentMapper` 和内部 SPI
-- [ ] `annotation` 模块定义首批注解
-- [ ] 所有模块启用 Explicit API Mode
-- [ ] 接口契约测试补齐
-- [ ] YAML/XML 适配器在 core API 稳定后再接入
+- [x] 当前工作区按模块拆成原子提交
+- [x] `core` 树节点改为接口 + Default 实现
+- [x] `DocumentTypeReference` 改为接口 + 默认实现
+- [x] `format-json` 的 parser/writer 收起实现细节
+- [x] `DefaultDocumentMapper` 收起为内部实现
+- [x] `annotation` 模块定义首批注解
+- [x] 所有模块启用 Explicit API Mode
+- [x] 接口契约测试补齐
+- [x] YAML 适配器接入（`format-yaml`）
+- [ ] XML 适配器在 core API 稳定后接入
+- [ ] 补充 CI 门禁
+- [ ] document 私服发布配置

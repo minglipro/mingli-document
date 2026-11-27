@@ -1,14 +1,14 @@
 # document
 
-格式无关的文档树模型 + JSON 编解码 + Java Bean 映射。
+格式无关的文档树模型 + JSON/YAML 编解码 + Java Bean 映射。
 
 `com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
 
 - **格式无关**：`core` 定义节点树与 `DocumentCodec` SPI，核心 API 不依赖任何具体格式；
-- **JSON 编解码**：`format-json` 提供 JSON/JSONC 解析与输出（目前唯一的格式实现）；
+- **JSON/YAML 编解码**：`format-json` 提供 JSON/JSONC，`format-yaml` 提供 YAML 解析与输出；
 - **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
 
-> YAML / XML **尚未实现**，只在路线图中；详见「限制与路线图」。
+> XML **尚未实现**，只在路线图中；详见「限制与路线图」。
 
 ## 模块与依赖
 
@@ -18,20 +18,22 @@
 | `exception` | 文档异常基类 `DocumentException` | `com.mingliqiye.exception:mingli-exception:1.1.1-Final` |
 | `core` | 文档树 `Node`、`DocumentCodec` / `DocumentParser` / `DocumentWriter` SPI、`DocumentTypeReference` | `exception` |
 | `format-json` | JSON/JSONC 编解码器 `JsonCodec`、`JsonReader` | `core` |
+| `format-yaml` | YAML 编解码器 `YamlCodec`、`YamlReader` | `core`、SnakeYAML |
 | `serialization` | Java Bean ↔ `Node` 映射、转换器 SPI、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
 
 ```text
 format-json   ──► core ──► exception ──► mingli-exception
+format-yaml   ──► core
 serialization ──► core
               ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
 annotation：项目内无依赖
 ```
 
-- `core` 不依赖任何具体格式，`format-json` 与 `serialization` 之间也不互相依赖（`serialization` 只在测试中依赖 `format-json`）。
-- 需要文本解析/输出时，业务方应同时引入 `serialization` 与 `format-json`。
+- `core` 不依赖任何具体格式，`format-json`、`format-yaml` 与 `serialization` 之间也不互相依赖（`serialization` 只在测试中依赖 `format-json`）。
+- 需要文本解析/输出时，业务方按需引入 `serialization` 与 `format-json` 或 `format-yaml`。
 
 ## 坐标
 
@@ -45,6 +47,7 @@ annotation：项目内无依赖
 dependencies {
     implementation("com.mingliqiye.document:serialization:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-json:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-yaml:1.0-SNAPSHOT")
     // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
     implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
 }
@@ -380,6 +383,47 @@ fun main() {
 - JSON 最大嵌套深度为 512，超过时抛出 `JsonParseException`；
 - 输出格式化使用两空格缩进。
 
+## YAML 支持
+
+YAML 使用 [SnakeYAML](https://bitbucket.org/snakeyaml/snakeyaml) 2.6，并通过 `SafeConstructor` 只还原标准 YAML 标量和集合。
+
+```kotlin
+import com.mingliqiye.document.format.yaml.YamlCodec
+import com.mingliqiye.document.format.yaml.toYamlNode
+import com.mingliqiye.document.format.yaml.toYamlString
+
+fun main() {
+    val text = """
+        name: 小于
+        tags:
+          - a
+          - b
+        profile:
+          age: 18
+    """.trimIndent()
+
+    val node = text.toYamlNode()
+    println(node.asObject()["name"]?.asString()) // 小于
+
+    // 流式紧凑输出（默认）
+    println(node.toYamlString())
+    // 块格式输出
+    println(node.toYamlString(pretty = true))
+
+    // 作为 Mapper codec 使用
+    val mapper = com.mingliqiye.document.serialization.DocumentMapperApi
+        .builder()
+        .codec(YamlCodec)
+        .build()
+    println(mapper.formatPretty(node))
+}
+```
+
+- YAML 映射键会转换为字符串（数字键 `1` 转为 `"1"`），复杂映射键不支持；
+- 空文档解析为 `NullNode`；
+- 重复键默认拒绝，解析失败抛出 `YamlParseException`；
+- 不支持 YAML 的 `NaN` / `Infinity` 数字。
+
 ## 构建与测试
 
 ```bash
@@ -392,6 +436,7 @@ gradlew.bat ktlintCheck build
 # 只跑单个模块的测试
 gradle :serialization:test
 gradle :format-json:test
+gradle :format-yaml:test
 
 # 自动格式化 Kotlin 代码
 gradle ktlintFormat
@@ -406,7 +451,7 @@ gradle ktlintFormat
 
 当前已实现的范围：
 
-- 格式实现只有 JSON（`format-json`）；
+- 格式实现有 JSON（`format-json`）和 YAML（`format-yaml`）；
 - Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
 - 实体需要无参构造器；不支持带参数构造器的实体（Kotlin 类所有构造参数都有默认值时编译器会生成无参构造器，可以正常映射）；
 - 文本 `parse` / `format` 需要构建 Mapper 时传入 codec，否则抛 `DocumentSerializationException`；
@@ -414,8 +459,8 @@ gradle ktlintFormat
 
 **尚未实现**：
 
-- YAML、XML 适配器均未实现。`core` 只提供 `DocumentCodec` SPI（`parse` / `write` / `format`），新增格式需要自行实现该接口，但当前仓库中没有 YAML/XML 模块或对应 API。
-- 按 `CONTRIBUTING.md` 的路线图，YAML/XML 适配器计划在 `core` API 稳定后再接入。
+- XML 适配器尚未实现。`core` 只提供 `DocumentCodec` SPI（`parse` / `write` / `format`），新增格式需要自行实现该接口。
+- XML 适配器计划在 `core` API 稳定后再接入。
 
 常见异常：
 
@@ -425,5 +470,6 @@ gradle ktlintFormat
 | `DocumentTypeException` | `exception` | 节点类型与预期不符（如对数组调用 `asObject()`） |
 | `DocumentSerializationException` | `serialization` | Bean 映射失败、未配置 codec、循环引用等 |
 | `JsonParseException` | `format-json` | JSON/JSONC 语法错误 |
+| `YamlParseException` | `format-yaml` | YAML 语法错误或不支持的类型 |
 
 更多代码规范、提交规范与模块约束见 [CONTRIBUTING.md](CONTRIBUTING.md)。
