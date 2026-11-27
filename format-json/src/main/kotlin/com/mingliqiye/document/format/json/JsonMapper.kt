@@ -55,12 +55,7 @@ public open class JsonMapper internal constructor(
 
     override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = parseDirect(source, targetType)
 
-    private fun <T> parseDirect(source: String, targetType: DocumentTypeReference<T>): T {
-        val reader = JsonValueReader(source, jsonConfig?.allowComments ?: true)
-        val result = readFrom(reader, targetType)
-        reader.ensureEnd()
-        return result
-    }
+    private fun <T> parseDirect(source: String, targetType: DocumentTypeReference<T>): T = fromTokens(JsonTokenReader(source, jsonConfig?.allowComments ?: true), targetType)
 
     override fun format(value: Any?): String = writeJson(value, pretty = jsonConfig?.pretty ?: false)
 

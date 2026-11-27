@@ -48,4 +48,18 @@ public fun interface ObjectInstantiator {
         type: Class<*>,
         context: StreamingInstantiationContext,
     ): Any? = null
+
+    /**
+     * 从 Token 流创建目标类型实例。
+     *
+     * @param reader Token 读取器
+     * @param type 目标类型
+     * @param context Token 实例化上下文
+     * @return 实例；不处理时返回 `null`
+     */
+    public fun instantiate(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        context: TokenInstantiationContext,
+    ): Any? = null
 }

@@ -474,6 +474,13 @@ public abstract class DocumentMapper protected constructor(
         path: String,
     ): Any? = readValue(reader, targetType, property, path)
 
+    internal fun readTokenValueForInstantiator(
+        reader: DocumentTokenReader,
+        targetType: Type,
+        property: DocumentProperty?,
+        path: String,
+    ): Any? = readTokenValue(reader, targetType, property, path)
+
     /**
      * 从 Token 流反序列化为指定类型。
      *
@@ -507,7 +514,11 @@ public abstract class DocumentMapper protected constructor(
      */
     public fun fromTokens(reader: DocumentTokenReader, targetType: Type): Any? {
         reader.nextToken() ?: throw DocumentSerializationException("Empty token stream")
-        return readTokenValue(reader, targetType, null, "$")
+        val result = readTokenValue(reader, targetType, null, "$")
+        if (reader.nextToken() != null) {
+            throw DocumentSerializationException("Unexpected trailing token content")
+        }
+        return result
     }
 
     private fun readTokenValue(
@@ -530,10 +541,19 @@ public abstract class DocumentMapper protected constructor(
             else -> null
         }
         if (rawType != null) {
-            val needsNode = propertyDeserializer(property) != null ||
-                findDeserializer(rawType) != null ||
-                objectInstantiator?.canInstantiate(rawType) == true
-            if (needsNode) {
+            if (propertyDeserializer(property) != null || findDeserializer(rawType) != null) {
+                return deserializeValue(TokenTreeReader.readNode(reader), type, path, property)
+            }
+            val instantiator = objectInstantiator
+            if (instantiator != null && instantiator.canInstantiate(rawType)) {
+                val streamed = instantiator.instantiate(
+                    reader,
+                    rawType,
+                    DefaultTokenInstantiationContext(this, path),
+                )
+                if (streamed != null) {
+                    return streamed
+                }
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path, property)
             }
         }

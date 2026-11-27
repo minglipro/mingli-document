@@ -1,10 +1,13 @@
 package com.mingliqiye.document.serialization.kotlin
 
 import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.serialization.DocumentTokenReader
+import com.mingliqiye.document.serialization.DocumentTokenType
 import com.mingliqiye.document.serialization.DocumentValueReader
 import com.mingliqiye.document.serialization.InstantiationContext
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.StreamingInstantiationContext
+import com.mingliqiye.document.serialization.TokenInstantiationContext
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import java.lang.reflect.Field
 import java.util.concurrent.ConcurrentHashMap
@@ -43,6 +46,24 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
         val metadata = cache.computeIfAbsent(type, ::createMetadata)
         return try {
             instantiateStreaming(reader, metadata, context, type)
+        } catch (e: DocumentSerializationException) {
+            throw e
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate data class ${type.name}", e)
+        }
+    }
+
+    override fun instantiate(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        context: TokenInstantiationContext,
+    ): Any? {
+        if (!type.kotlin.isData) {
+            return null
+        }
+        val metadata = cache.computeIfAbsent(type, ::createMetadata)
+        return try {
+            instantiateTokens(reader, metadata, context, type)
         } catch (e: DocumentSerializationException) {
             throw e
         } catch (e: Exception) {
@@ -95,6 +116,73 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
             seen[index] = true
         }
         reader.endObject()
+
+        if (metadata.directConstruction) {
+            for (index in seen.indices) {
+                if (!seen[index]) {
+                    throw DocumentSerializationException(
+                        "Missing required data class parameter '${metadata.parameters[index].parameter.name}' at ${context.path}",
+                    )
+                }
+            }
+            val constructor = requireNotNull(metadata.javaConstructor) {
+                "Data class ${type.name} has no Java constructor"
+            }
+            return constructor.newInstance(*argumentArray)
+        }
+
+        for ((index, parameterMetadata) in metadata.parameters.withIndex()) {
+            if (!seen[index] && !parameterMetadata.ignored && !parameterMetadata.parameter.isOptional) {
+                throw DocumentSerializationException(
+                    "Missing required data class parameter '${parameterMetadata.parameter.name}' at ${context.path}",
+                )
+            }
+        }
+        return metadata.constructor.callBy(arguments)
+    }
+
+    private fun instantiateTokens(
+        reader: DocumentTokenReader,
+        metadata: DataClassMetadata,
+        context: TokenInstantiationContext,
+        type: Class<*>,
+    ): Any {
+        if (reader.currentToken != DocumentTokenType.START_OBJECT) {
+            throw DocumentSerializationException("Expected object at ${context.path}")
+        }
+        val arguments = LinkedHashMap<KParameter, Any?>()
+        val argumentArray = arrayOfNulls<Any?>(metadata.parameters.size)
+        val seen = BooleanArray(metadata.parameters.size)
+
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of object at ${context.path}")
+                DocumentTokenType.END_OBJECT -> break
+                DocumentTokenType.FIELD_NAME -> {
+                    val fieldName = reader.textValue
+                        ?: throw DocumentSerializationException("Missing field name at ${context.path}")
+                    val entry = metadata.parametersByField[fieldName]
+                    reader.nextToken() ?: throw DocumentSerializationException(
+                        "Unexpected end of object at ${context.path}",
+                    )
+                    if (entry == null) {
+                        context.skipValue(reader)
+                        continue
+                    }
+                    val (index, parameterMetadata) = entry
+                    if (parameterMetadata.ignored) {
+                        context.skipValue(reader)
+                        continue
+                    }
+                    val value = context.readValue(reader, parameterMetadata.javaType, parameterMetadata.property)
+                    arguments[parameterMetadata.parameter] = value
+                    argumentArray[index] = value
+                    seen[index] = true
+                }
+
+                else -> throw DocumentSerializationException("Expected field name at ${context.path}")
+            }
+        }
 
         if (metadata.directConstruction) {
             for (index in seen.indices) {
