@@ -60,6 +60,8 @@ CborJazzerTarget
 SmileJazzerTarget
 AvroJazzerTarget
 ProtobufJazzerTarget
+CborTagJazzerTarget
+IonFidelityJazzerTarget
 ```
 
 `fuzzContinuous` 按时间持续生成文本/二进制畸形输入，遇到 StackOverflow 或 OOM

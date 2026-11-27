@@ -37,6 +37,8 @@ public object JazzerTargets {
         "com.mingliqiye.document.fuzz.SmileJazzerTarget",
         "com.mingliqiye.document.fuzz.AvroJazzerTarget",
         "com.mingliqiye.document.fuzz.ProtobufJazzerTarget",
+        "com.mingliqiye.document.fuzz.CborTagJazzerTarget",
+        "com.mingliqiye.document.fuzz.IonFidelityJazzerTarget",
     )
 }
 
@@ -142,6 +144,36 @@ public object SmileJazzerTarget {
 public object AvroJazzerTarget {
     private val mapper = AvroMapper(
         SchemaBuilder.record("Fuzz").fields().requiredInt("id").endRecord(),
+    )
+
+    @JvmStatic
+    public fun fuzzerTestOneInput(data: ByteArray) {
+        try {
+            mapper.parse(data, Node::class.java)
+        } catch (_: Exception) {
+            // 畸形输入
+        }
+    }
+}
+
+public object CborTagJazzerTarget {
+    private val mapper = CborMapper(
+        com.mingliqiye.document.format.cbor.CborConfig.builder().preserveTags(true).build(),
+    )
+
+    @JvmStatic
+    public fun fuzzerTestOneInput(data: ByteArray) {
+        try {
+            mapper.parse(data, Node::class.java)
+        } catch (_: Exception) {
+            // 畸形输入
+        }
+    }
+}
+
+public object IonFidelityJazzerTarget {
+    private val mapper = IonMapper(
+        com.mingliqiye.document.format.ion.IonConfig.builder().preserveTypes(true).build(),
     )
 
     @JvmStatic
