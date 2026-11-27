@@ -5,7 +5,7 @@ JSON / JSONC 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:json:1.0.0")
+implementation("com.mingliqiye.document.format:json:1.1.0")
 ```
 
 ## 主要 API

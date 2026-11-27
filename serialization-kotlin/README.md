@@ -7,7 +7,7 @@ Kotlin data class 支持模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization-kotlin:1.0.0")
+implementation("com.mingliqiye.document:serialization-kotlin:1.1.0")
 ```
 
 ## 示例
