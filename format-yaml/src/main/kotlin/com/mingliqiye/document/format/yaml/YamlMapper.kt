@@ -19,6 +19,11 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  *
  * 单文档 API（[parse]、[format]）保持原有语义；多文档读写使用
  * [parseAllToNodes]、[parseAll]、[formatAll]，文档之间以 `---` 分隔。
+ *
+ * `parse(String)` 默认通过 [YamlTokenReader] 直接消费 Token，不构建 Node 树；
+ * 配置了非零 `maxNodeDepth`/`maxNodeCount`/`maxStringLength` 时回退
+ * [NodeTokenReader] 路径以保持 Node 树限制语义。[YamlConfig.maxAliases] 同时
+ * 作用于两条路径。
  */
 public open class YamlMapper internal constructor(
     serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
@@ -28,7 +33,7 @@ public open class YamlMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "yaml",
-    { source -> YamlReader(source, config.maxNodeDepth).read() },
+    { source -> YamlReader(source, config.maxNodeDepth, maxAliasesOf(config)).read() },
     { node, pretty -> YamlWriter(pretty).write(node) },
     serializers,
     deserializers,
@@ -38,7 +43,9 @@ public open class YamlMapper internal constructor(
 ) {
 
     private val yamlConfig: YamlConfig? = config as? YamlConfig
+    private val mapperConfig: DocumentMapperConfig = config
     private val maxNodeDepth: Int = config.maxNodeDepth
+    private val maxAliases: Int = maxAliasesOf(config)
 
     /**
      * 创建默认 YAML 映射器。
@@ -73,7 +80,7 @@ public open class YamlMapper internal constructor(
      * @param source YAML 文本
      * @return 按文档顺序排列的文档树列表
      */
-    public fun parseAllToNodes(source: String): List<Node> = YamlCodec.parseAll(source)
+    public fun parseAllToNodes(source: String): List<Node> = YamlCodec.parseAll(source, mapperConfig.maxNodeDepth, maxAliases)
 
     /**
      * 解析多文档 YAML，按文档顺序反序列化为指定类型。
@@ -110,7 +117,24 @@ public open class YamlMapper internal constructor(
      */
     public fun formatAll(values: Iterable<Any?>): String = YamlCodec.writeAll(values.map(::toNode), yamlConfig?.pretty == true)
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(YamlReader(source, maxNodeDepth).read())
+    /**
+     * 创建文本 Token Reader。
+     *
+     * 默认使用原生 [YamlTokenReader]；配置了非零 Node 树限制
+     * （`maxNodeDepth`/`maxNodeCount`/`maxStringLength`）时回退
+     * [NodeTokenReader]，以保持 Node 路径的限制与行为。
+     *
+     * @param source YAML 文本
+     * @return Token Reader
+     */
+    override fun createTextTokenReader(source: String): DocumentTokenReader {
+        if (mapperConfig.maxNodeDepth > 0 || mapperConfig.maxNodeCount > 0 || mapperConfig.maxStringLength > 0) {
+            val node = YamlReader(source, mapperConfig.maxNodeDepth, maxAliases).read()
+            validateNodeLimits(node)
+            return NodeTokenReader(node)
+        }
+        return YamlTokenReader(source, maxNodeDepth, maxAliases, mapperConfig.maxStringLength)
+    }
 
     public companion object {
 
@@ -119,5 +143,7 @@ public open class YamlMapper internal constructor(
          */
         @JvmStatic
         public fun builder(): YamlMapperBuilder = YamlMapperBuilder()
+
+        private fun maxAliasesOf(config: DocumentMapperConfig): Int = (config as? YamlConfig)?.maxAliases ?: 0
     }
 }

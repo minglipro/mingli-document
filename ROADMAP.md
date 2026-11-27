@@ -51,7 +51,7 @@
 
 - [x] CSV 原生 Token Reader
 - [x] Properties 原生 Token Reader
-- [x] TOML 原生 Token Reader\n- [ ] YAML / XML 原生 Token Reader
+- [x] TOML 原生 Token Reader\n- [x] YAML 原生 Token Reader\n- [ ] XML 原生 Token Reader
 - [x] JSON 紧凑模式纯字节写出
 - [x] Schubfach Double 最短格式化
 - [ ] 运行期代码生成
