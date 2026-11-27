@@ -23,4 +23,13 @@ public fun interface ObjectInstantiator {
         node: ObjectNode,
         context: InstantiationContext,
     ): Any?
+
+    /**
+     * 是否处理指定类型。
+     *
+     * 用于流式读取时判断是否需要回退到 Node 路径。
+     *
+     * @param type 目标类型
+     */
+    public fun canInstantiate(type: Class<*>): Boolean = true
 }

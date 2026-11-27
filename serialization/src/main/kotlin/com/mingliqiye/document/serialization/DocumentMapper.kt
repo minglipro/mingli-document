@@ -294,6 +294,196 @@ public abstract class DocumentMapper protected constructor(
         }
     }
 
+    /**
+     * 直接从流式读取器反序列化实体，不构建完整文档树。
+     *
+     * @param reader 格式读取器
+     * @param targetType 目标类型
+     * @return 实体
+     */
+    public fun <T> readFrom(reader: DocumentValueReader, targetType: DocumentTypeReference<T>): T {
+        @Suppress("UNCHECKED_CAST")
+        return readValue(reader, targetType.type, null, "$") as T
+    }
+
+    private fun readValue(
+        reader: DocumentValueReader,
+        type: Type,
+        property: DocumentProperty?,
+        path: String,
+    ): Any? {
+        if (reader.tryReadNull()) {
+            return null
+        }
+        val rawType = when (type) {
+            is Class<*> -> type
+            is ParameterizedType -> type.rawType as? Class<*>
+            else -> null
+        }
+        if (rawType != null) {
+            propertyDeserializer(property)?.let { deserializer ->
+                return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
+            }
+            findDeserializer(rawType)?.let { deserializer ->
+                return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
+            }
+            if (objectInstantiator?.canInstantiate(rawType) == true) {
+                return deserializeValue(reader.readNode(), type, path, property)
+            }
+        }
+        return when (type) {
+            is Class<*> -> readClass(reader, type, path)
+            is ParameterizedType -> readParameterized(reader, type, path)
+            is GenericArrayType -> readReflectArray(reader, type.genericComponentType, path)
+            is WildcardType -> {
+                val upperBound = type.upperBounds.firstOrNull() ?: Any::class.java
+                readValue(reader, upperBound, property, path)
+            }
+
+            is TypeVariable<*> -> {
+                val bound = type.bounds.firstOrNull() ?: Any::class.java
+                readValue(reader, bound, property, path)
+            }
+
+            else -> throw DocumentSerializationException("Unsupported type at $path: $type")
+        }
+    }
+
+    private fun readClass(reader: DocumentValueReader, type: Class<*>, path: String): Any? {
+        if (Node::class.java.isAssignableFrom(type) || type == Any::class.java) {
+            return reader.readNode()
+        }
+        return when {
+            type == String::class.java || type == CharSequence::class.java -> reader.readString()
+            type == Char::class.java || type == Character::class.java -> readCharacter(reader, path)
+            type == Boolean::class.java || type == java.lang.Boolean::class.java -> reader.readBoolean()
+            type == Byte::class.java || type == java.lang.Byte::class.java -> readNumberNode(reader).toByte()
+            type == Short::class.java || type == java.lang.Short::class.java -> readNumberNode(reader).toShort()
+            type == Int::class.java || type == java.lang.Integer::class.java -> readNumberNode(reader).toInt()
+            type == Long::class.java || type == java.lang.Long::class.java -> readNumberNode(reader).toLong()
+            type == Float::class.java || type == java.lang.Float::class.java -> readNumberNode(reader).toFloat()
+            type == Double::class.java || type == java.lang.Double::class.java -> readNumberNode(reader).toDouble()
+            type == BigDecimal::class.java -> readNumberNode(reader).value
+            type == BigInteger::class.java -> readNumberNode(reader).toBigInteger()
+            type == Number::class.java -> readNumberNode(reader).value
+            type.isEnum -> enumValue(type, reader.readString(), path)
+            type.isArray -> readReflectArray(reader, type.componentType, path)
+            Collection::class.java.isAssignableFrom(type) -> readCollection(reader, Any::class.java, type, path)
+            Map::class.java.isAssignableFrom(type) -> readMap(reader, String::class.java, Any::class.java, type, path)
+            else -> readBean(reader, type, path)
+        }
+    }
+
+    private fun readParameterized(
+        reader: DocumentValueReader,
+        type: ParameterizedType,
+        path: String,
+    ): Any? {
+        val rawType = type.rawType as? Class<*>
+            ?: return readValue(reader, type.rawType, null, path)
+        val arguments = type.actualTypeArguments
+        return when {
+            Collection::class.java.isAssignableFrom(rawType) -> {
+                val elementType = arguments.firstOrNull() ?: Any::class.java
+                readCollection(reader, elementType, rawType, path)
+            }
+
+            Map::class.java.isAssignableFrom(rawType) -> {
+                val keyType = arguments.getOrNull(0) ?: String::class.java
+                val valueType = arguments.getOrNull(1) ?: Any::class.java
+                readMap(reader, keyType, valueType, rawType, path)
+            }
+
+            else -> deserializeValue(reader.readNode(), type, path)
+        }
+    }
+
+    private fun readCharacter(reader: DocumentValueReader, path: String): Char {
+        val value = reader.readString()
+        if (value.length != 1) {
+            throw DocumentSerializationException("Expected single character at $path")
+        }
+        return value[0]
+    }
+
+    private fun readNumberNode(reader: DocumentValueReader): NumberNode = NumberNode.ofRaw(reader.readNumberRaw())
+
+    private fun readCollection(
+        reader: DocumentValueReader,
+        elementType: Type,
+        rawType: Class<*>,
+        path: String,
+    ): Any {
+        val collection = newCollection(rawType)
+        reader.beginArray()
+        var index = 0
+        while (reader.hasNextElement()) {
+            collection.add(readValue(reader, elementType, null, "$path[$index]"))
+            index++
+        }
+        reader.endArray()
+        return collection
+    }
+
+    private fun readMap(
+        reader: DocumentValueReader,
+        keyType: Type,
+        valueType: Type,
+        rawType: Class<*>,
+        path: String,
+    ): Any {
+        val map = newMap(rawType)
+        reader.beginObject()
+        while (reader.hasNextField()) {
+            val fieldName = reader.readFieldName()
+            val key = deserializeMapKey(fieldName, keyType, path)
+            map[key] = readValue(reader, valueType, null, "$path.$fieldName")
+        }
+        reader.endObject()
+        return map
+    }
+
+    private fun readReflectArray(
+        reader: DocumentValueReader,
+        componentType: Type,
+        path: String,
+    ): Any {
+        val rawComponentType = rawClass(componentType)
+        reader.beginArray()
+        val values = ArrayList<Any?>()
+        while (reader.hasNextElement()) {
+            values.add(readValue(reader, componentType, null, "$path[${values.size}]"))
+        }
+        reader.endArray()
+        val result = ReflectArray.newInstance(rawComponentType, values.size)
+        for (index in values.indices) {
+            ReflectArray.set(result, index, values[index])
+        }
+        return result
+    }
+
+    private fun readBean(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        path: String,
+    ): Any {
+        val instance = instantiate(type)
+        val metadata = beanMetadata(type)
+        reader.beginObject()
+        while (reader.hasNextField()) {
+            val fieldName = reader.readFieldName()
+            val accessor = metadata.property(fieldName)
+            if (accessor != null && accessor.canWrite) {
+                val value = readValue(reader, accessor.valueType, accessor.metadata, "$path.$fieldName")
+                accessor.write(instance, value)
+            } else {
+                reader.skipValue()
+            }
+        }
+        reader.endObject()
+        return instance
+    }
+
     private fun serializeValue(
         value: Any?,
         seen: IdentityHashMap<Any, Boolean>,

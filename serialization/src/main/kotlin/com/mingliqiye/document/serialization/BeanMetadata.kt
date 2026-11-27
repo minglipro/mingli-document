@@ -7,4 +7,11 @@ package com.mingliqiye.document.serialization
  */
 internal class BeanMetadata(
     val properties: List<BeanPropertyAccessor>,
-)
+) {
+
+    private val propertiesByName: Map<String, BeanPropertyAccessor> =
+        properties.associateBy { it.metadata.documentName }
+
+    /** 按文档字段名查找属性。 */
+    fun property(name: String): BeanPropertyAccessor? = propertiesByName[name]
+}

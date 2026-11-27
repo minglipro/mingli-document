@@ -30,6 +30,8 @@ internal object KotlinDataClassInstantiator : ObjectInstantiator {
 
     private val cache = ConcurrentHashMap<Class<*>, DataClassMetadata>()
 
+    override fun canInstantiate(type: Class<*>): Boolean = type.kotlin.isData
+
     override fun instantiate(
         type: Class<*>,
         node: ObjectNode,

@@ -1,5 +1,6 @@
 package com.mingliqiye.document.format.json
 
+import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
@@ -38,6 +39,9 @@ public open class JsonMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null)
 
+    override fun <T> parse(source: String, targetType: Class<T>): T = readFrom(JsonValueReader(source), DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = readFrom(JsonValueReader(source), targetType)
     override fun format(value: Any?): String = writeJson(value, pretty = false)
 
     override fun formatPretty(value: Any?): String = writeJson(value, pretty = true)

@@ -66,6 +66,23 @@ class JsonConverterContractTest {
     }
 
     @Test
+    fun directJsonParseKeepsFieldContext() {
+        val converter = LabelConverter()
+        val mapper = JsonMapper.builder().addConverter(converter).build()
+
+        val holder = mapper.parse("""{"label_text":"v","note":"plain"}""", LabelHolder::class.java)
+        assertEquals("v", holder.label?.text)
+        assertEquals("plain", holder.note)
+
+        val context = assertNotNull(converter.deserializeContext)
+        val property = assertNotNull(context.property)
+        assertEquals(LabelHolder::class.java, property.declaringClass)
+        assertEquals("label", property.name)
+        assertEquals("label_text", property.documentName)
+        assertEquals(Label::class.java, property.getRawType())
+    }
+
+    @Test
     fun rootValueHasNoPropertyContext() {
         val converter = LabelConverter()
         val mapper = JsonMapper.builder().addConverter(converter).build()
