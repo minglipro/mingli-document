@@ -431,6 +431,29 @@ gradle :benchmarks:jmh
 | `benchmarks` | JMH 性能基准（不发布） |
 | `fuzz` | 解析器模糊测试（不发布） |
 
+各模块的坐标、API 与示例见模块 README：
+
+[annotation](annotation/README.md) ·
+[exception](exception/README.md) ·
+[core](core/README.md) ·
+[schema](schema/README.md) ·
+[serialization](serialization/README.md) ·
+[serialization-kotlin](serialization-kotlin/README.md) ·
+[json](format-json/README.md) ·
+[yaml](format-yaml/README.md) ·
+[xml](format-xml/README.md) ·
+[properties](format-properties/README.md) ·
+[toml](format-toml/README.md) ·
+[csv](format-csv/README.md) ·
+[ion](format-ion/README.md) ·
+[cbor](format-cbor/README.md) ·
+[smile](format-smile/README.md) ·
+[avro](format-avro/README.md) ·
+[protobuf](format-protobuf/README.md) ·
+[bom](bom/README.md) ·
+[benchmarks](benchmarks/README.md) ·
+[fuzz](fuzz/README.md)
+
 ## 构建与测试
 
 ```bash
