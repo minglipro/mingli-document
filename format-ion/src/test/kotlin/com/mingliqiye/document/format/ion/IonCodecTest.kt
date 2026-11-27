@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.ion
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
@@ -28,6 +29,7 @@ class IonCodecTest {
             "missing" to NullNode.INSTANCE,
             "tags" to ArrayNode.of(StringNode.of("a"), StringNode.of("b")),
             "address" to ObjectNode.of("city" to StringNode.of("杭州")),
+            "data" to BinaryNode.of(byteArrayOf(0, 1, 2, 3)),
             "matrix" to ArrayNode.of(
                 ArrayNode.of(NumberNode.of(1), NumberNode.of(2)),
                 ObjectNode.of("nested" to NullNode.INSTANCE),

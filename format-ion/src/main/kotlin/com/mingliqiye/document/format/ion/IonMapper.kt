@@ -10,8 +10,12 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
 /**
  * Ion 文档映射器。
  *
- * 继承通用 [DocumentMapper]，内置 Ion 文本编解码能力。当前只支持文本 Ion，
- * 不提供二进制 Ion 读写（[DocumentMapper] 的文本 API 只接受 String）。
+ * 继承通用 [DocumentMapper]，同时内置文本 Ion 与二进制 Ion 编解码能力：
+ * - 文本：`parse(String, ...)` / `format` / `formatPretty`
+ * - 二进制：`parse(ByteArray, ...)` / `formatBytes`
+ *
+ * 两种形态共用同一套 Node 映射规则；[com.mingliqiye.document.core.BinaryNode]
+ * 在文本中输出为 Base64 blob、在二进制中输出为原生 blob。
  */
 public open class IonMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
@@ -28,6 +32,8 @@ public open class IonMapper internal constructor(
     objectInstantiator,
     propertyMetadataResolver,
     config,
+    { source -> IonBinaryReader(source).read() },
+    { node, _ -> IonBinaryWriter().write(node) },
 ) {
 
     /**
