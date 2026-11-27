@@ -511,9 +511,9 @@ fun main() {
 
 | Benchmark | 本项目 | Jackson |
 |---|---:|---:|
-| JSON 解析树 | 0.468 ms | 0.303 ms |
-| JSON → Bean | 1.183 ms | 0.285 ms |
-| Bean → JSON | 0.678 ms | 0.202 ms |
+| JSON 解析树 | 0.469 ms | 0.305 ms |
+| JSON → Bean | 0.948 ms | 0.291 ms |
+| Bean → JSON | 0.696 ms | 0.201 ms |
 
 运行：
 
