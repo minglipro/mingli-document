@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -44,6 +45,33 @@ class DefaultDocumentMapperTest {
         )
         assertEquals(1, users.size)
         assertEquals("api", users[0].name)
+    }
+
+    @Test
+    fun annotationDrivenNamesAndIgnore() {
+        val source = AnnotatedUser().apply {
+            name = "小于"
+            age = 18
+            city = "杭州"
+        }
+
+        val node = mapper.toNode(source).asObject()
+        assertEquals("小于", node["display_name"]?.asString())
+        assertEquals("杭州", node["city_name"]?.asString())
+        assertFalse(node.containsKey("name"))
+        assertFalse(node.containsKey("age"))
+
+        val restored = mapper.fromNode(
+            ObjectNode.of(
+                "display_name" to StringNode.of("小于"),
+                "city_name" to StringNode.of("杭州"),
+                "age" to NumberNode.of(18),
+            ),
+            AnnotatedUser::class.java,
+        )
+        assertEquals("小于", restored.name)
+        assertEquals("杭州", restored.city)
+        assertEquals(0, restored.age)
     }
 
     @Test

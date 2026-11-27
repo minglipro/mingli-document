@@ -1,5 +1,7 @@
 package com.mingliqiye.document.serialization
 
+import com.mingliqiye.document.annotation.DocumentIgnore
+import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
@@ -13,6 +15,7 @@ import com.mingliqiye.document.exception.DocumentException
 import java.beans.IntrospectionException
 import java.beans.Introspector
 import java.beans.PropertyDescriptor
+import java.lang.reflect.Field
 import java.lang.reflect.GenericArrayType
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
@@ -276,18 +279,31 @@ class DefaultDocumentMapper(
         depth: Int,
     ): Node = withCycleCheck(bean, seen) {
         val fields = LinkedHashMap<String, Node>()
+        val handled = HashSet<String>()
         for (property in beanProperties(bean.javaClass)) {
+            handled.add(property.name)
+            if (isIgnored(bean.javaClass, property)) {
+                continue
+            }
             val reader = property.readMethod ?: continue
             if (Modifier.isStatic(reader.modifiers) || reader.parameterCount != 0) {
                 continue
             }
-            fields[property.name] = serializeValue(invoke(reader, bean), seen, depth + 1)
+            fields[documentName(bean.javaClass, property)] = serializeValue(
+                invoke(reader, bean),
+                seen,
+                depth + 1,
+            )
         }
         for (field in bean.javaClass.fields) {
-            if (Modifier.isStatic(field.modifiers) || field.isSynthetic || fields.containsKey(field.name)) {
+            if (Modifier.isStatic(field.modifiers) ||
+                field.isSynthetic ||
+                field.name in handled ||
+                field.isAnnotationPresent(DocumentIgnore::class.java)
+            ) {
                 continue
             }
-            fields[field.name] = serializeValue(field.get(bean), seen, depth + 1)
+            fields[fieldName(field)] = serializeValue(field.get(bean), seen, depth + 1)
         }
         ObjectNode.from(fields)
     }
@@ -454,21 +470,29 @@ class DefaultDocumentMapper(
             if (Modifier.isStatic(writer.modifiers)) {
                 continue
             }
-            val valueNode = objectNode[property.name] ?: continue
-            val parameterType = writer.genericParameterTypes.firstOrNull() ?: property.propertyType
-            invoke(writer, instance, deserializeValue(valueNode, parameterType, "$path.${property.name}"))
             handled.add(property.name)
+            if (isIgnored(type, property)) {
+                continue
+            }
+            val valueNode = objectNode[documentName(type, property)] ?: continue
+            val parameterType = writer.genericParameterTypes.firstOrNull() ?: property.propertyType
+            invoke(
+                writer,
+                instance,
+                deserializeValue(valueNode, parameterType, "$path.${property.name}"),
+            )
         }
 
         for (field in type.fields) {
             if (Modifier.isStatic(field.modifiers) ||
                 field.isSynthetic ||
                 Modifier.isFinal(field.modifiers) ||
-                field.name in handled
+                field.name in handled ||
+                field.isAnnotationPresent(DocumentIgnore::class.java)
             ) {
                 continue
             }
-            val valueNode = objectNode[field.name] ?: continue
+            val valueNode = objectNode[fieldName(field)] ?: continue
             field.set(
                 instance,
                 deserializeValue(valueNode, field.genericType, "$path.${field.name}"),
@@ -550,6 +574,35 @@ class DefaultDocumentMapper(
         is WildcardType -> rawClass(type.upperBounds.firstOrNull() ?: Any::class.java)
         is TypeVariable<*> -> rawClass(type.bounds.firstOrNull() ?: Any::class.java)
         else -> throw DocumentSerializationException("Unsupported component type: $type")
+    }
+
+    private fun documentName(type: Class<*>, property: PropertyDescriptor): String {
+        val field = findField(type, property.name)
+        return property.readMethod?.getAnnotation(DocumentName::class.java)?.value
+            ?: property.writeMethod?.getAnnotation(DocumentName::class.java)?.value
+            ?: field?.getAnnotation(DocumentName::class.java)?.value
+            ?: property.name
+    }
+
+    private fun isIgnored(type: Class<*>, property: PropertyDescriptor): Boolean {
+        val field = findField(type, property.name)
+        return property.readMethod?.isAnnotationPresent(DocumentIgnore::class.java) == true ||
+            property.writeMethod?.isAnnotationPresent(DocumentIgnore::class.java) == true ||
+            field?.isAnnotationPresent(DocumentIgnore::class.java) == true
+    }
+
+    private fun fieldName(field: Field): String = field.getAnnotation(DocumentName::class.java)?.value ?: field.name
+
+    private fun findField(type: Class<*>, name: String): Field? {
+        var current: Class<*>? = type
+        while (current != null && current != Any::class.java) {
+            try {
+                return current.getDeclaredField(name)
+            } catch (_: NoSuchFieldException) {
+                current = current.superclass
+            }
+        }
+        return null
     }
 
     private inline fun <T> withCycleCheck(

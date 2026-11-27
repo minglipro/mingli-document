@@ -9,6 +9,7 @@ kotlin {
 
 dependencies {
     api(project(":core"))
+    implementation(project(":annotation"))
     testImplementation(project(":format-json"))
     testImplementation(kotlin("test"))
 }
