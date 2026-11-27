@@ -38,6 +38,15 @@ public open class JsonMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null)
 
+    override fun format(value: Any?): String = writeJson(value, pretty = false)
+
+    override fun formatPretty(value: Any?): String = writeJson(value, pretty = true)
+
+    private fun writeJson(value: Any?, pretty: Boolean): String {
+        val writer = JsonStreamWriter(pretty)
+        writeTo(value, writer)
+        return writer.toString()
+    }
     public companion object {
 
         /**

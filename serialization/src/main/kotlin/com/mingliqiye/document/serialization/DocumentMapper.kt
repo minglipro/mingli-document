@@ -71,6 +71,7 @@ public abstract class DocumentMapper protected constructor(
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
+    private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
 
     /**
@@ -339,6 +340,142 @@ public abstract class DocumentMapper protected constructor(
         else -> NumberNode.ofRaw(value.toString())
     }
 
+    private fun serializeNumberRaw(value: Number): String = when (value) {
+        is BigDecimal -> value.toPlainString()
+        is BigInteger -> value.toString()
+        is Double -> {
+            require(value.isFinite()) { "NaN and Infinity cannot be serialized" }
+            value.toString()
+        }
+
+        is Float -> {
+            require(value.isFinite()) { "NaN and Infinity cannot be serialized" }
+            value.toString()
+        }
+
+        else -> value.toString()
+    }
+
+    /**
+     * 直接写出实体，不构建完整文档树。
+     *
+     * @param value 任意实体、集合、Map 或 [Node]
+     * @param writer 格式写出器
+     */
+    public fun writeTo(value: Any?, writer: DocumentValueWriter) {
+        writeValue(value, IdentityHashMap(), 0, null, "$", writer)
+    }
+
+    private fun writeValue(
+        value: Any?,
+        seen: IdentityHashMap<Any, Boolean>,
+        depth: Int,
+        property: DocumentProperty?,
+        path: String,
+        writer: DocumentValueWriter,
+    ) {
+        if (depth > MAX_SERIALIZATION_DEPTH) {
+            throw DocumentSerializationException("Maximum serialization depth exceeded")
+        }
+        if (value != null && value !is Node) {
+            propertySerializer(property)?.let { serializer ->
+                writer.writeNode(serializeWithSerializer(serializer, value, property, path))
+                return
+            }
+            val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
+                ?: findSerializer(value.javaClass)
+            if (serializer != null) {
+                writer.writeNode(serializeWithSerializer(serializer, value, property, path))
+                return
+            }
+        }
+        when (value) {
+            null -> writer.writeNull()
+            is Node -> writer.writeNode(value)
+            is CharSequence -> writer.writeString(value.toString())
+            is Char -> writer.writeString(value.toString())
+            is Boolean -> writer.writeBoolean(value)
+            is Number -> writer.writeNumber(serializeNumberRaw(value))
+            is Enum<*> -> writer.writeString(value.name)
+            is Map<*, *> -> {
+                writer.startObject()
+                for ((key, child) in value) {
+                    writer.fieldName(key?.toString() ?: "null")
+                    writeValue(child, seen, depth + 1, null, "$path.$key", writer)
+                }
+                writer.endObject()
+            }
+
+            is Iterable<*> -> {
+                writer.startArray()
+                for (element in value) {
+                    writeValue(element, seen, depth + 1, null, "$path[]", writer)
+                }
+                writer.endArray()
+            }
+
+            is Array<*> -> {
+                writer.startArray()
+                for (element in value) {
+                    writeValue(element, seen, depth + 1, null, "$path[]", writer)
+                }
+                writer.endArray()
+            }
+
+            else -> {
+                val type = value.javaClass
+                if (type.isArray) {
+                    writeReflectArray(value, seen, depth, path, writer)
+                } else {
+                    writeBean(value, seen, depth, path, writer)
+                }
+            }
+        }
+    }
+
+    private fun writeReflectArray(
+        value: Any,
+        seen: IdentityHashMap<Any, Boolean>,
+        depth: Int,
+        path: String,
+        writer: DocumentValueWriter,
+    ) {
+        val length = ReflectArray.getLength(value)
+        writer.startArray()
+        for (index in 0 until length) {
+            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, "$path[$index]", writer)
+        }
+        writer.endArray()
+    }
+
+    private fun writeBean(
+        bean: Any,
+        seen: IdentityHashMap<Any, Boolean>,
+        depth: Int,
+        path: String,
+        writer: DocumentValueWriter,
+    ) {
+        withCycleCheck(bean, seen) {
+            writer.startObject()
+            for (accessor in beanMetadata(bean.javaClass).properties) {
+                if (!accessor.canRead) {
+                    continue
+                }
+                val metadata = accessor.metadata
+                writer.fieldName(metadata.documentName)
+                writeValue(
+                    accessor.read(bean),
+                    seen,
+                    depth + 1,
+                    metadata,
+                    "$path.${metadata.name}",
+                    writer,
+                )
+            }
+            writer.endObject()
+        }
+    }
+
     private fun serializeMap(
         map: Map<*, *>,
         seen: IdentityHashMap<Any, Boolean>,
@@ -403,38 +540,13 @@ public abstract class DocumentMapper protected constructor(
         path: String,
     ): Node = withCycleCheck(bean, seen) {
         val fields = LinkedHashMap<String, Node>()
-        val handled = HashSet<String>()
-        for (property in beanProperties(bean.javaClass)) {
-            handled.add(property.name)
-            val metadata = documentProperty(bean.javaClass, property)
-            if (metadata.isIgnored()) {
+        for (accessor in beanMetadata(bean.javaClass).properties) {
+            if (!accessor.canRead) {
                 continue
             }
-            val reader = property.readMethod ?: continue
-            if (Modifier.isStatic(reader.modifiers) || reader.parameterCount != 0) {
-                continue
-            }
+            val metadata = accessor.metadata
             fields[metadata.documentName] = serializeValue(
-                invoke(reader, bean),
-                seen,
-                depth + 1,
-                metadata,
-                "$path.${metadata.name}",
-            )
-        }
-        for (field in bean.javaClass.fields) {
-            if (Modifier.isStatic(field.modifiers) ||
-                field.isSynthetic ||
-                field.name in handled
-            ) {
-                continue
-            }
-            val metadata = documentProperty(bean.javaClass, field)
-            if (metadata.isIgnored()) {
-                continue
-            }
-            fields[metadata.documentName] = serializeValue(
-                field.get(bean),
+                accessor.read(bean),
                 seen,
                 depth + 1,
                 metadata,
@@ -632,51 +744,19 @@ public abstract class DocumentMapper protected constructor(
             return customInstance
         }
         val instance = instantiate(type)
-        val handled = HashSet<String>()
 
-        for (property in beanProperties(type)) {
-            val writer = property.writeMethod ?: continue
-            if (Modifier.isStatic(writer.modifiers)) {
+        for (accessor in beanMetadata(type).properties) {
+            if (!accessor.canWrite) {
                 continue
             }
-            handled.add(property.name)
-            val metadata = documentProperty(type, property)
-            if (metadata.isIgnored()) {
-                continue
-            }
+            val metadata = accessor.metadata
             val valueNode = objectNode[metadata.documentName] ?: continue
-            val parameterType = writer.genericParameterTypes.firstOrNull() ?: property.propertyType
-            invoke(
-                writer,
+            accessor.write(
                 instance,
                 deserializeValue(
                     valueNode,
-                    parameterType,
-                    "$path.${property.name}",
-                    metadata,
-                ),
-            )
-        }
-
-        for (field in type.fields) {
-            if (Modifier.isStatic(field.modifiers) ||
-                field.isSynthetic ||
-                Modifier.isFinal(field.modifiers) ||
-                field.name in handled
-            ) {
-                continue
-            }
-            val metadata = documentProperty(type, field)
-            if (metadata.isIgnored()) {
-                continue
-            }
-            val valueNode = objectNode[metadata.documentName] ?: continue
-            field.set(
-                instance,
-                deserializeValue(
-                    valueNode,
-                    field.genericType,
-                    "$path.${field.name}",
+                    accessor.valueType,
+                    "$path.${metadata.name}",
                     metadata,
                 ),
             )
@@ -793,6 +873,90 @@ public abstract class DocumentMapper protected constructor(
         propertyMetadataResolver?.resolve(type, field.name).orEmpty(),
     )
 
+    private fun beanMetadata(type: Class<*>): BeanMetadata = beanMetadataCache.computeIfAbsent(type, ::createBeanMetadata)
+
+    private fun createBeanMetadata(type: Class<*>): BeanMetadata {
+        val accessors = LinkedHashMap<String, BeanPropertyAccessor>()
+        val handled = HashSet<String>()
+
+        for (property in beanProperties(type)) {
+            handled.add(property.name)
+            val metadata = documentProperty(type, property)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            val field = findField(type, property.name)
+            val readMethod = property.readMethod
+                ?.takeIf { !Modifier.isStatic(it.modifiers) && it.parameterCount == 0 }
+            val writeMethod = property.writeMethod
+                ?.takeIf { !Modifier.isStatic(it.modifiers) && it.parameterCount == 1 }
+
+            val getter: ((Any) -> Any?)? = when {
+                readMethod != null -> { bean -> invoke(readMethod, bean) }
+                field != null && !Modifier.isStatic(field.modifiers) && !field.isSynthetic -> { bean -> readField(field, bean) }
+                else -> null
+            }
+            val setter: ((Any, Any?) -> Unit)? = when {
+                writeMethod != null -> { bean, value -> invoke(writeMethod, bean, value) }
+                field != null &&
+                    !Modifier.isStatic(field.modifiers) &&
+                    !Modifier.isFinal(field.modifiers) &&
+                    !field.isSynthetic -> { bean, value -> writeField(field, bean, value) }
+
+                else -> null
+            }
+            if (getter == null && setter == null) {
+                continue
+            }
+            val valueType = writeMethod?.genericParameterTypes?.firstOrNull()
+                ?: field?.genericType
+                ?: property.propertyType
+            accessors[property.name] = BeanPropertyAccessor(metadata, getter, setter, valueType)
+        }
+
+        for (field in type.fields) {
+            if (Modifier.isStatic(field.modifiers) ||
+                field.isSynthetic ||
+                field.name in handled
+            ) {
+                continue
+            }
+            val metadata = documentProperty(type, field)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            val setter: ((Any, Any?) -> Unit)? =
+                if (Modifier.isFinal(field.modifiers)) {
+                    null
+                } else {
+                    { bean, value -> writeField(field, bean, value) }
+                }
+            accessors[field.name] = BeanPropertyAccessor(
+                metadata,
+                { bean -> readField(field, bean) },
+                setter,
+                field.genericType,
+            )
+        }
+
+        return BeanMetadata(accessors.values.toList())
+    }
+
+    private fun readField(field: Field, bean: Any): Any? = try {
+        field.isAccessible = true
+        field.get(bean)
+    } catch (e: Exception) {
+        throw DocumentSerializationException("Cannot read field ${field.name}", e)
+    }
+
+    private fun writeField(field: Field, bean: Any, value: Any?) {
+        try {
+            field.isAccessible = true
+            field.set(bean, value)
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot write field ${field.name}", e)
+        }
+    }
     private fun findField(type: Class<*>, name: String): Field? {
         var current: Class<*>? = type
         while (current != null && current != Any::class.java) {
