@@ -87,7 +87,7 @@
 - [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）\n- [ ] Gitea CI
 - [ ] Maven Central 发布
-- [x] SHA-256 校验和\n- [ ] SBOM
+- [x] SHA-256 校验和\n- [x] CycloneDX JSON SBOM
 - [ ] JPMS module-info
 - [ ] GraalVM Native Image
 

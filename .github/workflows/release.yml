@@ -31,8 +31,17 @@ jobs:
       - name: Generate checksums
         run: ./gradlew generateChecksums -PprojectVersion=${{ inputs.version }} --no-daemon
 
+      - name: Generate SBOM
+        run: ./gradlew generateSbom -PprojectVersion=${{ inputs.version }} --no-daemon
+
       - name: Upload checksums
         uses: actions/upload-artifact@v4
         with:
           name: sha256sums-${{ inputs.version }}
           path: build/checksums/SHA256SUMS.txt
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclonedx-${{ inputs.version }}
+          path: build/sbom/cyclonedx.json

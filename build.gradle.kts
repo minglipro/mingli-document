@@ -195,3 +195,46 @@ tasks.register("generateChecksums") {
         outputDirectory.resolve("SHA256SUMS.txt").writeText(lines.joinToString("\n") + "\n")
     }
 }
+tasks.register("generateSbom") {
+    group = "release"
+    description = "Generate a minimal CycloneDX JSON SBOM from runtime dependencies."
+    doLast {
+        val components = sortedMapOf<String, Triple<String, String, String>>()
+        publishableProjects.forEach { project ->
+            val artifactId = when {
+                project.name == "bom" -> "mingli-document-bom"
+                project.name.startsWith("format-") -> project.name.removePrefix("format-")
+                else -> project.name
+            }
+            val purl = "pkg:maven/${project.group}/${artifactId}@${project.version}"
+            components[purl] = Triple(project.group.toString(), artifactId, project.version.toString())
+        }
+        subprojects.forEach { project ->
+            val configuration = project.configurations.findByName("runtimeClasspath") ?: return@forEach
+            configuration.resolvedConfiguration.resolvedArtifacts.forEach { artifact ->
+                val id = artifact.moduleVersion.id
+                if (id.group.isNullOrBlank() || id.version.isNullOrBlank()) return@forEach
+                if (id.group.startsWith("com.mingliqiye.document")) return@forEach
+                val purl = "pkg:maven/${id.group}/${id.name}@${id.version}"
+                components[purl] = Triple(id.group, id.name, id.version)
+            }
+        }
+        val outputDirectory = rootProject.layout.buildDirectory.dir("sbom").get().asFile
+        outputDirectory.mkdirs()
+        val lines = mutableListOf<String>()
+        lines += "{"
+        lines += "  \"bomFormat\": \"CycloneDX\","
+        lines += "  \"specVersion\": \"1.4\","
+        lines += "  \"version\": 1,"
+        lines += "  \"components\": ["
+        val componentLines = components.entries.mapIndexed { index, entry ->
+            val (group, name, version) = entry.value
+            val comma = if (index == components.size - 1) "" else ","
+            "    {\"type\":\"library\",\"group\":\"${group}\",\"name\":\"${name}\",\"version\":\"${version}\",\"purl\":\"${entry.key}\"}$comma"
+        }
+        lines += componentLines
+        lines += "  ]"
+        lines += "}"
+        outputDirectory.resolve("cyclonedx.json").writeText(lines.joinToString("\n") + "\n")
+    }
+}
