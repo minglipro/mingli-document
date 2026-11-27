@@ -1,5 +1,6 @@
 package com.mingliqiye.document.serialization
 
+import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
@@ -71,6 +72,7 @@ class DefaultDocumentMapper internal constructor(
     constructor(codec: DocumentCodec? = null) : this(codec, emptyMap(), emptyMap())
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
+    private val converterCache = ConcurrentHashMap<Class<*>, Any>()
 
     /**
      * 将 Java 对象序列化为文档树。
@@ -207,6 +209,83 @@ class DefaultDocumentMapper internal constructor(
 
     private fun findDeserializer(type: Class<*>): JsonDeserializer<*>? = deserializers[type] ?: deserializers.entries.firstOrNull { it.key.isAssignableFrom(type) }?.value
 
+    /**
+     * 解析字段级 [DocumentConverter] 注解。
+     *
+     * 字段级转换器优先于 Builder 注册的全局转换器。
+     */
+    private fun propertyConverter(property: DocumentProperty?): Any? {
+        if (property == null) {
+            return null
+        }
+        val annotation = property.getAnnotation(DocumentConverter::class.java) ?: return null
+        val converterType = annotation.value.java
+        return converterCache.computeIfAbsent(converterType) {
+            instantiateConverter(property, converterType)
+        }
+    }
+
+    private fun propertySerializer(property: DocumentProperty?): JsonSerializer<*>? {
+        val converter = propertyConverter(property) ?: return null
+        return converter as? JsonSerializer<*>
+            ?: throw DocumentSerializationException(
+                "Converter ${converter.javaClass.name} for " +
+                    "${property?.declaringClass?.name}.${property?.name} does not implement JsonSerializer",
+            )
+    }
+
+    private fun propertyDeserializer(property: DocumentProperty?): JsonDeserializer<*>? {
+        val converter = propertyConverter(property) ?: return null
+        return converter as? JsonDeserializer<*>
+            ?: throw DocumentSerializationException(
+                "Converter ${converter.javaClass.name} for " +
+                    "${property?.declaringClass?.name}.${property?.name} does not implement JsonDeserializer",
+            )
+    }
+
+    private fun instantiateConverter(property: DocumentProperty, converterType: Class<*>): Any {
+        val instance = objectInstance(converterType) ?: constructorInstance(property, converterType)
+        if (instance !is JsonSerializer<*> && instance !is JsonDeserializer<*>) {
+            throw DocumentSerializationException(
+                "Converter ${converterType.name} for " +
+                    "${property.declaringClass.name}.${property.name} must implement JsonSerializer or JsonDeserializer",
+            )
+        }
+        return instance
+    }
+
+    private fun objectInstance(type: Class<*>): Any? = try {
+        val field = type.getDeclaredField("INSTANCE")
+        field.isAccessible = true
+        field.get(null)
+    } catch (_: NoSuchFieldException) {
+        null
+    } catch (e: ReflectiveOperationException) {
+        throw DocumentSerializationException("Cannot access converter instance ${type.name}", e)
+    }
+
+    private fun constructorInstance(property: DocumentProperty, type: Class<*>): Any {
+        val constructor = try {
+            type.getDeclaredConstructor()
+        } catch (e: NoSuchMethodException) {
+            throw DocumentSerializationException(
+                "Converter ${type.name} for ${property.declaringClass.name}.${property.name} " +
+                    "must have a no-arg constructor",
+                e,
+            )
+        }
+        return try {
+            constructor.isAccessible = true
+            constructor.newInstance()
+        } catch (e: ReflectiveOperationException) {
+            throw DocumentSerializationException(
+                "Cannot instantiate converter ${type.name} for " +
+                    "${property.declaringClass.name}.${property.name}",
+                e,
+            )
+        }
+    }
+
     private fun serializeValue(
         value: Any?,
         seen: IdentityHashMap<Any, Boolean>,
@@ -218,6 +297,9 @@ class DefaultDocumentMapper internal constructor(
             throw DocumentSerializationException("Maximum serialization depth exceeded")
         }
         if (value != null && value !is Node) {
+            propertySerializer(property)?.let { serializer ->
+                return serializeWithSerializer(serializer, value, property, path)
+            }
             val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
                 ?: findSerializer(value.javaClass)
             if (serializer != null) {
@@ -378,6 +460,10 @@ class DefaultDocumentMapper internal constructor(
                 throw DocumentSerializationException("Cannot assign null to primitive type at $path")
             }
             return null
+        }
+        val propertyDeserializer = propertyDeserializer(property)
+        if (propertyDeserializer != null) {
+            return deserializeWithDeserializer(propertyDeserializer, node, property, path)
         }
         val rawType = when (type) {
             is Class<*> -> type

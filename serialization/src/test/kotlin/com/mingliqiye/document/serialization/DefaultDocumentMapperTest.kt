@@ -1,5 +1,6 @@
 package com.mingliqiye.document.serialization
 
+import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
@@ -86,6 +87,41 @@ class DefaultDocumentMapperTest {
 
         val money = mapper.fromNode(node, Money::class.java)
         assertEquals(12, money.amount)
+    }
+
+    @Test
+    fun fieldLevelConverter() {
+        val mapper = DocumentMapperApi.builder().build()
+        val wallet = Wallet().apply { money = Money(12) }
+
+        val node = mapper.toNode(wallet).asObject()
+        assertEquals("12 CNY", node["money"]?.asString())
+
+        val restored = mapper.fromNode(node, Wallet::class.java)
+        assertEquals(12, restored.money.amount)
+    }
+
+    @Test
+    fun fieldLevelConverterHasPriorityOverGlobalConverter() {
+        val mapper = DocumentMapperApi.builder()
+            .addConverter(GlobalMoneyConverter())
+            .build()
+        val wallet = Wallet().apply { money = Money(12) }
+
+        val node = mapper.toNode(wallet).asObject()
+        assertEquals("12 CNY", node["money"]?.asString())
+    }
+
+    @Test
+    fun fieldLevelConverterReadsPropertyAnnotations() {
+        val mapper = DocumentMapperApi.builder().build()
+        val wallet = LabeledWallet().apply { money = Money(12) }
+
+        val node = mapper.toNode(wallet).asObject()
+        assertEquals("12 USD", node["money"]?.asString())
+
+        val restored = mapper.fromNode(node, LabeledWallet::class.java)
+        assertEquals(12, restored.money.amount)
     }
 
     @Test
@@ -176,6 +212,39 @@ class DefaultDocumentMapperTest {
 
     private data class Money(val amount: Int)
 
+    private class Wallet {
+        @field:DocumentConverter(MoneyConverter::class)
+        var money: Money = Money(0)
+    }
+
+    private class GlobalMoneyConverter : JsonConverter<Money> {
+        override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
+
+        override fun serialize(value: Money, context: SerializationContext): Node = StringNode.of("${value.amount} GLOBAL")
+
+        override fun deserialize(node: Node, context: DeserializationContext): Money = Money(node.asString().removeSuffix(" GLOBAL").toInt())
+    }
+
+    private class LabeledWallet {
+        @field:DocumentConverter(LabeledMoneyConverter::class)
+        @field:MoneyLabel("USD")
+        var money: Money = Money(0)
+    }
+
+    private class LabeledMoneyConverter : JsonConverter<Money> {
+        override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
+
+        override fun serialize(value: Money, context: SerializationContext): Node {
+            val label = context.property?.getAnnotation(MoneyLabel::class.java)?.value ?: "?"
+            return StringNode.of("${value.amount} $label")
+        }
+
+        override fun deserialize(node: Node, context: DeserializationContext): Money {
+            val label = context.property?.getAnnotation(MoneyLabel::class.java)?.value ?: "?"
+            return Money(node.asString().removeSuffix(" $label").toInt())
+        }
+    }
+
     private class MoneyConverter : JsonConverter<Money> {
         override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
 
@@ -184,3 +253,7 @@ class DefaultDocumentMapperTest {
         override fun deserialize(node: Node, context: DeserializationContext): Money = Money(node.asString().removeSuffix(" CNY").toInt())
     }
 }
+
+@Retention(AnnotationRetention.RUNTIME)
+@Target(AnnotationTarget.FIELD)
+private annotation class MoneyLabel(val value: String)
