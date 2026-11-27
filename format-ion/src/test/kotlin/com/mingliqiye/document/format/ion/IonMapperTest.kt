@@ -87,6 +87,24 @@ class IonMapperTest {
         assertTrue(!ion.contains("address"))
     }
 
+    @Test
+    fun byteParseDecodesNestedBeanThroughTokenReader() {
+        val mapper = IonMapper()
+        val person = Person().apply {
+            name = "小于"
+            age = 18
+            tags = listOf("a", "b")
+            address = Address().apply { city = "杭州" }
+        }
+
+        val restored = mapper.parse(mapper.formatBytes(person), Person::class.java)
+
+        assertEquals("小于", restored.name)
+        assertEquals(18, restored.age)
+        assertEquals(listOf("a", "b"), restored.tags)
+        assertEquals("杭州", restored.address?.city)
+    }
+
     private class Person {
         var name: String? = null
         var age: Int = 0

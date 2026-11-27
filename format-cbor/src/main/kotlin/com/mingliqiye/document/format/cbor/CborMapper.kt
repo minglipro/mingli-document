@@ -2,6 +2,7 @@ package com.mingliqiye.document.format.cbor
 
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
@@ -14,8 +15,12 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * `byte[]` 读写 [com.mingliqiye.document.core.Node]，
  * 文本 API（`parse(String)` / `format`）会抛出不支持异常。
  *
- * 解析模型见 [CborReader]，写出模型见 [CborWriter]。CBOR 的 byte string 映射为
- * [com.mingliqiye.document.core.BinaryNode]，因此 Java 的 `byte[]` 属性可无损往返。
+ * `parse(ByteArray, Class)` 会优先用 [createTokenReader] 返回的 [CborTokenReader]
+ * 流式直读 Bean，不构建完整 Node 树；Token 路径不可用时回退到
+ * [CborReader] 构建 Node 再映射。写出仍由 [CborWriter] 完成。
+ *
+ * CBOR 的 byte string 映射为 [com.mingliqiye.document.core.BinaryNode]/BINARY Token，
+ * 因此 Java 的 `byte[]` 属性可无损往返。
  */
 public open class CborMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
@@ -51,6 +56,17 @@ public open class CborMapper internal constructor(
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
+
+    /**
+     * 创建 CBOR Token 直读器。
+     *
+     * 用于从字节流直接解码 Bean；解析失败抛
+     * [com.mingliqiye.document.format.cbor.exception.CborParseException]。
+     *
+     * @param source CBOR 二进制内容
+     * @return Token 读取器
+     */
+    override fun createTokenReader(source: ByteArray): DocumentTokenReader = CborTokenReader(source)
 
     public companion object {
 

@@ -1,7 +1,13 @@
 package com.mingliqiye.document.format.smile
 
+import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.core.NumberNode
+import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.serialization.DocumentMapperConfig
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -104,6 +110,65 @@ class SmileMapperTest {
         val node = SmileReader(bytes).read().asObject()
         assertFalse(node.containsKey("address"))
         assertTrue(node.containsKey("name"))
+    }
+
+    @Test
+    fun parseByteArrayUsesTokenDirectBeanPath() {
+        val mapper = RecordingSmileMapper()
+        val bytes = ObjectNode.of(
+            "name" to StringNode.of("小于"),
+            "age" to NumberNode.of(28),
+            "tags" to ArrayNode.of(StringNode.of("x"), StringNode.of("y")),
+            "address" to ObjectNode.of("city" to StringNode.of("杭州")),
+            "unknown" to ObjectNode.of(
+                "nested" to ArrayNode.of(NumberNode.of(1), BooleanNode.of(true)),
+            ),
+        ).toSmileBytes()
+
+        val person = mapper.parse(bytes, Person::class.java)
+
+        assertEquals(1, mapper.tokenReaderCalls)
+        assertEquals("小于", person.name)
+        assertEquals(28, person.age)
+        assertEquals(listOf("x", "y"), person.tags)
+        assertEquals("杭州", person.address?.city)
+
+        val listBytes = SmileMapper().formatBytes(listOf(Person().apply { name = "a" }))
+        val people = mapper.parse(listBytes, DocumentTypeReference.of<List<Person>>())
+        assertEquals(2, mapper.tokenReaderCalls)
+        assertEquals("a", people[0].name)
+    }
+
+    @Test
+    fun nodePathIsKeptAlongsideTokenPath() {
+        val mapper = SmileMapper()
+        val bytes = mapper.formatBytes(
+            Person().apply {
+                name = "节点"
+                age = 5
+                tags = listOf("n")
+                address = Address().apply { city = "上海" }
+            },
+        )
+
+        val node = SmileReader(bytes).read()
+        val restored = mapper.fromNode(node, Person::class.java)
+        assertEquals("节点", restored.name)
+        assertEquals(5, restored.age)
+        assertEquals(listOf("n"), restored.tags)
+        assertEquals("上海", restored.address?.city)
+
+        assertEquals(node, SmileReader(mapper.formatBytes(node)).read())
+    }
+
+    private class RecordingSmileMapper : SmileMapper() {
+        var tokenReaderCalls: Int = 0
+            private set
+
+        override fun createTokenReader(source: ByteArray): DocumentTokenReader {
+            tokenReaderCalls++
+            return super.createTokenReader(source)
+        }
     }
 
     private class Person {

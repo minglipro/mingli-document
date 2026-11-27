@@ -9,6 +9,7 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.ion.exception.IonParseException
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -150,8 +151,37 @@ class IonBinaryTest {
         assertEquals(node, text.toIonNode())
     }
 
+    @Test
+    fun mapperUsesDirectTokenReaderForByteParse() {
+        val mapper = CountingIonMapper()
+        val person = Person().apply {
+            name = "小于"
+            age = 18
+            tags = listOf("a", "b")
+            address = Address().apply { city = "杭州" }
+        }
+
+        val restored = mapper.parse(mapper.formatBytes(person), Person::class.java)
+        assertTrue(mapper.tokenReaderUsed)
+        assertEquals("杭州", restored.address?.city)
+
+        val listBytes = mapper.formatBytes(listOf(person))
+        val restoredList = mapper.parse(listBytes, DocumentTypeReference.of<List<Person>>())
+        assertEquals(listOf("小于"), restoredList.map { it.name })
+        assertTrue(mapper.tokenReaderUsed)
+    }
+
     private class ByteArrayHolder {
         var data: ByteArray? = null
+    }
+
+    private class CountingIonMapper : IonMapper() {
+        var tokenReaderUsed: Boolean = false
+
+        override fun createTokenReader(source: ByteArray): DocumentTokenReader {
+            tokenReaderUsed = true
+            return super.createTokenReader(source)
+        }
     }
 
     private class Person {

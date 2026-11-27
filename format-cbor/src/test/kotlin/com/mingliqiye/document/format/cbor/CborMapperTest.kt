@@ -1,8 +1,15 @@
 package com.mingliqiye.document.format.cbor
 
+import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
+import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.core.NumberNode
+import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -95,6 +102,69 @@ class CborMapperTest {
             DocumentMapperConfig.builder().writeNulls(false).build(),
         )
         assertTrue(withConstructorConfig.toNode(Person()).isObject)
+    }
+
+    @Test
+    fun parseByteArrayUsesTokenDirectBeanPath() {
+        val mapper = RecordingCborMapper()
+        val bytes = ObjectNode.of(
+            "name" to StringNode.of("小于"),
+            "age" to NumberNode.of(28),
+            "tags" to ArrayNode.of(StringNode.of("x"), StringNode.of("y")),
+            "address" to ObjectNode.of("city" to StringNode.of("杭州")),
+            "data" to BinaryNode.of(byteArrayOf(1, 2, 3)),
+            "unknown" to ObjectNode.of(
+                "nested" to ArrayNode.of(NumberNode.of(1), BooleanNode.of(true)),
+            ),
+        ).toCborBytes()
+
+        val person = mapper.parse(bytes, Person::class.java)
+
+        assertEquals(1, mapper.tokenReaderCalls)
+        assertEquals("小于", person.name)
+        assertEquals(28, person.age)
+        assertEquals(listOf("x", "y"), person.tags)
+        assertEquals("杭州", person.address?.city)
+        assertContentEquals(byteArrayOf(1, 2, 3), person.data)
+
+        val listBytes = CborMapper().formatBytes(listOf(Person().apply { name = "a" }))
+        val people = mapper.parse(listBytes, DocumentTypeReference.of<List<Person>>())
+        assertEquals(2, mapper.tokenReaderCalls)
+        assertEquals("a", people[0].name)
+    }
+
+    @Test
+    fun nodePathIsKeptAlongsideTokenPath() {
+        val mapper = CborMapper()
+        val bytes = mapper.formatBytes(
+            Person().apply {
+                name = "节点"
+                age = 5
+                tags = listOf("n")
+                address = Address().apply { city = "上海" }
+                data = byteArrayOf(7, 8)
+            },
+        )
+
+        val node = CborReader(bytes).read()
+        val restored = mapper.fromNode(node, Person::class.java)
+        assertEquals("节点", restored.name)
+        assertEquals(5, restored.age)
+        assertEquals(listOf("n"), restored.tags)
+        assertEquals("上海", restored.address?.city)
+        assertContentEquals(byteArrayOf(7, 8), restored.data)
+
+        assertEquals(node, CborReader(mapper.formatBytes(node)).read())
+    }
+
+    private class RecordingCborMapper : CborMapper() {
+        var tokenReaderCalls: Int = 0
+            private set
+
+        override fun createTokenReader(source: ByteArray): DocumentTokenReader {
+            tokenReaderCalls++
+            return super.createTokenReader(source)
+        }
     }
 
     private class Person {
