@@ -55,6 +55,7 @@ public abstract class DocumentMapper protected constructor(
     private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
     private val objectInstantiator: ObjectInstantiator?,
     private val propertyMetadataResolver: PropertyMetadataResolver?,
+    private val config: DocumentMapperConfig,
 ) : DocumentMapperApi {
 
     /**
@@ -68,7 +69,7 @@ public abstract class DocumentMapper protected constructor(
         formatName: String,
         parseText: (String) -> Node,
         writeText: (Node, Boolean) -> String,
-    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null, null)
+    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null, null, DocumentMapperConfig.empty())
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val constructorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
@@ -240,6 +241,7 @@ public abstract class DocumentMapper protected constructor(
         if (property == null) {
             return null
         }
+        config.fieldConverter(property)?.let { return it }
         val cached = propertyConverterCache[property]
         if (cached != null) {
             return if (cached === noConverter) null else cached

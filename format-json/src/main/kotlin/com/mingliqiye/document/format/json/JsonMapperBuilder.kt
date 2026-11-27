@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.serialization.DocumentMapperBuilder
+import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
@@ -16,5 +17,19 @@ public class JsonMapperBuilder internal constructor() : DocumentMapperBuilder<Js
         deserializers: Map<Class<*>, JsonDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
-    ): JsonMapper = JsonMapper(serializers, deserializers, objectInstantiator, propertyMetadataResolver)
+    ): JsonMapper = createMapper(
+        serializers,
+        deserializers,
+        objectInstantiator,
+        propertyMetadataResolver,
+        DocumentMapperConfig.empty(),
+    )
+
+    override fun createMapper(
+        serializers: Map<Class<*>, JsonSerializer<*>>,
+        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        objectInstantiator: ObjectInstantiator?,
+        propertyMetadataResolver: PropertyMetadataResolver?,
+        config: DocumentMapperConfig,
+    ): JsonMapper = JsonMapper(serializers, deserializers, objectInstantiator, propertyMetadataResolver, config)
 }

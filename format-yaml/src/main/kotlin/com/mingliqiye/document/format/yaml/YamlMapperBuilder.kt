@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.yaml
 
 import com.mingliqiye.document.serialization.DocumentMapperBuilder
+import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
@@ -16,5 +17,19 @@ public class YamlMapperBuilder internal constructor() : DocumentMapperBuilder<Ya
         deserializers: Map<Class<*>, JsonDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
-    ): YamlMapper = YamlMapper(serializers, deserializers, objectInstantiator, propertyMetadataResolver)
+    ): YamlMapper = createMapper(
+        serializers,
+        deserializers,
+        objectInstantiator,
+        propertyMetadataResolver,
+        DocumentMapperConfig.empty(),
+    )
+
+    override fun createMapper(
+        serializers: Map<Class<*>, JsonSerializer<*>>,
+        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        objectInstantiator: ObjectInstantiator?,
+        propertyMetadataResolver: PropertyMetadataResolver?,
+        config: DocumentMapperConfig,
+    ): YamlMapper = YamlMapper(serializers, deserializers, objectInstantiator, propertyMetadataResolver, config)
 }

@@ -17,6 +17,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
     private val modules = LinkedHashMap<String, DocumentModule>()
     private var objectInstantiator: ObjectInstantiator? = null
     private var propertyMetadataResolver: PropertyMetadataResolver? = null
+    private var config: DocumentMapperConfig = DocumentMapperConfig.empty()
 
     /**
      * 注册序列化器。
@@ -77,6 +78,17 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
     }
 
     /**
+     * 设置 Mapper 配置。
+     *
+     * @param config Mapper 配置
+     * @return 当前构建器
+     */
+    public fun config(config: DocumentMapperConfig): DocumentMapperBuilder<M> {
+        this.config = config
+        return this
+    }
+
+    /**
      * 设置对象实例化策略。
      *
      * @param instantiator 实例化策略
@@ -106,6 +118,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
             allDeserializers,
             moduleContext.objectInstantiator() ?: objectInstantiator,
             moduleContext.propertyMetadataResolver() ?: propertyMetadataResolver,
+            config,
         )
     }
 
@@ -118,4 +131,17 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
     ): M
+
+    /**
+     * 由格式模块创建具体 Mapper，并传入字段配置。
+     *
+     * 默认忽略配置以兼容旧实现；内置格式 Mapper 会重写此方法。
+     */
+    protected open fun createMapper(
+        serializers: Map<Class<*>, JsonSerializer<*>>,
+        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        objectInstantiator: ObjectInstantiator?,
+        propertyMetadataResolver: PropertyMetadataResolver?,
+        config: DocumentMapperConfig,
+    ): M = createMapper(serializers, deserializers, objectInstantiator, propertyMetadataResolver)
 }

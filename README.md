@@ -329,6 +329,48 @@ val documentName = property?.documentName               // 应用 @DocumentName 
 val label = property?.getAnnotation(MoneyLabel::class.java)?.value
 ```
 
+## 字段级配置
+
+格式 Mapper 可以传入 `DocumentMapperConfig`，按 `声明类 + 属性名` 定义字段的解析与格式化方式：
+
+```kotlin
+val config = DocumentMapperConfig.builder()
+    .field(Order::class.java, "createdAt", DateFieldConverter())
+    .build()
+
+val jsonMapper = JsonMapper(config)
+val yamlMapper = YamlMapper(config)
+```
+
+也可以从 Builder 传入：
+
+```kotlin
+val mapper = JsonMapper.builder()
+    .config(config)
+    .build()
+```
+
+配置中的转换器与普通 `JsonConverter` 完全一致，仍然可以通过 `context.property` 获取：
+
+```kotlin
+context.property?.declaringClass
+context.property?.name
+context.property?.documentName
+```
+
+优先级：
+
+```text
+DocumentMapperConfig 字段配置
+  ↓
+@DocumentConverter 字段注解
+  ↓
+Builder 全局转换器
+  ↓
+内置类型映射
+```
+
+`DocumentMapperConfig` 对 Java Bean 和 Kotlin data class 字段都生效。
 ## 字段注解
 
 注解位于 `com.mingliqiye.document.annotation`：

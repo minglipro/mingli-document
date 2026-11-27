@@ -2,6 +2,7 @@ package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.serialization.DocumentMapper
+import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
@@ -18,6 +19,7 @@ public open class JsonMapper internal constructor(
     deserializers: Map<Class<*>, JsonDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
+    config: DocumentMapperConfig,
 ) : DocumentMapper(
     "json",
     { source -> JsonReader(source).read() },
@@ -26,18 +28,26 @@ public open class JsonMapper internal constructor(
     deserializers,
     objectInstantiator,
     propertyMetadataResolver,
+    config,
 ) {
 
     /**
      * 创建默认 JSON 映射器。
      */
-    public constructor() : this(emptyMap(), emptyMap(), null, null)
+    public constructor() : this(emptyMap(), emptyMap(), null, null, DocumentMapperConfig.empty())
+
+    /**
+     * 使用字段配置创建 JSON 映射器。
+     *
+     * @param config Mapper 配置
+     */
+    public constructor(config: DocumentMapperConfig) : this(emptyMap(), emptyMap(), null, null, config)
 
     /**
      * 供格式专用 Mapper 子类使用的构造器。
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
-        this(emptyMap(), emptyMap(), objectInstantiator, null)
+        this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
     override fun <T> parse(source: String, targetType: Class<T>): T = readFrom(JsonValueReader(source), DocumentTypeReference.of(targetType))
 
