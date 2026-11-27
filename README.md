@@ -1055,22 +1055,30 @@ Avro/Protobuf 目前是 Schema 适配层，完整 wire 编解码后续接入。
 
 | Benchmark | 本项目 | Jackson |
 |---|---:|---:|
-| JSON 解析树 | 0.492 ms | 0.329 ms |
-| JSON → Bean | 0.724 ms | 0.298 ms |
-| JSON → data class | 0.819 ms | 0.298 ms |
-| Bean → JSON | 0.727 ms | 0.207 ms |
+| JSON 解析树 | 0.671 ms | 0.304 ms |
+| JSON → Bean | 1.036 ms | 0.309 ms |
+| JSON → data class | 1.089 ms | 0.309 ms |
+| Bean → JSON | 0.724 ms | 0.203 ms |
+
+Token 直读/直写（CBOR、1000 个 Kotlin data class）：
+
+| Benchmark | Token 路径 | Node 路径 | 提升 |
+|---|---:|---:|---:|
+| CBOR → Bean | 1.028 ms | 1.328 ms | 约 23% |
+| Bean → CBOR | 0.701 ms | 1.432 ms | 约 51% |
+
+说明：
+
+- JSON Token 路径：`JsonMapper.parse` / `format` 已走 `JsonTokenReader` / `JsonStreamWriter`
+- CBOR Token 路径：`CborMapper.parse(ByteArray)` / `formatBytes` 走 Token Reader/Writer
+- 数字受 JVM、硬件与 Gradle 构建环境影响，只用于同轮相对比较
+- 详细方法和结果见 [benchmarks/README.md](benchmarks/README.md)
 
 运行：
 
 ```bash
 gradle :benchmarks:jmh
 ```
-
-说明：
-
-- 本项目面向统一不可变 Node 树，Jackson 直接绑定 Bean，两者不是同一工作负载
-- `JsonMapper.format` 使用流式写出，不构建完整 Node 树
-- 详细方法和结果见 [benchmarks/README.md](benchmarks/README.md)
 ## 构建与测试
 
 ```bash
@@ -1091,6 +1099,9 @@ gradle :format-csv:test
 gradle :format-ion:test
 gradle :format-cbor:test
 gradle :format-smile:test
+gradle :schema:test
+gradle :format-avro:test
+gradle :format-protobuf:test
 gradle :serialization-kotlin:test
 
 # 自动格式化 Kotlin 代码

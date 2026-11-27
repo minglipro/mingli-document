@@ -19,17 +19,23 @@ gradle :benchmarks:jmh
 
 ```text
 Benchmark                             Mode  Cnt  Score   Error  Units
-JsonMapperBenchmark.jacksonFormat       avgt    5  0.207 ± 0.017  ms/op
-JsonMapperBenchmark.jacksonParseData    avgt    5  0.298 ± 0.012  ms/op
-JsonMapperBenchmark.jacksonParseTree    avgt    5  0.329 ± 0.018  ms/op
-JsonMapperBenchmark.ourFormat           avgt    5  0.727 ± 0.013  ms/op
-JsonMapperBenchmark.ourParseData        avgt    5  0.724 ± 0.055  ms/op
-JsonMapperBenchmark.ourParseKotlinData  avgt    5  0.819 ± 0.029  ms/op
-JsonMapperBenchmark.ourParseTree        avgt    5  0.492 ± 0.031  ms/op
+JsonMapperBenchmark.jacksonFormat       avgt    5  0.203 ± 0.017  ms/op
+JsonMapperBenchmark.jacksonParseData    avgt    5  0.309 ± 0.015  ms/op
+JsonMapperBenchmark.jacksonParseTree    avgt    5  0.304 ± 0.017  ms/op
+JsonMapperBenchmark.ourFormat           avgt    5  0.724 ± 0.019  ms/op
+JsonMapperBenchmark.ourParseData        avgt    5  1.036 ± 0.054  ms/op
+JsonMapperBenchmark.ourParseKotlinData  avgt    5  1.089 ± 0.111  ms/op
+JsonMapperBenchmark.ourParseTree        avgt    5  0.671 ± 0.070  ms/op
+TokenPathBenchmark.cborParseBeanToken   avgt    5  1.028 ± 0.044  ms/op
+TokenPathBenchmark.cborParseBeanNode    avgt    5  1.328 ± 0.321  ms/op
+TokenPathBenchmark.cborFormatBeanToken  avgt    5  0.701 ± 0.016  ms/op
+TokenPathBenchmark.cborFormatBeanNode   avgt    5  1.432 ± 0.112  ms/op
+TokenPathBenchmark.jsonParseBeanToken   avgt    5  1.162 ± 0.173  ms/op
 ```
 
 说明：
 
-- `ourFormat` 使用流式 JSON 写出，不构建完整 Node 树
+- `ourParseData` / `ourParseKotlinData` 已走 JSON Token 直读
+- `ourFormat` 使用 JSON Token 写出，不构建完整 Node 树
+- `cborParseBeanToken`/`cborFormatBeanToken` 对比 `cborParseBeanNode`/`cborFormatBeanNode`：Token 路径分别约快 23% / 51%
 - 该结果是单机普通 JVM 数据，不代表所有硬件/负载
-- 与 Jackson 对比时注意：本库输出统一的不可变 Node 树，Jackson 直接绑定 Bean

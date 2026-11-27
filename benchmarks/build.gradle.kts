@@ -8,6 +8,7 @@ kotlin {
 
 dependencies {
     implementation(project(":format-json"))
+    implementation(project(":format-cbor"))
     implementation(project(":serialization-kotlin"))
     implementation("org.openjdk.jmh:jmh-core:1.37")
     annotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:1.37")
