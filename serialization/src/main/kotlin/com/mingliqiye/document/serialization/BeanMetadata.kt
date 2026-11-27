@@ -7,6 +7,7 @@ package com.mingliqiye.document.serialization
  */
 internal class BeanMetadata(
     val properties: List<BeanPropertyAccessor>,
+    val knownFields: Set<String>,
 ) {
 
     private val propertiesByName: Map<String, BeanPropertyAccessor> =

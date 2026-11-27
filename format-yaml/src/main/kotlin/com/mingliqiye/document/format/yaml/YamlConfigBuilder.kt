@@ -1,15 +1,15 @@
 package com.mingliqiye.document.format.yaml
 
-import com.mingliqiye.document.serialization.FieldKey
+import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonConverter
-import java.util.LinkedHashMap
+import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
  * [YamlConfig] 构建器。
  */
 public class YamlConfigBuilder {
 
-    private val fieldConverters = LinkedHashMap<FieldKey, JsonConverter<*>>()
+    private val base = DocumentMapperConfig.builder()
     private var pretty = false
 
     /**
@@ -25,7 +25,31 @@ public class YamlConfigBuilder {
         name: String,
         converter: JsonConverter<*>,
     ): YamlConfigBuilder {
-        fieldConverters[FieldKey(declaringClass, name)] = converter
+        base.field(declaringClass, name, converter)
+        return this
+    }
+
+    /**
+     * 设置缺少字段时的处理策略。
+     */
+    public fun missingFieldPolicy(policy: MissingFieldPolicy): YamlConfigBuilder {
+        base.missingFieldPolicy(policy)
+        return this
+    }
+
+    /**
+     * 设置遇到未知字段时是否抛出异常。
+     */
+    public fun failOnUnknownFields(fail: Boolean): YamlConfigBuilder {
+        base.failOnUnknownFields(fail)
+        return this
+    }
+
+    /**
+     * 设置 Bean 字段为 null 时是否写出。
+     */
+    public fun writeNulls(write: Boolean): YamlConfigBuilder {
+        base.writeNulls(write)
         return this
     }
 
@@ -40,5 +64,5 @@ public class YamlConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): YamlConfig = YamlConfig(LinkedHashMap(fieldConverters), pretty)
+    public fun build(): YamlConfig = YamlConfig(base.build(), pretty)
 }

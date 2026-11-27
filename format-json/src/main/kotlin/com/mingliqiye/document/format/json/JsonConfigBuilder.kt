@@ -1,15 +1,15 @@
 package com.mingliqiye.document.format.json
 
-import com.mingliqiye.document.serialization.FieldKey
+import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonConverter
-import java.util.LinkedHashMap
+import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
  * [JsonConfig] 构建器。
  */
 public class JsonConfigBuilder {
 
-    private val fieldConverters = LinkedHashMap<FieldKey, JsonConverter<*>>()
+    private val base = DocumentMapperConfig.builder()
     private var allowComments = true
     private var pretty = false
 
@@ -26,7 +26,31 @@ public class JsonConfigBuilder {
         name: String,
         converter: JsonConverter<*>,
     ): JsonConfigBuilder {
-        fieldConverters[FieldKey(declaringClass, name)] = converter
+        base.field(declaringClass, name, converter)
+        return this
+    }
+
+    /**
+     * 设置缺少字段时的处理策略。
+     */
+    public fun missingFieldPolicy(policy: MissingFieldPolicy): JsonConfigBuilder {
+        base.missingFieldPolicy(policy)
+        return this
+    }
+
+    /**
+     * 设置遇到未知字段时是否抛出异常。
+     */
+    public fun failOnUnknownFields(fail: Boolean): JsonConfigBuilder {
+        base.failOnUnknownFields(fail)
+        return this
+    }
+
+    /**
+     * 设置 Bean 字段为 null 时是否写出。
+     */
+    public fun writeNulls(write: Boolean): JsonConfigBuilder {
+        base.writeNulls(write)
         return this
     }
 
@@ -49,5 +73,5 @@ public class JsonConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): JsonConfig = JsonConfig(LinkedHashMap(fieldConverters), allowComments, pretty)
+    public fun build(): JsonConfig = JsonConfig(base.build(), allowComments, pretty)
 }

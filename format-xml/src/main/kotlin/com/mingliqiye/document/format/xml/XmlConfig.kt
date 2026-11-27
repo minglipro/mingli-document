@@ -1,19 +1,17 @@
 package com.mingliqiye.document.format.xml
 
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.FieldKey
-import com.mingliqiye.document.serialization.JsonConverter
 
 /**
  * XML Mapper 配置。
  *
- * 在字段级转换配置基础上增加 XML 根元素名。
+ * 在通用字段/读写配置基础上增加 XML 根元素名。
  */
 public class XmlConfig internal constructor(
-    fieldConverters: Map<FieldKey, JsonConverter<*>>,
+    base: DocumentMapperConfig,
     /** 写出时的根元素名。 */
     public val rootName: String,
-) : DocumentMapperConfig(fieldConverters) {
+) : DocumentMapperConfig(base) {
 
     public companion object {
 

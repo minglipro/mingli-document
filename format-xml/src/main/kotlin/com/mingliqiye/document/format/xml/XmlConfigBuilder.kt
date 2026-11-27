@@ -1,15 +1,15 @@
 package com.mingliqiye.document.format.xml
 
-import com.mingliqiye.document.serialization.FieldKey
+import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.JsonConverter
-import java.util.LinkedHashMap
+import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
  * [XmlConfig] 构建器。
  */
 public class XmlConfigBuilder {
 
-    private val fieldConverters = LinkedHashMap<FieldKey, JsonConverter<*>>()
+    private val base = DocumentMapperConfig.builder()
     private var rootName = "root"
 
     /**
@@ -25,7 +25,31 @@ public class XmlConfigBuilder {
         name: String,
         converter: JsonConverter<*>,
     ): XmlConfigBuilder {
-        fieldConverters[FieldKey(declaringClass, name)] = converter
+        base.field(declaringClass, name, converter)
+        return this
+    }
+
+    /**
+     * 设置缺少字段时的处理策略。
+     */
+    public fun missingFieldPolicy(policy: MissingFieldPolicy): XmlConfigBuilder {
+        base.missingFieldPolicy(policy)
+        return this
+    }
+
+    /**
+     * 设置遇到未知字段时是否抛出异常。
+     */
+    public fun failOnUnknownFields(fail: Boolean): XmlConfigBuilder {
+        base.failOnUnknownFields(fail)
+        return this
+    }
+
+    /**
+     * 设置 Bean 字段为 null 时是否写出。
+     */
+    public fun writeNulls(write: Boolean): XmlConfigBuilder {
+        base.writeNulls(write)
         return this
     }
 
@@ -40,5 +64,5 @@ public class XmlConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): XmlConfig = XmlConfig(LinkedHashMap(fieldConverters), rootName)
+    public fun build(): XmlConfig = XmlConfig(base.build(), rootName)
 }

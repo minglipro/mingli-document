@@ -576,19 +576,75 @@ public abstract class DocumentMapper protected constructor(
     ): Any {
         val instance = instantiate(type)
         val metadata = beanMetadata(type)
+        val seen = HashSet<String>()
         reader.beginObject()
         while (reader.hasNextField()) {
             val fieldName = reader.readFieldName()
             val accessor = metadata.property(fieldName)
             if (accessor != null && accessor.canWrite) {
+                seen.add(fieldName)
                 val value = readValue(reader, accessor.valueType, accessor.metadata, "$path.$fieldName")
                 accessor.write(instance, value)
             } else {
+                if (config.failOnUnknownFields && fieldName !in metadata.knownFields) {
+                    throw DocumentSerializationException(
+                        "Unknown field '$fieldName' for ${type.name} at $path",
+                    )
+                }
                 reader.skipValue()
             }
         }
         reader.endObject()
+        applyMissingFields(instance, metadata, seen, path)
         return instance
+    }
+
+    private fun applyMissingFields(
+        instance: Any,
+        metadata: BeanMetadata,
+        seen: Set<String>,
+        path: String,
+    ) {
+        val policy = config.missingFieldPolicy
+        if (policy == MissingFieldPolicy.KEEP_DEFAULT) {
+            return
+        }
+        for (accessor in metadata.properties) {
+            if (!accessor.canWrite) {
+                continue
+            }
+            val fieldName = accessor.metadata.documentName
+            if (fieldName in seen) {
+                continue
+            }
+            if (policy == MissingFieldPolicy.FAIL) {
+                throw DocumentSerializationException(
+                    "Missing field '$fieldName' at $path",
+                )
+            }
+            val rawType = try {
+                rawClass(accessor.valueType)
+            } catch (_: Exception) {
+                null
+            }
+            if (rawType?.isPrimitive == true) {
+                continue
+            }
+            accessor.write(instance, missingValue(policy, rawType))
+        }
+    }
+
+    private fun missingValue(policy: MissingFieldPolicy, rawType: Class<*>?): Any? = when (policy) {
+        MissingFieldPolicy.SET_EMPTY -> when {
+            rawType == null -> null
+            rawType == String::class.java || rawType == CharSequence::class.java -> ""
+            Collection::class.java.isAssignableFrom(rawType) -> newCollection(rawType)
+            Map::class.java.isAssignableFrom(rawType) -> newMap(rawType)
+            rawType.isArray -> ReflectArray.newInstance(rawType.componentType, 0)
+            else -> null
+        }
+
+        else -> null
     }
 
     private fun serializeValue(
@@ -771,9 +827,13 @@ public abstract class DocumentMapper protected constructor(
                     continue
                 }
                 val metadata = accessor.metadata
+                val value = accessor.read(bean)
+                if (!config.writeNulls && value == null) {
+                    continue
+                }
                 writer.fieldName(metadata.documentName)
                 writeValue(
-                    accessor.read(bean),
+                    value,
                     seen,
                     depth + 1,
                     metadata,
@@ -854,8 +914,12 @@ public abstract class DocumentMapper protected constructor(
                 continue
             }
             val metadata = accessor.metadata
+            val value = accessor.read(bean)
+            if (!config.writeNulls && value == null) {
+                continue
+            }
             fields[metadata.documentName] = serializeValue(
-                accessor.read(bean),
+                value,
                 seen,
                 depth + 1,
                 metadata,
@@ -1053,23 +1117,36 @@ public abstract class DocumentMapper protected constructor(
             return customInstance
         }
         val instance = instantiate(type)
+        val metadata = beanMetadata(type)
+        if (config.failOnUnknownFields) {
+            for (key in objectNode.keys) {
+                if (key !in metadata.knownFields) {
+                    throw DocumentSerializationException(
+                        "Unknown field '$key' for ${type.name} at $path",
+                    )
+                }
+            }
+        }
+        val seen = HashSet<String>()
 
-        for (accessor in beanMetadata(type).properties) {
+        for (accessor in metadata.properties) {
             if (!accessor.canWrite) {
                 continue
             }
-            val metadata = accessor.metadata
-            val valueNode = objectNode[metadata.documentName] ?: continue
+            val propertyMetadata = accessor.metadata
+            val valueNode = objectNode[propertyMetadata.documentName] ?: continue
+            seen.add(propertyMetadata.documentName)
             accessor.write(
                 instance,
                 deserializeValue(
                     valueNode,
                     accessor.valueType,
-                    "$path.${metadata.name}",
-                    metadata,
+                    "$path.${propertyMetadata.name}",
+                    propertyMetadata,
                 ),
             )
         }
+        applyMissingFields(instance, metadata, seen, path)
         return instance
     }
 
@@ -1188,10 +1265,12 @@ public abstract class DocumentMapper protected constructor(
     private fun createBeanMetadata(type: Class<*>): BeanMetadata {
         val accessors = LinkedHashMap<String, BeanPropertyAccessor>()
         val handled = HashSet<String>()
+        val knownFields = LinkedHashSet<String>()
 
         for (property in beanProperties(type)) {
             handled.add(property.name)
             val metadata = documentProperty(type, property)
+            knownFields.add(metadata.documentName)
             if (metadata.isIgnored()) {
                 continue
             }
@@ -1243,6 +1322,7 @@ public abstract class DocumentMapper protected constructor(
                 continue
             }
             val metadata = documentProperty(type, field)
+            knownFields.add(metadata.documentName)
             if (metadata.isIgnored()) {
                 continue
             }
@@ -1261,7 +1341,7 @@ public abstract class DocumentMapper protected constructor(
             )
         }
 
-        return BeanMetadata(accessors.values.toList())
+        return BeanMetadata(accessors.values.toList(), knownFields)
     }
 
     private fun readField(field: Field, bean: Any): Any? = try {

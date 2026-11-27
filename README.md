@@ -392,6 +392,65 @@ Builder 全局转换器
 
 `DocumentMapperConfig` 对 Java Bean 和 Kotlin data class 字段都生效。
 
+## 读写行为配置
+
+`DocumentMapperConfig` 同时提供类似 Jackson `DeserializationFeature` / `SerializationFeature` 的开关：
+
+```kotlin
+val config = DocumentMapperConfig.builder()
+    .missingFieldPolicy(MissingFieldPolicy.SET_EMPTY)
+    .failOnUnknownFields(true)
+    .writeNulls(false)
+    .build()
+
+val mapper = JsonMapper(config)
+```
+
+### missingFieldPolicy
+
+文档缺少 Bean 字段时：
+
+| 策略 | 行为 |
+|---|---|
+| `KEEP_DEFAULT` | 保留对象构造后的默认值（默认） |
+| `SET_NULL` | 引用类型设为 `null`；基本类型保留默认值 |
+| `SET_EMPTY` | `String` 设为 `""`；集合、Map、数组设为空集合；其他引用类型设为 `null` |
+| `FAIL` | 抛出 `DocumentSerializationException` |
+
+### failOnUnknownFields
+
+```kotlin
+DocumentMapperConfig.builder()
+    .failOnUnknownFields(true)
+    .build()
+```
+
+遇到文档中不存在于 Bean 的字段时抛出异常；默认忽略。
+
+### writeNulls
+
+```kotlin
+DocumentMapperConfig.builder()
+    .writeNulls(false)
+    .build()
+```
+
+Bean 字段值为 `null` 时不写出该字段；默认写出。
+
+JSON/YAML/XML 专属 Config 也提供这些方法：
+
+```kotlin
+val jsonConfig = JsonConfig.builder()
+    .missingFieldPolicy(MissingFieldPolicy.SET_EMPTY)
+    .failOnUnknownFields(true)
+    .writeNulls(false)
+    .allowComments(false)
+    .pretty(true)
+    .build()
+```
+
+> `missingFieldPolicy` / `failOnUnknownFields` 主要作用于普通 Java Bean；Kotlin data class 仍按主构造参数规则：必填参数缺失会报错，默认参数保留默认值。
+
 ## 日期时间格式
 
 `@DocumentDateTimeFormat` 直接定义单个日期/时间字段的解析与格式化：

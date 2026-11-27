@@ -1,21 +1,19 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.FieldKey
-import com.mingliqiye.document.serialization.JsonConverter
 
 /**
  * JSON Mapper 配置。
  *
- * 在字段级转换配置基础上增加 JSON 专属选项。
+ * 在通用字段/读写配置基础上增加 JSON 专属选项。
  */
 public class JsonConfig internal constructor(
-    fieldConverters: Map<FieldKey, JsonConverter<*>>,
+    base: DocumentMapperConfig,
     /** 是否允许 JSONC 注释。 */
     public val allowComments: Boolean,
     /** `format()` 是否默认输出格式化 JSON。 */
     public val pretty: Boolean,
-) : DocumentMapperConfig(fieldConverters) {
+) : DocumentMapperConfig(base) {
 
     public companion object {
 
