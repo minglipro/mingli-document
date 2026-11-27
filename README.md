@@ -20,16 +20,14 @@
 | `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
-| `serialization-kotlin` | Kotlin data class Mapper（`KotlinJsonMapper` / `KotlinYamlMapper`） | `serialization`、`format-json`、`format-yaml`、`annotation`、`kotlin-reflect` |
+| `serialization-kotlin` | Kotlin data class 支持模块 `KotlinModule` | `serialization`、`annotation`、`kotlin-reflect` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
 
 ```text
 format-json ──► serialization ──► core ──► exception ──► mingli-exception
 format-yaml ──► serialization
-serialization-kotlin ──► format-json
-                   ──► format-yaml
-                   ──► serialization
+serialization-kotlin ──► serialization
 serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
 annotation：项目内无依赖
@@ -120,19 +118,28 @@ fun main() {
 Java Bean 需要无参构造器；Kotlin data class 可以通过 `serialization-kotlin` 使用主构造器反序列化。
 
 ```kotlin
-import com.mingliqiye.document.serialization.kotlin.KotlinJsonMapper
+import com.mingliqiye.document.format.json.JsonMapper
+import com.mingliqiye.document.serialization.kotlin.KotlinModule
 
 data class User(val name: String, val age: Int)
 
 fun main() {
-    val mapper = KotlinJsonMapper()
+    val mapper = JsonMapper.builder()
+        .addModule(KotlinModule)
+        .build()
 
     val user = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
     println(mapper.formatPretty(user))
 }
 ```
 
-YAML 使用 `KotlinYamlMapper`。
+YAML 同样注册模块：
+
+```kotlin
+val mapper = YamlMapper.builder()
+    .addModule(KotlinModule)
+    .build()
+```
 
 支持：
 
@@ -145,7 +152,48 @@ YAML 使用 `KotlinYamlMapper`。
 
 > `serialization-kotlin` 依赖 `kotlin-reflect`；不需要 Kotlin 反射时可以不引入该模块。
 >
-> 低层扩展点 `KotlinDataClassInstantiator` 仍可配合任意 `JsonMapper.builder().objectInstantiator(...)` 使用。
+> 低层扩展点 `ObjectInstantiator` 仍可通过 `DocumentModule` 的 `ModuleSetupContext` 注入。
+
+## Mapper 模块系统
+
+格式 Mapper 支持类似 Jackson `Module` 的模块机制：
+
+```kotlin
+public interface DocumentModule {
+    public val moduleName: String
+    public fun setupModule(context: ModuleSetupContext)
+}
+```
+
+自定义模块：
+
+```kotlin
+import com.mingliqiye.document.serialization.DocumentModule
+import com.mingliqiye.document.serialization.ModuleSetupContext
+
+object MoneyModule : DocumentModule {
+    override val moduleName: String = "money"
+
+    override fun setupModule(context: ModuleSetupContext) {
+        context.addConverter(MoneyConverter())
+    }
+}
+
+fun main() {
+    val mapper = JsonMapper.builder()
+        .addModule(MoneyModule)
+        .build()
+}
+```
+
+模块可以：
+
+- `addSerializer(...)`
+- `addDeserializer(...)`
+- `addConverter(...)`
+- `setObjectInstantiator(...)`
+
+`addModule(...)` 按 `moduleName` 去重，模块配置在 `build()` 时应用；Builder 自身注册的配置与模块配置会合并。
 
 ## 自定义转换器
 

@@ -1,11 +1,10 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.serialization.DocumentMapper
-import com.mingliqiye.document.serialization.JsonConverter
+import com.mingliqiye.document.serialization.DocumentMapperBuilder
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
-import java.util.LinkedHashMap
 
 /**
  * JSON 文档映射器。
@@ -48,48 +47,12 @@ public open class JsonMapper private constructor(
     /**
      * [JsonMapper] 构建器。
      */
-    public class Builder internal constructor() {
+    public class Builder internal constructor() : DocumentMapperBuilder<JsonMapper>() {
 
-        private val serializers = LinkedHashMap<Class<*>, JsonSerializer<*>>()
-        private val deserializers = LinkedHashMap<Class<*>, JsonDeserializer<*>>()
-        private var objectInstantiator: ObjectInstantiator? = null
-
-        /**
-         * 注册序列化器。
-         */
-        public fun addSerializer(serializer: JsonSerializer<*>): Builder {
-            serializers[serializer.getType().getRawType()] = serializer
-            return this
-        }
-
-        /**
-         * 注册反序列化器。
-         */
-        public fun addDeserializer(deserializer: JsonDeserializer<*>): Builder {
-            deserializers[deserializer.getType().getRawType()] = deserializer
-            return this
-        }
-
-        /**
-         * 设置对象实例化策略。
-         */
-        public fun objectInstantiator(instantiator: ObjectInstantiator?): Builder {
-            this.objectInstantiator = instantiator
-            return this
-        }
-
-        /**
-         * 注册双向转换器。
-         */
-        public fun addConverter(converter: JsonConverter<*>): Builder {
-            addSerializer(converter)
-            addDeserializer(converter)
-            return this
-        }
-
-        /**
-         * 构建 JSON Mapper。
-         */
-        public fun build(): JsonMapper = JsonMapper(serializers, deserializers, objectInstantiator)
+        override fun createMapper(
+            serializers: Map<Class<*>, JsonSerializer<*>>,
+            deserializers: Map<Class<*>, JsonDeserializer<*>>,
+            objectInstantiator: ObjectInstantiator?,
+        ): JsonMapper = JsonMapper(serializers, deserializers, objectInstantiator)
     }
 }

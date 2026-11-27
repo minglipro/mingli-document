@@ -34,7 +34,7 @@
 | `format-json` | JSON Mapper | `serialization`、`core` |
 | `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
 | `serialization` | Java 实体与树之间的映射、DocumentMapper 基类 | `core`、`annotation` |
-| `serialization-kotlin` | Kotlin data class Mapper | `serialization`、`format-json`、`format-yaml`、`annotation`、`kotlin-reflect` |
+| `serialization-kotlin` | Kotlin data class 模块 `KotlinModule` | `serialization`、`annotation`、`kotlin-reflect` |
 
 允许的依赖方向：
 
@@ -47,7 +47,7 @@ core
  └── serialization
       ├── format-json
       ├── format-yaml
-      └── serialization-kotlin ──► format-json / format-yaml
+      └── serialization-kotlin
 ```
 
 规则：
@@ -55,7 +55,7 @@ core
 - `core` 不能依赖任何具体格式模块。
 - `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`serialization`。
 - `format-*` 依赖 `serialization` 与 `core`，通过继承 `DocumentMapper` 暴露格式 Mapper。
-- `serialization-kotlin` 提供带 Kotlin data class 支持的格式 Mapper，依赖 format 模块与 kotlin-reflect。
+- `serialization-kotlin` 提供 `KotlinModule` 与 kotlin-reflect，不绑定具体格式。
 - `serialization` 主代码不依赖具体格式。
 - 测试可以临时依赖其他模块做集成验证，但不能把测试依赖带入主代码 API。
 - 传递暴露给使用方的类型使用 `api`；纯实现依赖使用 `implementation`。
@@ -171,6 +171,7 @@ DocumentMapperApi
 - 内部格式 Codec 不对外暴露；
 - 对外扩展点只保留：`JsonSerializer`、`JsonDeserializer`、`JsonConverter`；
 - 未来 XML 模块继承 `DocumentMapper`，例如 `XmlMapper`。
+- 跨格式能力通过 `DocumentModule` 注册，使用 `JsonMapper.builder().addModule(...)`。
 
 ---
 

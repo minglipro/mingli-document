@@ -23,7 +23,7 @@ import kotlin.reflect.jvm.javaType
  *
  * 非 data class 返回 `null`，由 Mapper 回退到默认无参构造器。
  */
-public object KotlinDataClassInstantiator : ObjectInstantiator {
+internal object KotlinDataClassInstantiator : ObjectInstantiator {
 
     override fun instantiate(
         type: Class<*>,

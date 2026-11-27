@@ -10,10 +10,10 @@ kotlin {
 
 dependencies {
     api(project(":serialization"))
-    api(project(":format-json"))
-    api(project(":format-yaml"))
     implementation(project(":annotation"))
     implementation(kotlin("reflect"))
+    testImplementation(project(":format-json"))
+    testImplementation(project(":format-yaml"))
     testImplementation(kotlin("test"))
 }
 
