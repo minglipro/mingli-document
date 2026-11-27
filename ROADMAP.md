@@ -102,3 +102,28 @@
 | 第三批 | 多态、构造器/Builder、CBOR tag、Ion 保真 | 待开始 |
 | 第四批 | 原生 Token、JSON byte writer、Ryu | 待开始 |
 | 第五批 | CI/CD、SBOM、发布收口 | 待开始 |
+
+---
+
+## 1.1.0 交付状态
+
+已验证：
+
+- master / dev / v1.1.0 已推送 GitHub
+- 私服 1.1.0 已发布
+- `clean ktlintCheck build generateChecksums generateSbom` 成功
+- 648 tests / 0 failures / 0 errors
+- SHA-256 清单 53 个 jar
+- SBOM 46 个组件
+
+以下能力延后到 1.2.0：
+
+- CBOR tag 保留
+- Ion 类型保真
+- Avro / Protobuf 解析深度
+- 原生 Token Reader
+- Ryu / Schubfach
+- Jazzer / JQF 持续 fuzz
+- 运行期 / 编译期代码生成
+- 远程 `$ref`
+- Maven Central 自动发布
