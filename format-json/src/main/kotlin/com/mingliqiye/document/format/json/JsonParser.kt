@@ -10,8 +10,6 @@ import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.json.exception.JsonParseException
 import java.util.LinkedHashMap
 
-private const val MAX_JSON_DEPTH = 512
-
 /**
  * JSON/JSONC 递归下降解析器。
  *
@@ -19,14 +17,23 @@ private const val MAX_JSON_DEPTH = 512
  *
  * 语法本身保持严格（拒绝尾逗号、单引号、非法数字等）；在 [allowComments]
  * 为 `true` 时，`skipWhitespace` 会额外跳过多余空白、`//` 行注释和块注释。
+ *
+ * @param source JSON 文本
+ * @param allowComments 是否允许 JSONC 注释
+ * @param duplicateKeyPolicy 对象内重复 key 策略
+ * @param maxDepth 对象/数组最大嵌套深度
+ * @param initialDepth 起始嵌套深度，供 [JsonTokenReader] 跳过重复字段值时复用
  */
 internal class JsonParser(
     private val source: String,
     private val allowComments: Boolean,
+    private val duplicateKeyPolicy: DuplicateKeyPolicy = DuplicateKeyPolicy.LAST_WINS,
+    private val maxDepth: Int = JsonConfig.DEFAULT_MAX_DEPTH,
+    initialDepth: Int = 0,
 ) {
 
     private var position = 0
-    private var depth = 0
+    private var depth = initialDepth
 
     /**
      * 解析一个完整 JSON 值，并确保之后只剩空白字符。
@@ -94,7 +101,7 @@ internal class JsonParser(
                 skipWhitespace()
                 expect(':')
                 skipWhitespace()
-                fields[key] = parseValue()
+                parseFieldValue(fields, key)
                 skipWhitespace()
                 when {
                     consume(',') -> {
@@ -112,6 +119,46 @@ internal class JsonParser(
         } finally {
             depth--
         }
+    }
+
+    /**
+     * 按重复 key 策略解析并写入一个对象字段值。
+     *
+     * @param fields 已解析字段
+     * @param key 当前字段名
+     */
+    private fun parseFieldValue(fields: LinkedHashMap<String, Node>, key: String) {
+        when (duplicateKeyPolicy) {
+            DuplicateKeyPolicy.LAST_WINS -> fields[key] = parseValue()
+            DuplicateKeyPolicy.FIRST_WINS -> {
+                if (key in fields) {
+                    parseValue()
+                } else {
+                    fields[key] = parseValue()
+                }
+            }
+
+            DuplicateKeyPolicy.FAIL -> {
+                if (key in fields) {
+                    throw error("Duplicate field \"$key\"")
+                }
+                fields[key] = parseValue()
+            }
+        }
+    }
+
+    /**
+     * 从指定偏移量跳过（解析并丢弃）一个 JSON 值。
+     *
+     * 供 [JsonTokenReader] 在 `FIRST_WINS` 策略下跳过重复字段值；仍完整校验语法与深度。
+     *
+     * @param offset 值在源文本中的起始偏移量
+     * @return 值之后的偏移量
+     */
+    internal fun skipValueAt(offset: Int): Int {
+        position = offset
+        parseValue()
+        return position
     }
 
     private fun parseArray(): Node {
@@ -371,8 +418,8 @@ internal class JsonParser(
 
     private fun enter() {
         depth++
-        if (depth > MAX_JSON_DEPTH) {
-            throw error("Maximum nesting depth of $MAX_JSON_DEPTH exceeded")
+        if (depth > maxDepth) {
+            throw error("Maximum nesting depth of $maxDepth exceeded")
         }
     }
 

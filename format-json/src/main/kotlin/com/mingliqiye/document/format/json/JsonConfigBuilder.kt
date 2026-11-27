@@ -12,6 +12,8 @@ public class JsonConfigBuilder {
     private val base = DocumentMapperConfig.builder()
     private var allowComments = true
     private var pretty = false
+    private var duplicateKeyPolicy = DuplicateKeyPolicy.LAST_WINS
+    private var maxDepth = JsonConfig.DEFAULT_MAX_DEPTH
 
     /**
      * 为指定字段绑定转换器。
@@ -71,7 +73,31 @@ public class JsonConfigBuilder {
     }
 
     /**
+     * 设置对象内重复 key 的处理策略。
+     *
+     * @param policy 重复 key 策略，默认 [DuplicateKeyPolicy.LAST_WINS]
+     * @return 当前构建器
+     */
+    public fun duplicateKeyPolicy(policy: DuplicateKeyPolicy): JsonConfigBuilder {
+        this.duplicateKeyPolicy = policy
+        return this
+    }
+
+    /**
+     * 设置对象/数组最大嵌套深度（对象与数组统一计数）。
+     *
+     * @param maxDepth 最大嵌套深度，必须为正数
+     * @return 当前构建器
+     * @throws IllegalArgumentException `maxDepth` 小于等于 0 时抛出
+     */
+    public fun maxDepth(maxDepth: Int): JsonConfigBuilder {
+        require(maxDepth > 0) { "maxDepth must be positive, but was $maxDepth" }
+        this.maxDepth = maxDepth
+        return this
+    }
+
+    /**
      * 构建配置。
      */
-    public fun build(): JsonConfig = JsonConfig(base.build(), allowComments, pretty)
+    public fun build(): JsonConfig = JsonConfig(base.build(), allowComments, pretty, duplicateKeyPolicy, maxDepth)
 }

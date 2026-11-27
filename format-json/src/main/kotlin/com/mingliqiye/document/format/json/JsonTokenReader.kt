@@ -16,18 +16,33 @@ private const val ARRAY_AFTER_VALUE = 2
  * JSON 文本 Token 读取器。
  *
  * 直接按 Token 生成，不构建 Node 树。
+ *
+ * @param source JSON 文本
+ * @param allowComments 是否允许 JSONC 注释
+ * @param duplicateKeyPolicy 对象内重复 key 策略；`FIRST_WINS` 时重复字段不会产出 Token
+ * @param maxDepth 对象/数组最大嵌套深度
  */
 internal class JsonTokenReader(
     private val source: String,
     private val allowComments: Boolean = true,
+    private val duplicateKeyPolicy: DuplicateKeyPolicy = DuplicateKeyPolicy.LAST_WINS,
+    private val maxDepth: Int = JsonConfig.DEFAULT_MAX_DEPTH,
 ) : DocumentTokenReader {
+
+    /**
+     * 兼容旧构造器。
+     */
+    internal constructor(source: String, allowComments: Boolean) :
+        this(source, allowComments, DuplicateKeyPolicy.LAST_WINS, JsonConfig.DEFAULT_MAX_DEPTH)
 
     private var position = 0
     private var rootStarted = false
     private var rootFinished = false
     private var depth = 0
+    private val trackDuplicateKeys = duplicateKeyPolicy != DuplicateKeyPolicy.LAST_WINS
     private var containerArrays = BooleanArray(8)
     private var containerPhases = IntArray(8)
+    private var containerKeySets: Array<MutableSet<String>?> = arrayOfNulls(8)
     private var currentType: DocumentTokenType? = null
     private var currentText: String? = null
     private var currentBoolean: Boolean? = null
@@ -117,10 +132,15 @@ internal class JsonTokenReader(
                         skipWhitespace()
                         if (consume('}')) {
                             depth--
+                            containerKeySets[depth] = null
                             return emit(DocumentTokenType.END_OBJECT)
                         }
                         containerPhases[depth - 1] = OBJECT_VALUE
-                        return parseFieldName()
+                        val field = parseFieldName()
+                        if (field != null) {
+                            return field
+                        }
+                        containerPhases[depth - 1] = OBJECT_AFTER_VALUE
                     }
 
                     OBJECT_VALUE -> {
@@ -132,6 +152,7 @@ internal class JsonTokenReader(
                         skipWhitespace()
                         if (consume('}')) {
                             depth--
+                            containerKeySets[depth] = null
                             return emit(DocumentTokenType.END_OBJECT)
                         }
                         expect(',')
@@ -191,23 +212,57 @@ internal class JsonTokenReader(
     }
 
     private fun pushContainer(array: Boolean) {
+        if (depth + 1 > maxDepth) {
+            throw error("Maximum nesting depth of $maxDepth exceeded")
+        }
         if (depth == containerArrays.size) {
-            containerArrays = containerArrays.copyOf(depth * 2)
-            containerPhases = containerPhases.copyOf(depth * 2)
+            val newSize = depth * 2
+            containerArrays = containerArrays.copyOf(newSize)
+            containerPhases = containerPhases.copyOf(newSize)
+            containerKeySets = containerKeySets.copyOf(newSize)
         }
         containerArrays[depth] = array
         containerPhases[depth] = 0
+        containerKeySets[depth] = if (array || !trackDuplicateKeys) null else HashSet(8)
         depth++
     }
 
-    private fun parseFieldName(): DocumentTokenType {
+    /**
+     * 解析对象字段名并处理重复 key。
+     *
+     * @return FIELD_NAME Token；`FIRST_WINS` 策略下跳过重复字段时返回 `null`
+     */
+    private fun parseFieldName(): DocumentTokenType? {
         if (!hasNext() || source[position] != '"') {
             throw error("Expected object key")
         }
         val key = parseString()
         skipWhitespace()
         expect(':')
+        val keys = containerKeySets[depth - 1]
+        if (keys != null && !keys.add(key)) {
+            when (duplicateKeyPolicy) {
+                DuplicateKeyPolicy.FAIL -> throw error("Duplicate field \"$key\"")
+                DuplicateKeyPolicy.FIRST_WINS -> {
+                    skipDuplicateValue()
+                    return null
+                }
+
+                DuplicateKeyPolicy.LAST_WINS -> Unit
+            }
+        }
         return emit(DocumentTokenType.FIELD_NAME, text = key)
+    }
+
+    /**
+     * 跳过 `FIRST_WINS` 策略下重复字段的值。
+     *
+     * 复用 [JsonParser] 做完整语法、重复 key 与深度校验。
+     */
+    private fun skipDuplicateValue() {
+        skipWhitespace()
+        val parser = JsonParser(source, allowComments, duplicateKeyPolicy, maxDepth, depth)
+        position = parser.skipValueAt(position)
     }
 
     private fun parseString(): String {
