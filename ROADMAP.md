@@ -183,3 +183,18 @@
 
 - Jazzer / JQF 覆盖率引导 fuzz
 - 运行期 / 编译期代码生成
+---
+
+## 1.5.0 交付状态
+
+- master / v1.5.0 已推送 GitHub
+- 私服 1.5.0 全模块发布成功
+- 全量构建与 749 tests 通过
+- 新增 11 个 Jazzer 目标与 fuzzJazzer 任务
+- fuzzContinuous 持续随机 fuzz
+- dev 本地保持未推送
+
+仍延后：
+
+- JQF 集成
+- 运行期 / 编译期代码生成
