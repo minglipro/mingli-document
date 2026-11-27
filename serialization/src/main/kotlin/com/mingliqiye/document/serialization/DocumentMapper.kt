@@ -176,13 +176,13 @@ class DocumentMapper(
             throw DocumentSerializationException("Maximum serialization depth exceeded")
         }
         return when (value) {
-            null -> NullNode
+            null -> NullNode.INSTANCE
             is Node -> value
-            is CharSequence -> StringNode(value.toString())
-            is Char -> StringNode(value.toString())
-            is Boolean -> BooleanNode(value)
+            is CharSequence -> StringNode.of(value.toString())
+            is Char -> StringNode.of(value.toString())
+            is Boolean -> BooleanNode.of(value)
             is Number -> serializeNumber(value)
-            is Enum<*> -> StringNode(value.name)
+            is Enum<*> -> StringNode.of(value.name)
             is Map<*, *> -> serializeMap(value, seen, depth)
             is Iterable<*> -> serializeIterable(value, seen, depth)
             is Array<*> -> serializeArray(value, seen, depth)

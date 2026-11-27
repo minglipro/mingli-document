@@ -69,15 +69,15 @@ class DocumentMapperTest {
     @Test
     fun deserializeJavaBean() {
         val node = ObjectNode.of(
-            "name" to StringNode("小于"),
+            "name" to StringNode.of("小于"),
             "age" to NumberNode.of(18),
             "address" to ObjectNode.of(
-                "city" to StringNode("杭州"),
+                "city" to StringNode.of("杭州"),
                 "zipCode" to NumberNode.of(310000),
             ),
-            "tags" to ArrayNode.of(StringNode("a"), StringNode("b")),
+            "tags" to ArrayNode.of(StringNode.of("a"), StringNode.of("b")),
             "scores" to ObjectNode.of("math" to NumberNode.of(95)),
-            "status" to StringNode("ACTIVE"),
+            "status" to StringNode.of("ACTIVE"),
         )
 
         val user = mapper.fromNode(node, User::class.java)

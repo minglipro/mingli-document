@@ -52,21 +52,21 @@ internal class JsonParser(
 
             '[' -> parseArray()
 
-            '"' -> StringNode(parseString())
+            '"' -> StringNode.of(parseString())
 
             't' -> {
                 expectLiteral("true")
-                BooleanNode(true)
+                BooleanNode.of(true)
             }
 
             'f' -> {
                 expectLiteral("false")
-                BooleanNode(false)
+                BooleanNode.of(false)
             }
 
             'n' -> {
                 expectLiteral("null")
-                NullNode
+                NullNode.INSTANCE
             }
 
             '-', in '0'..'9' -> parseNumber()

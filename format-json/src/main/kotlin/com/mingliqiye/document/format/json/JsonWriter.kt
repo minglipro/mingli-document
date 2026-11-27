@@ -36,7 +36,7 @@ internal class JsonWriter(
             is NumberNode -> builder.append(node.raw)
             is StringNode -> appendString(node.value)
             is BooleanNode -> builder.append(if (node.value) "true" else "false")
-            NullNode -> builder.append("null")
+            is NullNode -> builder.append("null")
         }
     }
 

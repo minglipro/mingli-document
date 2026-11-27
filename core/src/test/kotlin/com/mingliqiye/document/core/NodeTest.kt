@@ -14,10 +14,10 @@ class NodeTest {
     @Test
     fun createObjectAndArray() {
         val objectNode = ObjectNode.of(
-            "name" to StringNode("小于"),
+            "name" to StringNode.of("小于"),
             "age" to NumberNode.of(18),
-            "tags" to ArrayNode.of(StringNode("a"), StringNode("b")),
-            "empty" to NullNode,
+            "tags" to ArrayNode.of(StringNode.of("a"), StringNode.of("b")),
+            "empty" to NullNode.INSTANCE,
         )
 
         assertEquals(NodeType.OBJECT, objectNode.type)
@@ -33,13 +33,13 @@ class NodeTest {
     @Test
     fun immutableCollections() {
         val objectNode = ObjectNode.from(mapOf("a" to NumberNode.of(1)))
-        val arrayNode = ArrayNode.of(StringNode("x"))
+        val arrayNode = ArrayNode.of(StringNode.of("x"))
 
         assertFailsWith<UnsupportedOperationException> {
-            (objectNode.asMap() as MutableMap<String, Node>)["b"] = NullNode
+            (objectNode.asMap() as MutableMap<String, Node>)["b"] = NullNode.INSTANCE
         }
         assertFailsWith<UnsupportedOperationException> {
-            (arrayNode.asList() as MutableList<Node>).add(NullNode)
+            (arrayNode.asList() as MutableList<Node>).add(NullNode.INSTANCE)
         }
     }
 
@@ -62,7 +62,7 @@ class NodeTest {
 
     @Test
     fun nullNodeIsSingleton() {
-        assertSame(NullNode, NullNode)
-        assertTrue(NullNode.isNull)
+        assertSame(NullNode.INSTANCE, NullNode.INSTANCE)
+        assertTrue(NullNode.INSTANCE.isNull)
     }
 }

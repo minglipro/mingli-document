@@ -9,15 +9,7 @@ import java.util.LinkedHashMap
 /**
  * 与具体格式无关的文档树节点。
  *
- * 支持的类型见 [NodeType]：
- * - 对象：[ObjectNode]
- * - 数组：[ArrayNode]
- * - 数字：[NumberNode]
- * - 字符串：[StringNode]
- * - 布尔：[BooleanNode]
- * - null：[NullNode]
- *
- * 所有具体节点都不可变，可作为 `Map` 的 key 或集合元素使用。
+ * 公共 API 只暴露下列接口；具体实现由 `Default*` 类内部提供。
  */
 sealed interface Node {
 
@@ -56,9 +48,7 @@ sealed interface Node {
     fun asObject(): ObjectNode = asObjectOrNull()
         ?: throw DocumentTypeException("Expected object but was $type")
 
-    /**
-     * 转为对象节点；类型不匹配时返回 `null`。
-     */
+    /** 转为对象节点；类型不匹配时返回 `null`。 */
     fun asObjectOrNull(): ObjectNode? = this as? ObjectNode
 
     /**
@@ -69,9 +59,7 @@ sealed interface Node {
     fun asArray(): ArrayNode = asArrayOrNull()
         ?: throw DocumentTypeException("Expected array but was $type")
 
-    /**
-     * 转为数组节点；类型不匹配时返回 `null`。
-     */
+    /** 转为数组节点；类型不匹配时返回 `null`。 */
     fun asArrayOrNull(): ArrayNode? = this as? ArrayNode
 
     /**
@@ -82,9 +70,7 @@ sealed interface Node {
     fun asNumber(): NumberNode = asNumberOrNull()
         ?: throw DocumentTypeException("Expected number but was $type")
 
-    /**
-     * 转为数字节点；类型不匹配时返回 `null`。
-     */
+    /** 转为数字节点；类型不匹配时返回 `null`。 */
     fun asNumberOrNull(): NumberNode? = this as? NumberNode
 
     /**
@@ -95,9 +81,7 @@ sealed interface Node {
     fun asString(): String = asStringOrNull()
         ?: throw DocumentTypeException("Expected string but was $type")
 
-    /**
-     * 转为字符串值；类型不匹配时返回 `null`。
-     */
+    /** 转为字符串值；类型不匹配时返回 `null`。 */
     fun asStringOrNull(): String? = (this as? StringNode)?.value
 
     /**
@@ -108,32 +92,26 @@ sealed interface Node {
     fun asBoolean(): Boolean = asBooleanOrNull()
         ?: throw DocumentTypeException("Expected boolean but was $type")
 
-    /**
-     * 转为布尔值；类型不匹配时返回 `null`。
-     */
+    /** 转为布尔值；类型不匹配时返回 `null`。 */
     fun asBooleanOrNull(): Boolean? = (this as? BooleanNode)?.value
 }
 
 /**
- * 对象节点，字段保持插入顺序。
+ * 对象节点契约。
  */
-class ObjectNode private constructor(
-    private val fields: LinkedHashMap<String, Node>,
-) : Node {
+interface ObjectNode : Node {
 
     override val type: NodeType
         get() = NodeType.OBJECT
 
     /** 对象字段数量。 */
     val size: Int
-        get() = fields.size
 
     /** 字段名集合，保持插入顺序。 */
     val keys: Set<String>
-        get() = Collections.unmodifiableSet(fields.keys)
 
     /** 判断是否包含指定字段（即使字段值为 null 也返回 true）。 */
-    fun containsKey(key: String): Boolean = fields.containsKey(key)
+    fun containsKey(key: String): Boolean
 
     /**
      * 读取字段。
@@ -141,52 +119,41 @@ class ObjectNode private constructor(
      * @param key 字段名
      * @return 字段值；不存在时返回 `null`
      */
-    operator fun get(key: String): Node? = fields[key]
+    operator fun get(key: String): Node?
 
     /** 字段条目集合，保持插入顺序。 */
-    fun entries(): Set<Map.Entry<String, Node>> = Collections.unmodifiableSet(fields.entries)
+    fun entries(): Set<Map.Entry<String, Node>>
 
     /** 转为不可变 Map。 */
-    fun asMap(): Map<String, Node> = Collections.unmodifiableMap(fields)
+    fun asMap(): Map<String, Node>
 
-    override fun equals(other: Any?): Boolean = other is ObjectNode && fields == other.fields
-
-    override fun hashCode(): Int = fields.hashCode()
-
-    override fun toString(): String = "ObjectNode($fields)"
+    override fun asObject(): ObjectNode = this
 
     companion object {
 
         /** 空对象。 */
         @JvmField
-        val EMPTY: ObjectNode = ObjectNode(LinkedHashMap())
+        val EMPTY: ObjectNode = DefaultObjectNode(LinkedHashMap())
 
         /**
          * 从键值对创建对象；重复 key 以后出现的值为准。
          */
         @JvmStatic
-        fun of(vararg entries: Pair<String, Node>): ObjectNode {
-            val fields = LinkedHashMap<String, Node>(entries.size)
-            for ((key, value) in entries) {
-                fields[key] = value
-            }
-            return ObjectNode(fields)
-        }
+        fun of(vararg entries: Pair<String, Node>): ObjectNode = DefaultObjectNode.of(*entries)
 
         /**
          * 从 Map 创建对象，保持 Map 的迭代顺序。
          */
         @JvmStatic
-        fun from(map: Map<String, Node>): ObjectNode = ObjectNode(LinkedHashMap(map))
+        fun from(map: Map<String, Node>): ObjectNode = DefaultObjectNode.from(map)
     }
 }
 
 /**
- * 数组节点。
+ * 数组节点契约。
  */
-class ArrayNode private constructor(
-    private val elements: List<Node>,
-) : Node,
+interface ArrayNode :
+    Node,
     Iterable<Node> {
 
     override val type: NodeType
@@ -194,90 +161,64 @@ class ArrayNode private constructor(
 
     /** 数组元素数量。 */
     val size: Int
-        get() = elements.size
 
     /**
      * 按下标读取元素。
      *
      * @throws IndexOutOfBoundsException 下标越界时抛出
      */
-    operator fun get(index: Int): Node = elements[index]
+    operator fun get(index: Int): Node
 
     /** 转为不可变 List。 */
-    fun asList(): List<Node> = Collections.unmodifiableList(elements)
+    fun asList(): List<Node>
 
-    override fun iterator(): Iterator<Node> = asList().iterator()
-
-    override fun equals(other: Any?): Boolean = other is ArrayNode && elements == other.elements
-
-    override fun hashCode(): Int = elements.hashCode()
-
-    override fun toString(): String = "ArrayNode($elements)"
+    override fun asArray(): ArrayNode = this
 
     companion object {
 
         /** 空数组。 */
         @JvmField
-        val EMPTY: ArrayNode = ArrayNode(emptyList())
+        val EMPTY: ArrayNode = DefaultArrayNode(emptyList())
 
         /** 从节点数组创建数组。 */
         @JvmStatic
-        fun of(vararg elements: Node): ArrayNode = ArrayNode(elements.toList())
+        fun of(vararg elements: Node): ArrayNode = DefaultArrayNode(elements.toList())
 
         /** 从可迭代对象创建数组。 */
         @JvmStatic
-        fun from(elements: Iterable<Node>): ArrayNode = ArrayNode(elements.toList())
+        fun from(elements: Iterable<Node>): ArrayNode = DefaultArrayNode(elements.toList())
     }
 }
 
 /**
- * 数字节点。
+ * 数字节点契约。
  *
- * 数字使用 [BigDecimal] 保存，避免 `Double` 精度丢失；[raw] 保留原始文本。
+ * 数字使用 [BigDecimal] 保存精确值；[raw] 保留原始文本。
  */
-class NumberNode private constructor(
-    /** 数字原始文本。 */
-    val raw: String,
-    /** 数字的精确十进制值。 */
-    val value: BigDecimal,
-) : Node {
+interface NumberNode : Node {
 
     override val type: NodeType
         get() = NodeType.NUMBER
 
-    /**
-     * 转为 Byte。
-     *
-     * @throws ArithmeticException 数字有小数或超出 Byte 范围时抛出
-     */
+    /** 数字原始文本。 */
+    val raw: String
+
+    /** 数字的精确十进制值。 */
+    val value: BigDecimal
+
+    /** 转为 Byte。 */
     fun toByte(): Byte = value.byteValueExact()
 
-    /**
-     * 转为 Short。
-     *
-     * @throws ArithmeticException 数字有小数或超出 Short 范围时抛出
-     */
+    /** 转为 Short。 */
     fun toShort(): Short = value.shortValueExact()
 
-    /**
-     * 转为 Int。
-     *
-     * @throws ArithmeticException 数字有小数或超出 Int 范围时抛出
-     */
+    /** 转为 Int。 */
     fun toInt(): Int = value.intValueExact()
 
-    /**
-     * 转为 Long。
-     *
-     * @throws ArithmeticException 数字有小数或超出 Long 范围时抛出
-     */
+    /** 转为 Long。 */
     fun toLong(): Long = value.longValueExact()
 
-    /**
-     * 转为 BigInteger。
-     *
-     * @throws ArithmeticException 数字有小数时抛出
-     */
+    /** 转为 BigInteger。 */
     fun toBigInteger(): BigInteger = value.toBigIntegerExact()
 
     /** 转为 Float，可能丢失精度。 */
@@ -289,25 +230,17 @@ class NumberNode private constructor(
     /** 转为 BigDecimal。 */
     fun toBigDecimal(): BigDecimal = value
 
-    override fun equals(other: Any?): Boolean = other is NumberNode && value.compareTo(other.value) == 0
-
-    override fun hashCode(): Int = value.stripTrailingZeros().hashCode()
-
-    override fun toString(): String = raw
+    override fun asNumber(): NumberNode = this
 
     companion object {
 
-        /**
-         * 从原始数字文本创建，保留原始写法。
-         *
-         * @throws NumberFormatException 文本不是合法数字时抛出
-         */
+        /** 从原始数字文本创建，保留原始写法。 */
         @JvmStatic
-        fun ofRaw(raw: String): NumberNode = NumberNode(raw, BigDecimal(raw))
+        fun ofRaw(raw: String): NumberNode = DefaultNumberNode(raw)
 
         /** 从 [BigDecimal] 创建。 */
         @JvmStatic
-        fun of(value: BigDecimal): NumberNode = NumberNode(value.toPlainString(), value)
+        fun of(value: BigDecimal): NumberNode = DefaultNumberNode(value.toPlainString(), value)
 
         /** 从 [Int] 创建。 */
         @JvmStatic
@@ -317,14 +250,14 @@ class NumberNode private constructor(
         @JvmStatic
         fun of(value: Long): NumberNode = of(BigDecimal.valueOf(value))
 
-        /** 从 [Double] 创建，要求必须是有限值。 */
+        /** 从 [Double] 创建。 */
         @JvmStatic
         fun of(value: Double): NumberNode {
             require(value.isFinite()) { "NaN and Infinity are not valid numbers" }
             return of(BigDecimal.valueOf(value))
         }
 
-        /** 从 [Float] 创建，要求必须是有限值。 */
+        /** 从 [Float] 创建。 */
         @JvmStatic
         fun of(value: Float): NumberNode {
             require(value.isFinite()) { "NaN and Infinity are not valid numbers" }
@@ -338,33 +271,51 @@ class NumberNode private constructor(
 }
 
 /**
- * 字符串节点。
+ * 字符串节点契约。
  */
-data class StringNode(
-    /** 字符串值。 */
-    val value: String,
-) : Node {
+interface StringNode : Node {
 
     override val type: NodeType
         get() = NodeType.STRING
+
+    /** 字符串值。 */
+    val value: String
+
+    override fun asString(): String = value
+
+    companion object {
+
+        /** 创建字符串节点。 */
+        @JvmStatic
+        fun of(value: String): StringNode = DefaultStringNode(value)
+    }
 }
 
 /**
- * 布尔节点。
+ * 布尔节点契约。
  */
-data class BooleanNode(
-    /** 布尔值。 */
-    val value: Boolean,
-) : Node {
+interface BooleanNode : Node {
 
     override val type: NodeType
         get() = NodeType.BOOLEAN
+
+    /** 布尔值。 */
+    val value: Boolean
+
+    override fun asBoolean(): Boolean = value
+
+    companion object {
+
+        /** 创建布尔节点。 */
+        @JvmStatic
+        fun of(value: Boolean): BooleanNode = DefaultBooleanNode(value)
+    }
 }
 
 /**
- * null 节点。
+ * null 节点契约。
  */
-object NullNode : Node {
+interface NullNode : Node {
 
     override val type: NodeType
         get() = NodeType.NULL
@@ -372,7 +323,12 @@ object NullNode : Node {
     override val isNull: Boolean
         get() = true
 
-    override fun toString(): String = "null"
+    companion object {
+
+        /** 全局 null 节点实例。 */
+        @JvmField
+        val INSTANCE: NullNode = DefaultNullNode
+    }
 }
 
 /**
@@ -385,4 +341,106 @@ enum class NodeType(val value: String) {
     STRING("string"),
     BOOLEAN("boolean"),
     NULL("null"),
+}
+
+/**
+ * 对象节点默认实现。
+ */
+internal class DefaultObjectNode(
+    private val fields: LinkedHashMap<String, Node>,
+) : ObjectNode {
+
+    override val size: Int
+        get() = fields.size
+
+    override val keys: Set<String>
+        get() = Collections.unmodifiableSet(fields.keys)
+
+    override fun containsKey(key: String): Boolean = fields.containsKey(key)
+
+    override fun get(key: String): Node? = fields[key]
+
+    override fun entries(): Set<Map.Entry<String, Node>> = Collections.unmodifiableSet(fields.entries)
+
+    override fun asMap(): Map<String, Node> = Collections.unmodifiableMap(fields)
+
+    override fun equals(other: Any?): Boolean = other is ObjectNode && fields == other.asMap()
+
+    override fun hashCode(): Int = fields.hashCode()
+
+    override fun toString(): String = "ObjectNode($fields)"
+
+    companion object {
+
+        fun of(vararg entries: Pair<String, Node>): ObjectNode {
+            val fields = LinkedHashMap<String, Node>(entries.size)
+            for ((key, value) in entries) {
+                fields[key] = value
+            }
+            return DefaultObjectNode(fields)
+        }
+
+        fun from(map: Map<String, Node>): ObjectNode = DefaultObjectNode(LinkedHashMap(map))
+    }
+}
+
+/**
+ * 数组节点默认实现。
+ */
+internal class DefaultArrayNode(
+    private val elements: List<Node>,
+) : ArrayNode {
+
+    override val size: Int
+        get() = elements.size
+
+    override fun get(index: Int): Node = elements[index]
+
+    override fun asList(): List<Node> = Collections.unmodifiableList(elements)
+
+    override fun iterator(): Iterator<Node> = asList().iterator()
+
+    override fun equals(other: Any?): Boolean = other is ArrayNode && elements == other.asList()
+
+    override fun hashCode(): Int = elements.hashCode()
+
+    override fun toString(): String = "ArrayNode($elements)"
+}
+
+/**
+ * 数字节点默认实现。
+ */
+internal class DefaultNumberNode(
+    override val raw: String,
+    override val value: BigDecimal,
+) : NumberNode {
+
+    constructor(raw: String) : this(raw, BigDecimal(raw))
+
+    override fun equals(other: Any?): Boolean = other is NumberNode && value.compareTo(other.value) == 0
+
+    override fun hashCode(): Int = value.stripTrailingZeros().hashCode()
+
+    override fun toString(): String = raw
+}
+
+/**
+ * 字符串节点默认实现。
+ */
+internal data class DefaultStringNode(
+    override val value: String,
+) : StringNode
+
+/**
+ * 布尔节点默认实现。
+ */
+internal data class DefaultBooleanNode(
+    override val value: Boolean,
+) : BooleanNode
+
+/**
+ * null 节点默认实现。
+ */
+internal object DefaultNullNode : NullNode {
+    override fun toString(): String = "null"
 }

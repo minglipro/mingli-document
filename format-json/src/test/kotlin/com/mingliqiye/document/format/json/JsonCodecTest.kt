@@ -115,8 +115,8 @@ class JsonCodecTest {
     fun builderAndRoundTrip() {
         val node = ObjectNode.of(
             "a" to NumberNode.of(1),
-            "b" to ArrayNode.of(StringNode("x"), NullNode),
-            "c" to ObjectNode.of("nested" to BooleanNode(true)),
+            "b" to ArrayNode.of(StringNode.of("x"), NullNode.INSTANCE),
+            "c" to ObjectNode.of("nested" to BooleanNode.of(true)),
         )
 
         assertEquals("""{"a":1,"b":["x",null],"c":{"nested":true}}""", node.toJsonString())
