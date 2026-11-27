@@ -66,7 +66,7 @@
 - [x] Protobuf 解析器 maxDepth
 - [x] Avro 解析器 maxDepth\n- [x] Ion 解析器 maxDepth\n- [x] YAML 解析器 maxDepth\n- [ ] XML / Properties / TOML / CSV maxDepth
 - [x] 全格式 maxInputSize
-- [ ] 全格式 maxStringLength
+- [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
 - [ ] Jazzer / JQF 持续 fuzz
 - [ ] 安全测试基线

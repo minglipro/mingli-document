@@ -75,6 +75,7 @@ fileCharset             文本文件/流字符集，默认 UTF-8
 atomicFileWrite         临时文件 + 原子替换
 createParentDirectories 自动创建父目录
 maxInputSize            单次输入最大字节数，0 表示不限制
+maxStringLength         Node 树单个字符串最大长度，0 表示不限制
 maxNodeDepth            Node 树最大深度，0 表示不限制
 maxNodeCount            Node 树最大节点数，0 表示不限制
 resolveReferences       反序列化前解析本地 $ref，默认 false

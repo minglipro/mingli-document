@@ -3,17 +3,18 @@ package com.mingliqiye.document.serialization
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import java.util.ArrayDeque
 import java.util.IdentityHashMap
 
 /**
- * Node 树深度/节点数限制。
+ * Node 树深度/节点数/字符串长度限制。
  */
 internal object NodeLimits {
 
-    fun validate(node: Node, maxDepth: Int, maxNodeCount: Long) {
-        if (maxDepth <= 0 && maxNodeCount <= 0) {
+    fun validate(node: Node, maxDepth: Int, maxNodeCount: Long, maxStringLength: Int) {
+        if (maxDepth <= 0 && maxNodeCount <= 0 && maxStringLength <= 0) {
             return
         }
         val visited = IdentityHashMap<Node, Boolean>()
@@ -33,10 +34,23 @@ internal object NodeLimits {
                 throw DocumentSerializationException("Node count exceeds maxNodeCount $maxNodeCount")
             }
             when (current) {
-                is ObjectNode -> current.entries().forEach { stack.addLast(it.value to depth + 1) }
+                is ObjectNode -> {
+                    current.entries().forEach { entry ->
+                        checkStringLength(entry.key, maxStringLength)
+                        stack.addLast(entry.value to depth + 1)
+                    }
+                }
+
                 is ArrayNode -> current.forEach { stack.addLast(it to depth + 1) }
+                is StringNode -> checkStringLength(current.value, maxStringLength)
                 else -> Unit
             }
+        }
+    }
+
+    private fun checkStringLength(value: String, maxStringLength: Int) {
+        if (maxStringLength > 0 && value.length > maxStringLength) {
+            throw DocumentSerializationException("String length ${value.length} exceeds maxStringLength $maxStringLength")
         }
     }
 }
