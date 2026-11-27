@@ -2,43 +2,22 @@ package com.mingliqiye.document.core
 
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
+import java.lang.reflect.WildcardType
 
 /**
- * 运行时类型引用，用于在泛型类型被擦除后保留完整的 [Type] 信息。
+ * 文档目标类型引用接口，用于在泛型被擦除后保留完整的 [Type] 信息。
  *
- * 使用匿名子类创建：
+ * 使用工厂方法创建：
  * ```kotlin
- * val type = object : DocumentTypeReference<List<String>>() {}
+ * val type = DocumentTypeReference.of<List<String>>()
  * ```
  *
- * @param T 引用的目标类型
+ * @param T 目标类型
  */
-abstract class DocumentTypeReference<T> {
+interface DocumentTypeReference<T> {
 
-    /**
-     * 当前引用的类型信息；子类可以覆写。
-     */
-    open var type: Type = Any::class.java
-
-    /**
-     * 通过匿名子类的泛型父类获取类型。
-     */
-    protected constructor() {
-        val superType = this.javaClass.genericSuperclass
-        require(superType is ParameterizedType) {
-            "DocumentTypeReference must be created as an anonymous subclass"
-        }
-        type = superType.actualTypeArguments[0]
-    }
-
-    /**
-     * 直接指定类型。
-     *
-     * @param type 类型信息
-     */
-    protected constructor(type: Type) {
-        this.type = type
-    }
+    /** 当前引用的类型信息。 */
+    val type: Type
 
     /**
      * 获取去掉泛型参数后的原始类型。
@@ -53,22 +32,12 @@ abstract class DocumentTypeReference<T> {
         return rawType as Class<T>
     }
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is DocumentTypeReference<*>) return false
-        return type == other.type
-    }
-
-    override fun hashCode(): Int = type.hashCode()
-
-    override fun toString(): String = "DocumentTypeReference($type)"
-
     companion object {
 
         /**
          * 根据 reified 泛型参数创建类型引用。
          */
-        inline fun <reified T> of(): DocumentTypeReference<T> = object : DocumentTypeReference<T>() {}
+        inline fun <reified T> of(): DocumentTypeReference<T> = DefaultDocumentTypeReference(object : TypeCapture<T>() {}.type)
 
         /**
          * 根据 [Class] 创建类型引用。
@@ -76,7 +45,7 @@ abstract class DocumentTypeReference<T> {
          * @param clazz 目标类
          */
         @JvmStatic
-        fun <T> of(clazz: Class<T>): DocumentTypeReference<T> = object : DocumentTypeReference<T>(clazz) {}
+        fun <T> of(clazz: Class<T>): DocumentTypeReference<T> = DefaultDocumentTypeReference(clazz)
 
         /**
          * 根据 [Type] 创建类型引用。
@@ -84,7 +53,7 @@ abstract class DocumentTypeReference<T> {
          * @param type 目标类型
          */
         @JvmStatic
-        fun <T> of(type: Type): DocumentTypeReference<T> = object : DocumentTypeReference<T>(type) {}
+        fun <T> of(type: Type): DocumentTypeReference<T> = DefaultDocumentTypeReference(type)
 
         /**
          * 创建 List 类型引用。
@@ -92,9 +61,7 @@ abstract class DocumentTypeReference<T> {
          * @param elementType 元素类型
          */
         @JvmStatic
-        fun <T> listType(elementType: Class<T>): DocumentTypeReference<List<T>> = object : DocumentTypeReference<List<T>>(
-            SimpleParameterizedType(List::class.java, arrayOf(elementType)),
-        ) {}
+        fun <T> listType(elementType: Class<T>): DocumentTypeReference<List<T>> = DefaultDocumentTypeReference(SimpleParameterizedType(List::class.java, arrayOf(elementType)))
 
         /**
          * 创建 Map 类型引用。
@@ -106,25 +73,69 @@ abstract class DocumentTypeReference<T> {
         fun <K, V> mapType(
             keyType: Class<K>,
             valueType: Class<V>,
-        ): DocumentTypeReference<Map<K, V>> = object : DocumentTypeReference<Map<K, V>>(
+        ): DocumentTypeReference<Map<K, V>> = DefaultDocumentTypeReference(
             SimpleParameterizedType(Map::class.java, arrayOf(keyType, valueType)),
-        ) {}
+        )
     }
+}
 
-    /**
-     * 简单的参数化类型实现，用于工厂方法。
-     */
-    private class SimpleParameterizedType(
-        private val raw: Type,
-        private val arguments: Array<Type>,
-    ) : ParameterizedType {
+/**
+ * 泛型捕获辅助类，供 reified 工厂使用。
+ */
+@PublishedApi
+internal abstract class TypeCapture<T> {
 
-        override fun getActualTypeArguments(): Array<Type> = arguments
+    /** 捕获到的完整类型。 */
+    val type: Type = normalizeType(
+        (javaClass.genericSuperclass as? ParameterizedType)
+            ?.actualTypeArguments
+            ?.firstOrNull()
+            ?: throw IllegalArgumentException("Cannot capture generic type"),
+    )
+}
 
-        override fun getRawType(): Type = raw
+/**
+ * 将 Kotlin 捕获到的通配符类型归一化为具体类型。
+ */
+private fun normalizeType(type: Type): Type = when (type) {
+    is WildcardType -> normalizeType(type.upperBounds.firstOrNull() ?: Any::class.java)
+    is ParameterizedType -> normalizeParameterizedType(type)
+    else -> type
+}
 
-        override fun getOwnerType(): Type? = null
+private fun normalizeParameterizedType(type: ParameterizedType): Type = SimpleParameterizedType(
+    type.rawType,
+    type.actualTypeArguments.map(::normalizeType).toTypedArray(),
+)
 
-        override fun toString(): String = "$raw<${arguments.joinToString(",")}>"
-    }
+/**
+ * 类型引用默认实现。
+ */
+@PublishedApi
+internal class DefaultDocumentTypeReference<T>(
+    override val type: Type,
+) : DocumentTypeReference<T> {
+
+    override fun equals(other: Any?): Boolean = other is DocumentTypeReference<*> && type == other.type
+
+    override fun hashCode(): Int = type.hashCode()
+
+    override fun toString(): String = "DocumentTypeReference($type)"
+}
+
+/**
+ * 简单参数化类型实现。
+ */
+internal class SimpleParameterizedType(
+    private val raw: Type,
+    private val arguments: Array<Type>,
+) : ParameterizedType {
+
+    override fun getActualTypeArguments(): Array<Type> = arguments
+
+    override fun getRawType(): Type = raw
+
+    override fun getOwnerType(): Type? = null
+
+    override fun toString(): String = "$raw<${arguments.joinToString(",")}>"
 }
