@@ -49,7 +49,9 @@
 
 ## 阶段 3：性能与流式
 
-- [x] CSV 原生 Token Reader\n- [ ] YAML / XML / Properties / TOML 原生 Token Reader
+- [x] CSV 原生 Token Reader
+- [x] Properties 原生 Token Reader
+- [ ] YAML / XML / TOML 原生 Token Reader
 - [x] JSON 紧凑模式纯字节写出
 - [x] Schubfach Double 最短格式化
 - [ ] 运行期代码生成

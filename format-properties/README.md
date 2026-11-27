@@ -56,6 +56,7 @@ user.tags[0]=a
 - 扁平文本与 Node 树互转
 - 文件/流读取与保存
 - Token 直读 Bean
+- 原生 Properties Token Reader
 
 ## 构建
 
