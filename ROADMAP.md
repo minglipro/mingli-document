@@ -150,3 +150,18 @@
 - Jazzer / JQF 持续 fuzz
 - 运行期 / 编译期代码生成
 - Maven Central 自动发布
+---
+
+## 1.3.0 交付状态
+
+- master / v1.3.0 已推送 GitHub；dev 保持了本地未推送
+- 私服 1.3.0 全模块发布成功
+- 全量构建与 691 tests 通过
+- 新增 Ion 类型保真、CBOR tag 保真、CSV 原生 Token Reader、maxStringLength、YAML alias 限制
+
+仍延后到 1.4.0：
+
+- YAML / XML / Properties / TOML 原生 Token Reader
+- Ryu / Schubfach
+- Jazzer / JQF 持续 fuzz
+- 运行期 / 编译期代码生成
