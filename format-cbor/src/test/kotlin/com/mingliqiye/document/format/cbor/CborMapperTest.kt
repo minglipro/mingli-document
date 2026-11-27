@@ -211,7 +211,7 @@ class CborMapperTest {
         var tokenReaderCalls: Int = 0
             private set
 
-        override fun createTokenReader(source: ByteArray): DocumentTokenReader {
+        override fun createTokenReader(source: ByteArray): DocumentTokenReader? {
             tokenReaderCalls++
             return super.createTokenReader(source)
         }
