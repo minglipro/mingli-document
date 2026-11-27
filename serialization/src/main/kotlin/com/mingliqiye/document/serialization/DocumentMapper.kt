@@ -52,6 +52,7 @@ public abstract class DocumentMapper protected constructor(
     private val writeText: (Node, Boolean) -> String,
     private val serializers: Map<Class<*>, JsonSerializer<*>>,
     private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    private val objectInstantiator: ObjectInstantiator?,
 ) : DocumentMapperApi {
 
     /**
@@ -65,7 +66,7 @@ public abstract class DocumentMapper protected constructor(
         formatName: String,
         parseText: (String) -> Node,
         writeText: (Node, Boolean) -> String,
-    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap())
+    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null)
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
@@ -615,6 +616,19 @@ public abstract class DocumentMapper protected constructor(
             throw DocumentSerializationException("Expected object node at $path")
         }
         val objectNode = node.asObject()
+        val customInstance = objectInstantiator?.instantiate(
+            type,
+            objectNode,
+            DefaultInstantiationContext(this, path),
+        )
+        if (customInstance != null) {
+            if (!type.isInstance(customInstance)) {
+                throw DocumentSerializationException(
+                    "ObjectInstantiator returned ${customInstance.javaClass.name} for ${type.name}",
+                )
+            }
+            return customInstance
+        }
         val instance = instantiate(type)
         val handled = HashSet<String>()
 
@@ -710,6 +724,11 @@ public abstract class DocumentMapper protected constructor(
     } catch (e: Exception) {
         throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
     }
+
+    /**
+     * 供 [InstantiationContext] 递归反序列化构造参数。
+     */
+    internal fun deserializeForInstantiator(node: Node, targetType: Type, path: String): Any? = deserializeValue(node, targetType, path)
 
     private fun newInstance(type: Class<*>): Any {
         val constructor = type.getDeclaredConstructor()

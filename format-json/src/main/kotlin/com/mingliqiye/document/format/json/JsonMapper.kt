@@ -4,6 +4,7 @@ import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
+import com.mingliqiye.document.serialization.ObjectInstantiator
 import java.util.LinkedHashMap
 
 /**
@@ -15,18 +16,20 @@ import java.util.LinkedHashMap
 public class JsonMapper private constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
     deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    objectInstantiator: ObjectInstantiator?,
 ) : DocumentMapper(
     "json",
     { source -> JsonReader(source).read() },
     { node, pretty -> JsonWriter(pretty).write(node) },
     serializers,
     deserializers,
+    objectInstantiator,
 ) {
 
     /**
      * 创建默认 JSON 映射器。
      */
-    public constructor() : this(emptyMap(), emptyMap())
+    public constructor() : this(emptyMap(), emptyMap(), null)
 
     public companion object {
 
@@ -43,6 +46,7 @@ public class JsonMapper private constructor(
 
         private val serializers = LinkedHashMap<Class<*>, JsonSerializer<*>>()
         private val deserializers = LinkedHashMap<Class<*>, JsonDeserializer<*>>()
+        private var objectInstantiator: ObjectInstantiator? = null
 
         /**
          * 注册序列化器。
@@ -61,6 +65,14 @@ public class JsonMapper private constructor(
         }
 
         /**
+         * 设置对象实例化策略。
+         */
+        public fun objectInstantiator(instantiator: ObjectInstantiator?): Builder {
+            this.objectInstantiator = instantiator
+            return this
+        }
+
+        /**
          * 注册双向转换器。
          */
         public fun addConverter(converter: JsonConverter<*>): Builder {
@@ -72,6 +84,6 @@ public class JsonMapper private constructor(
         /**
          * 构建 JSON Mapper。
          */
-        public fun build(): JsonMapper = JsonMapper(serializers, deserializers)
+        public fun build(): JsonMapper = JsonMapper(serializers, deserializers, objectInstantiator)
     }
 }
