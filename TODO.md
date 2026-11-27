@@ -16,12 +16,12 @@
 
 | 序号 | 事项 | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| 1 | Avro / Protobuf wire parser | 高 | 待开始 | 无 |
-| 2 | XML attributes + namespaces | 中高 | 待开始 | 无 |
-| 3 | JSON byte API + 重复 key 策略 + 深度限制 | 高 | 待开始 | 无 |
-| 4 | YAML 多文档 / typed binary | 中 | 待开始 | 无 |
-| 5 | 所有文本格式接入 Token Reader | 中 | 待开始 | 2、4 |
-| 6 | 模糊测试 + 边界语料 | 高 | 待开始 | 1~5 |
+| 1 | Avro / Protobuf wire parser | 高 | ✅ 完成 | 9380353 / 7d5ffca |
+| 2 | XML attributes + namespaces | 中高 | ✅ 完成 | 118b344 |
+| 3 | JSON byte API + 重复 key 策略 + 深度限制 | 高 | ✅ 完成 | 39cc8fb |
+| 4 | YAML 多文档 / typed binary | 中 | ✅ 完成 | e751389 |
+| 5 | 所有文本格式接入 Token Reader | 中 | ✅ 完成 | 2da7ae3 |
+| 6 | 模糊测试 + 边界语料 | 高 | ✅ 完成 | 291559c |
 
 建议顺序：`1 → 2 → 3 → 4 → 5 → 6`
 
@@ -56,11 +56,11 @@ ProtobufSchema  -> ProtobufMapper
 
 ### 验收标准
 
-- [ ] 二进制 `formatBytes` -> `parse(ByteArray)` 往返一致
-- [ ] 嵌套对象、数组、map、枚举、bytes 至少各一个测试
-- [ ] 未知字段、缺字段、schema 不匹配有明确异常
-- [ ] Avro/Protobuf 各自测试通过
-- [ ] 全量构建通过
+- [x] 二进制 `formatBytes` -> `parse(ByteArray)` 往返一致
+- [x] 嵌套对象、数组、map、枚举、bytes 至少各一个测试
+- [x] 未知字段、缺字段、schema 不匹配有明确异常
+- [x] Avro/Protobuf 各自测试通过
+- [x] 全量构建通过
 
 ### 风险
 
@@ -95,11 +95,11 @@ ProtobufSchema  -> ProtobufMapper
 
 ### 验收标准
 
-- [ ] 属性 round-trip
-- [ ] 带命名空间 XML 可读取且不丢信息
-- [ ] 写出结果可被标准 XML 解析器读取
-- [ ] 原有 `type` / `nil` 协议测试不回归
-- [ ] XXE 安全测试仍通过
+- [x] 属性 round-trip
+- [x] 带命名空间 XML 可读取且不丢信息
+- [x] 写出结果可被标准 XML 解析器读取
+- [x] 原有 `type` / `nil` 协议测试不回归
+- [x] XXE 安全测试仍通过
 
 ### 需要先定决策
 
@@ -137,11 +137,11 @@ ProtobufSchema  -> ProtobufMapper
 
 ### 验收标准
 
-- [ ] `parse(bytes)` / `formatBytes` 往返
-- [ ] 三种重复 key 策略各有测试
-- [ ] 超深 JSON 抛出受控异常
-- [ ] 既有 JSON 测试全部通过
-- [ ] 性能不明显回退
+- [x] `parse(bytes)` / `formatBytes` 往返
+- [x] 三种重复 key 策略各有测试
+- [x] 超深 JSON 抛出受控异常
+- [x] 既有 JSON 测试全部通过
+- [x] 性能不明显回退
 
 ---
 
@@ -166,10 +166,10 @@ ProtobufSchema  -> ProtobufMapper
 
 ### 验收标准
 
-- [ ] 多文档读取按顺序返回
-- [ ] 多文档写出可再读回
-- [ ] `!!binary` round-trip 保持字节
-- [ ] 原有 YAML 测试不回归
+- [x] 多文档读取按顺序返回
+- [x] 多文档写出可再读回
+- [x] `!!binary` round-trip 保持字节
+- [x] 原有 YAML 测试不回归
 
 ---
 
@@ -198,11 +198,11 @@ ProtobufSchema  -> ProtobufMapper
 
 ### 验收标准
 
-- [ ] 每个文本格式至少有一个 Token Reader
-- [ ] Bean 解析走 Token 路径
-- [ ] 原有 parse/format/fromNode 行为不变
-- [ ] 各格式 Token 序列测试通过
-- [ ] 全量构建通过
+- [x] 每个文本格式至少有一个 Token Reader
+- [x] Bean 解析走 Token 路径
+- [x] 原有 parse/format/fromNode 行为不变
+- [x] 各格式 Token 序列测试通过
+- [x] 全量构建通过
 
 ### 风险
 
@@ -246,11 +246,11 @@ ProtobufSchema  -> ProtobufMapper
 
 ### 验收标准
 
-- [ ] 每个解析器至少 1 组 malformed corpus 测试
-- [ ] 深嵌套输入抛受控异常而非 StackOverflow
-- [ ] 测试有超时限制
-- [ ] CI/Gradle 全量测试时间可控
-- [ ] 发现的问题先修复再收口
+- [x] 每个解析器至少 1 组 malformed corpus 测试
+- [x] 深嵌套输入抛受控异常而非 StackOverflow
+- [x] 测试有超时限制
+- [x] CI/Gradle 全量测试时间可控
+- [x] 发现的问题先修复再收口
 
 ---
 
@@ -258,10 +258,10 @@ ProtobufSchema  -> ProtobufMapper
 
 全部完成后：
 
-- [ ] `gradle clean ktlintCheck build` 通过
-- [ ] README / NOTICE / 模块文档同步
-- [ ] 所有项独立提交
-- [ ] 工作区干净
+- [x] `gradle clean ktlintCheck build` 通过
+- [x] README / NOTICE / 模块文档同步
+- [x] 所有项独立提交
+- [x] 工作区干净
 
 ---
 

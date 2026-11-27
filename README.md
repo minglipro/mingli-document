@@ -1,11 +1,11 @@
 # document
 
-格式无关的文档树模型 + JSON/YAML/XML/Properties/TOML/CSV/Ion/CBOR/Smile 编解码 + Java Bean 映射。
+格式无关的文档树模型 + JSON/YAML/XML/Properties/TOML/CSV/Ion/CBOR/Smile/Avro/Protobuf 编解码 + Java Bean 映射。
 
 `com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
 
 - **格式无关**：`core` 只定义节点树与类型引用，不依赖任何具体格式；
-- **多格式 Mapper**：`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`format-cbor`、`format-smile` 分别提供对应 Mapper，均继承通用 `DocumentMapper`；
+- **多格式 Mapper**：`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`format-cbor`、`format-smile`、`format-avro`、`format-protobuf` 分别提供对应 Mapper，均继承通用 `DocumentMapper`；
 - **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
 
 ## 模块与依赖
@@ -25,8 +25,8 @@
 | `format-cbor` | CBOR Mapper `CborMapper`（二进制） | `serialization`、`core`、Jackson CBOR |
 | `format-smile` | Smile Mapper `SmileMapper`（二进制） | `serialization`、`core`、Jackson Smile |
 | `schema` | 格式无关 Schema：`DocumentSchema`、`SchemaField`、`SchemaType` | `core` |
-| `format-avro` | Avro Schema：`AvroSchema`（暂未含 Avro 编解码） | `schema`、`core` |
-| `format-protobuf` | Protobuf Schema：`ProtobufSchema`（暂未含 Protobuf 编解码） | `schema`、`core` |
+| `format-avro` | Avro Mapper/Schema：`AvroMapper`、`AvroSchema` | `serialization`、`schema`、Apache Avro |
+| `format-protobuf` | Protobuf Mapper/Schema：`ProtobufMapper`、`ProtobufSchema` | `serialization`、`schema`、protobuf-java |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、Token 直读/直写、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 | `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 
@@ -1044,10 +1044,78 @@ val mapper = CsvMapper(schema)
 | 模块 | Schema |
 |---|---|
 | `format-csv` | `CsvSchema`，支持按 schema 顺序读列、类型解析、表头/无表头 |
-| `format-avro` | `AvroSchema` + `AvroType`（记录名/namespace/字段/类型映射） |
-| `format-protobuf` | `ProtobufSchema` + `ProtobufType` + `ProtobufSchemaField`（message/字段编号/repeated） |
+| `format-avro` | `AvroSchema` + `AvroType` + `AvroMapper`（wire binary） |
+| `format-protobuf` | `ProtobufSchema` + `ProtobufType` + `ProtobufMapper`（DynamicMessage wire） |
 
-Avro/Protobuf 目前是 Schema 适配层，完整 wire 编解码后续接入。
+Avro/Protobuf 已支持二进制 wire 编解码；调用方需要提供 Avro `Schema` 或 Protobuf `Descriptor`。
+
+## 解析器增强
+
+### JSON 安全与字节 API
+
+```kotlin
+val mapper = JsonMapper(
+    JsonConfig.builder()
+        .duplicateKeyPolicy(DuplicateKeyPolicy.FAIL)
+        .maxDepth(512)
+        .build(),
+)
+
+val bytes = mapper.formatBytes(user)
+val restored = mapper.parse(bytes, User::class.java)
+```
+
+- `parse(ByteArray)` 使用严格 UTF-8，非法 UTF-8 抛 `JsonParseException`
+- 重复 key 策略：`LAST_WINS` / `FIRST_WINS` / `FAIL`
+- 超深嵌套抛受控异常，不会 `StackOverflow`
+
+### XML 属性与命名空间
+
+```kotlin
+val mapper = XmlMapper(
+    XmlConfig.builder()
+        .attributeMode(true)     // 默认前缀 @
+        .namespaceAware(true)
+        .build(),
+)
+```
+
+- 属性对应 `@id` 这类对象字段
+- 命名空间使用 `prefix:local` 与 `xmlns` 字段保留
+- 保持 `type` / `nil` 协议与 XXE 防护
+
+### YAML 多文档与 typed binary
+
+```kotlin
+val documents = YamlMapper().parseAllToNodes(text)
+val text2 = YamlMapper().formatAll(documents)
+```
+
+- `!!binary` 映射为 `BinaryNode`
+- 多文档使用 `---` 分隔，单文档 API 保持兼容
+
+### Avro / Protobuf wire
+
+```kotlin
+val avroMapper = AvroMapper(avroSchema)
+val bytes = avroMapper.formatBytes(node)
+val node = avroMapper.parse(bytes, Node::class.java)
+
+val protobufMapper = ProtobufMapper(descriptor)
+val protobufBytes = protobufMapper.formatBytes(node)
+```
+
+### 文本格式 Token Reader
+
+YAML、XML、Properties、TOML、CSV 已通过 `NodeTokenReader` 接入统一 Token Bean 解码路径；JSON 使用原生 `JsonTokenReader`。
+
+### 模糊测试
+
+`fuzz` 模块包含各格式 malformed 边界语料和随机畸形输入测试：
+
+```bash
+gradle :fuzz:test
+```
 
 ## 性能基准
 
@@ -1107,6 +1175,7 @@ gradle :format-smile:test
 gradle :schema:test
 gradle :format-avro:test
 gradle :format-protobuf:test
+gradle :fuzz:test
 gradle :serialization-kotlin:test
 
 # 自动格式化 Kotlin 代码
