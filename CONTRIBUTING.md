@@ -26,6 +26,7 @@ annotation              格式无关注解
 exception               异常基类
 core                    Node 树、类型引用
 schema                  格式无关 Schema
+bom                     Maven BOM（统一版本）
 serialization           DocumentMapper、Bean 映射、Token
 serialization-kotlin    Kotlin data class 支持
 format-json             JSON / JSONC
@@ -271,6 +272,7 @@ gradle publish
 - 发布物包含 jar、pom、Gradle module metadata、javadoc、kotlindoc
 - 发布物使用 GPG 签名；本机需配置可用 GPG key
 - `benchmarks`、`fuzz` 不发布
+- BOM 模块 `bom` 发布为 `com.mingliqiye.document:mingli-document-bom`
 
 ## 12. Review 清单
 
