@@ -5,7 +5,7 @@ Smile 二进制格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:smile:1.3.0")
+implementation("com.mingliqiye.document.format:smile:1.4.0")
 ```
 
 ## 主要 API
