@@ -3,31 +3,31 @@ package com.mingliqiye.document.serialization
 /**
  * 序列化上下文。
  */
-interface SerializationContext {
+public interface SerializationContext {
 
     /** 当前 Mapper。 */
-    val mapper: DocumentMapperApi
+    public val mapper: DocumentMapperApi
 
     /** 当前字段/属性；根对象或集合元素为 `null`。 */
-    val property: DocumentProperty?
+    public val property: DocumentProperty?
 
     /** 当前路径，用于错误定位。 */
-    val path: String
+    public val path: String
 }
 
 /**
  * 反序列化上下文。
  */
-interface DeserializationContext {
+public interface DeserializationContext {
 
     /** 当前 Mapper。 */
-    val mapper: DocumentMapperApi
+    public val mapper: DocumentMapperApi
 
     /** 当前字段/属性；根对象或集合元素为 `null`。 */
-    val property: DocumentProperty?
+    public val property: DocumentProperty?
 
     /** 当前路径，用于错误定位。 */
-    val path: String
+    public val path: String
 }
 
 /**

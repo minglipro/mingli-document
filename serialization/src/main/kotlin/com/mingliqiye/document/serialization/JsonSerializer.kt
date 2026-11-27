@@ -10,12 +10,12 @@ import com.mingliqiye.document.core.Node
  *
  * @param T 需要序列化的类型
  */
-interface JsonSerializer<T> {
+public interface JsonSerializer<T> {
 
     /**
      * 获取序列化器负责的类型。
      */
-    fun getType(): DocumentTypeReference<T>
+    public fun getType(): DocumentTypeReference<T>
 
     /**
      * 将对象转换为文档树。
@@ -24,7 +24,7 @@ interface JsonSerializer<T> {
      * @param context 序列化上下文
      * @return 文档节点
      */
-    fun serialize(value: T, context: SerializationContext): Node
+    public fun serialize(value: T, context: SerializationContext): Node
 }
 
 /**
@@ -34,12 +34,12 @@ interface JsonSerializer<T> {
  *
  * @param T 需要反序列化的类型
  */
-interface JsonDeserializer<T> {
+public interface JsonDeserializer<T> {
 
     /**
      * 获取反序列化器负责的类型。
      */
-    fun getType(): DocumentTypeReference<T>
+    public fun getType(): DocumentTypeReference<T>
 
     /**
      * 将文档树还原为对象。
@@ -48,7 +48,7 @@ interface JsonDeserializer<T> {
      * @param context 反序列化上下文
      * @return 还原后的对象；无法还原时返回 `null`
      */
-    fun deserialize(node: Node, context: DeserializationContext): T?
+    public fun deserialize(node: Node, context: DeserializationContext): T?
 }
 
 /**
@@ -59,6 +59,6 @@ interface JsonDeserializer<T> {
  *
  * @param T 转换类型
  */
-interface JsonConverter<T> :
+public interface JsonConverter<T> :
     JsonSerializer<T>,
     JsonDeserializer<T>

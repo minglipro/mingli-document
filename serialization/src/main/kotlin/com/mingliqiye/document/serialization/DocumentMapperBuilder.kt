@@ -6,7 +6,7 @@ import java.util.LinkedHashMap
 /**
  * [DocumentMapperApi] 构建器接口。
  */
-interface DocumentMapperBuilder {
+public interface DocumentMapperBuilder {
 
     /**
      * 设置文本格式编解码器。
@@ -14,7 +14,7 @@ interface DocumentMapperBuilder {
      * @param codec 编解码器
      * @return 当前构建器
      */
-    fun codec(codec: DocumentCodec?): DocumentMapperBuilder
+    public fun codec(codec: DocumentCodec?): DocumentMapperBuilder
 
     /**
      * 注册序列化器。
@@ -22,7 +22,7 @@ interface DocumentMapperBuilder {
      * @param serializer 序列化器
      * @return 当前构建器
      */
-    fun addSerializer(serializer: JsonSerializer<*>): DocumentMapperBuilder
+    public fun addSerializer(serializer: JsonSerializer<*>): DocumentMapperBuilder
 
     /**
      * 注册反序列化器。
@@ -30,7 +30,7 @@ interface DocumentMapperBuilder {
      * @param deserializer 反序列化器
      * @return 当前构建器
      */
-    fun addDeserializer(deserializer: JsonDeserializer<*>): DocumentMapperBuilder
+    public fun addDeserializer(deserializer: JsonDeserializer<*>): DocumentMapperBuilder
 
     /**
      * 注册双向转换器。
@@ -38,12 +38,12 @@ interface DocumentMapperBuilder {
      * @param converter 转换器
      * @return 当前构建器
      */
-    fun addConverter(converter: JsonConverter<*>): DocumentMapperBuilder
+    public fun addConverter(converter: JsonConverter<*>): DocumentMapperBuilder
 
     /**
      * 构建 Mapper。
      */
-    fun build(): DocumentMapperApi
+    public fun build(): DocumentMapperApi
 }
 
 /**

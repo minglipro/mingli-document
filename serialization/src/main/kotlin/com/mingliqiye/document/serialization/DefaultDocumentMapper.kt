@@ -39,7 +39,7 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  * @param message 异常信息
  * @param throwable 异常原因
  */
-class DocumentSerializationException @JvmOverloads constructor(
+public class DocumentSerializationException @JvmOverloads constructor(
     message: String? = null,
     throwable: Throwable? = null,
 ) : DocumentException(message, throwable)
@@ -57,9 +57,9 @@ class DocumentSerializationException @JvmOverloads constructor(
  *
  * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
-class DefaultDocumentMapper internal constructor(
+public class DefaultDocumentMapper internal constructor(
     /** 可选的文本格式编解码器；用于 [parse] / [format] 便捷方法。 */
-    val codec: DocumentCodec?,
+    public val codec: DocumentCodec?,
     private val serializers: Map<Class<*>, JsonSerializer<*>>,
     private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
 ) : DocumentMapperApi {
@@ -69,7 +69,7 @@ class DefaultDocumentMapper internal constructor(
      *
      * @param codec 可选的文本格式编解码器
      */
-    constructor(codec: DocumentCodec? = null) : this(codec, emptyMap(), emptyMap())
+    public constructor(codec: DocumentCodec? = null) : this(codec, emptyMap(), emptyMap())
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
@@ -104,7 +104,7 @@ class DefaultDocumentMapper internal constructor(
      * @return Java 对象
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
-    fun fromNode(node: Node, targetType: Type): Any? = deserializeValue(node, targetType, "$")
+    public fun fromNode(node: Node, targetType: Type): Any? = deserializeValue(node, targetType, "$")
 
     /**
      * 将文档树反序列化为指定泛型类型。

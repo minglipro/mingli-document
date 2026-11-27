@@ -11,7 +11,7 @@ import com.mingliqiye.document.core.Node
  * - 文本解析/格式化通过可选的 `DocumentCodec` 注入；
  * - 提供实体与实体、实体与树之间的转换。
  */
-interface DocumentMapperApi {
+public interface DocumentMapperApi {
 
     /**
      * 将 Java 对象序列化为文档树。
@@ -19,7 +19,7 @@ interface DocumentMapperApi {
      * @param value Java 对象
      * @return 文档树
      */
-    fun toNode(value: Any?): Node
+    public fun toNode(value: Any?): Node
 
     /**
      * 将文档树反序列化为指定 Java 类型。
@@ -28,7 +28,7 @@ interface DocumentMapperApi {
      * @param targetType 目标类型
      * @return Java 对象
      */
-    fun <T> fromNode(node: Node, targetType: Class<T>): T
+    public fun <T> fromNode(node: Node, targetType: Class<T>): T
 
     /**
      * 将文档树反序列化为指定泛型类型。
@@ -37,7 +37,7 @@ interface DocumentMapperApi {
      * @param targetType 目标类型引用
      * @return Java 对象
      */
-    fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T
+    public fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T
 
     /**
      * 将文本解析为 Java 实体。
@@ -46,7 +46,7 @@ interface DocumentMapperApi {
      * @param targetType 目标类型
      * @return Java 实体
      */
-    fun <T> parse(source: String, targetType: Class<T>): T
+    public fun <T> parse(source: String, targetType: Class<T>): T
 
     /**
      * 将文本解析为指定泛型类型。
@@ -55,7 +55,7 @@ interface DocumentMapperApi {
      * @param targetType 目标类型引用
      * @return Java 实体
      */
-    fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T
+    public fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T
 
     /**
      * 将 Java 实体序列化为文本。
@@ -63,7 +63,7 @@ interface DocumentMapperApi {
      * @param value Java 实体
      * @return 格式文本
      */
-    fun format(value: Any?): String
+    public fun format(value: Any?): String
 
     /**
      * 将 Java 实体序列化为格式化文本。
@@ -71,7 +71,7 @@ interface DocumentMapperApi {
      * @param value Java 实体
      * @return 格式化文本
      */
-    fun formatPretty(value: Any?): String
+    public fun formatPretty(value: Any?): String
 
     /**
      * 将任意对象转换为指定 Java 类型。
@@ -80,7 +80,7 @@ interface DocumentMapperApi {
      * @param destinationClass 目标类型
      * @return 目标对象
      */
-    fun <D> convert(source: Any?, destinationClass: Class<D>): D
+    public fun <D> convert(source: Any?, destinationClass: Class<D>): D
 
     /**
      * 将任意对象转换为指定泛型类型。
@@ -89,28 +89,28 @@ interface DocumentMapperApi {
      * @param destinationType 目标类型引用
      * @return 目标对象
      */
-    fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D
+    public fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D
 
-    companion object {
+    public companion object {
 
         /**
          * 创建 Mapper 构建器。
          */
-        fun builder(): DocumentMapperBuilder = DefaultDocumentMapperBuilder()
+        public fun builder(): DocumentMapperBuilder = DefaultDocumentMapperBuilder()
 
         /**
          * 按 reified 泛型参数把文档树反序列化为 Java 实体。
          */
-        inline fun <reified T> DocumentMapperApi.fromNode(node: Node): T = fromNode(node, DocumentTypeReference.of<T>())
+        public inline fun <reified T> DocumentMapperApi.fromNode(node: Node): T = fromNode(node, DocumentTypeReference.of<T>())
 
         /**
          * 按 reified 泛型参数把文本解析为 Java 实体。
          */
-        inline fun <reified T> DocumentMapperApi.parse(source: String): T = parse(source, DocumentTypeReference.of<T>())
+        public inline fun <reified T> DocumentMapperApi.parse(source: String): T = parse(source, DocumentTypeReference.of<T>())
 
         /**
          * 按 reified 泛型参数把任意对象转换为 Java 实体。
          */
-        inline fun <reified T> DocumentMapperApi.convert(source: Any?): T = convert(source, DocumentTypeReference.of<T>())
+        public inline fun <reified T> DocumentMapperApi.convert(source: Any?): T = convert(source, DocumentTypeReference.of<T>())
     }
 }
