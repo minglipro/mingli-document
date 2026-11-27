@@ -10,7 +10,7 @@ import com.mingliqiye.exception.MingLiBaseException
  * @param enableSuppression 是否启用异常抑制
  * @param writableStackTrace 是否生成堆栈信息
  */
-open class DocumentException @JvmOverloads constructor(
+public open class DocumentException @JvmOverloads constructor(
     message: String? = null,
     throwable: Throwable? = null,
     enableSuppression: Boolean = false,
@@ -22,7 +22,7 @@ open class DocumentException @JvmOverloads constructor(
  *
  * @param message 异常信息
  */
-class DocumentTypeException @JvmOverloads constructor(
+public class DocumentTypeException @JvmOverloads constructor(
     message: String? = null,
     throwable: Throwable? = null,
 ) : DocumentException(message, throwable)
