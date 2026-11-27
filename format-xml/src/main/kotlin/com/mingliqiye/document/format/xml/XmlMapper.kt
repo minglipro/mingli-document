@@ -1,11 +1,11 @@
 package com.mingliqiye.document.format.xml
 
 import com.mingliqiye.document.annotation.DocumentRootName
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
@@ -30,8 +30,8 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  *   子元素项单字段 `ObjectNode`），写出时按该数组顺序交错输出文本与子元素；`REJECT` 抛异常。
  */
 public open class XmlMapper internal constructor(
-    serializers: Map<Class<*>, JsonSerializer<*>>,
-    deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
     config: DocumentMapperConfig,

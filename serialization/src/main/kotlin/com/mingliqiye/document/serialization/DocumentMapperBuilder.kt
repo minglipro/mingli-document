@@ -12,8 +12,8 @@ import java.util.LinkedHashMap
  */
 public abstract class DocumentMapperBuilder<M : DocumentMapper> {
 
-    private val serializers = LinkedHashMap<Class<*>, JsonSerializer<*>>()
-    private val deserializers = LinkedHashMap<Class<*>, JsonDeserializer<*>>()
+    private val serializers = LinkedHashMap<Class<*>, DocumentBaseSerializer<*>>()
+    private val deserializers = LinkedHashMap<Class<*>, DocumentBaseDeserializer<*>>()
     private val modules = LinkedHashMap<String, DocumentModule>()
     private var objectInstantiator: ObjectInstantiator? = null
     private var propertyMetadataResolver: PropertyMetadataResolver? = null
@@ -25,7 +25,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
      * @param serializer 序列化器
      * @return 当前构建器
      */
-    public fun addSerializer(serializer: JsonSerializer<*>): DocumentMapperBuilder<M> {
+    public fun addSerializer(serializer: DocumentBaseSerializer<*>): DocumentMapperBuilder<M> {
         serializers[serializer.getType().getRawType()] = serializer
         return this
     }
@@ -36,7 +36,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
      * @param deserializer 反序列化器
      * @return 当前构建器
      */
-    public fun addDeserializer(deserializer: JsonDeserializer<*>): DocumentMapperBuilder<M> {
+    public fun addDeserializer(deserializer: DocumentBaseDeserializer<*>): DocumentMapperBuilder<M> {
         deserializers[deserializer.getType().getRawType()] = deserializer
         return this
     }
@@ -47,7 +47,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
      * @param converter 转换器
      * @return 当前构建器
      */
-    public fun addConverter(converter: JsonConverter<*>): DocumentMapperBuilder<M> {
+    public fun addConverter(converter: DocumentBaseConverter<*>): DocumentMapperBuilder<M> {
         addSerializer(converter)
         addDeserializer(converter)
         return this
@@ -126,8 +126,8 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
      * 由格式模块创建具体 Mapper。
      */
     protected abstract fun createMapper(
-        serializers: Map<Class<*>, JsonSerializer<*>>,
-        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+        deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
     ): M
@@ -138,8 +138,8 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
      * 默认忽略配置以兼容旧实现；内置格式 Mapper 会重写此方法。
      */
     protected open fun createMapper(
-        serializers: Map<Class<*>, JsonSerializer<*>>,
-        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+        deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
         config: DocumentMapperConfig,

@@ -24,7 +24,7 @@ import java.util.TimeZone
 internal class DocumentDateTimeFormatConverter(
     private val pattern: String,
     timezone: String,
-) : JsonConverter<Any> {
+) : DocumentBaseConverter<Any> {
 
     private val zone: ZoneId? = timezone.takeIf { it.isNotBlank() }?.let(ZoneId::of)
 

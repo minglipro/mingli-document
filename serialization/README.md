@@ -63,7 +63,7 @@ LOWER_CAMEL
 
 ## 转换器
 
-实现 `JsonSerializer` 与/或 `JsonDeserializer`，通过：
+实现 `DocumentBaseSerializer` 与/或 `DocumentBaseDeserializer`，通过：
 
 - `DocumentMapperBuilder.addSerializer(...)`
 - `DocumentMapperBuilder.addDeserializer(...)`

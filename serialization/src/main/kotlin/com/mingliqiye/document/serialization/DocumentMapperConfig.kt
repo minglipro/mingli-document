@@ -7,7 +7,7 @@ package com.mingliqiye.document.serialization
  * 字段命名策略。
  */
 public open class DocumentMapperConfig protected constructor(
-    private val fieldConverters: Map<FieldKey, JsonConverter<*>>,
+    private val fieldConverters: Map<FieldKey, DocumentBaseConverter<*>>,
     /** 文档缺少 Bean 字段时的处理策略。 */
     public val missingFieldPolicy: MissingFieldPolicy = MissingFieldPolicy.KEEP_DEFAULT,
     /** 遇到未知字段是否抛出异常。 */
@@ -32,7 +32,7 @@ public open class DocumentMapperConfig protected constructor(
         other.namingStrategy,
     )
 
-    internal fun fieldConverter(property: DocumentProperty): JsonConverter<*>? = fieldConverters[FieldKey(property.declaringClass, property.name)]
+    internal fun fieldConverter(property: DocumentProperty): DocumentBaseConverter<*>? = fieldConverters[FieldKey(property.declaringClass, property.name)]
 
     internal val hasFieldConverters: Boolean
         get() = fieldConverters.isNotEmpty()
@@ -52,7 +52,7 @@ public open class DocumentMapperConfig protected constructor(
         public fun empty(): DocumentMapperConfig = DocumentMapperConfig(emptyMap())
 
         internal fun from(
-            fieldConverters: Map<FieldKey, JsonConverter<*>>,
+            fieldConverters: Map<FieldKey, DocumentBaseConverter<*>>,
             missingFieldPolicy: MissingFieldPolicy,
             failOnUnknownFields: Boolean,
             writeNulls: Boolean,

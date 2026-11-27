@@ -62,8 +62,8 @@ public abstract class DocumentMapper protected constructor(
     public val formatName: String,
     private val parseText: (String) -> Node,
     private val writeText: (Node, Boolean) -> String,
-    private val serializers: Map<Class<*>, JsonSerializer<*>>,
-    private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    private val serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    private val deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     private val objectInstantiator: ObjectInstantiator?,
     private val propertyMetadataResolver: PropertyMetadataResolver?,
     private val config: DocumentMapperConfig,
@@ -319,39 +319,39 @@ public abstract class DocumentMapper protected constructor(
     override fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D = fromNode(toNode(source), destinationType)
 
     private fun serializeWithSerializer(
-        serializer: JsonSerializer<*>,
+        serializer: DocumentBaseSerializer<*>,
         value: Any,
         property: DocumentProperty?,
         path: String,
     ): Node {
         @Suppress("UNCHECKED_CAST")
-        return (serializer as JsonSerializer<Any>).serialize(
+        return (serializer as DocumentBaseSerializer<Any>).serialize(
             value,
             DefaultSerializationContext(this, property, path),
         )
     }
 
     private fun deserializeWithDeserializer(
-        deserializer: JsonDeserializer<*>,
+        deserializer: DocumentBaseDeserializer<*>,
         node: Node,
         property: DocumentProperty?,
         path: String,
     ): Any? {
         @Suppress("UNCHECKED_CAST")
-        return (deserializer as JsonDeserializer<Any>).deserialize(
+        return (deserializer as DocumentBaseDeserializer<Any>).deserialize(
             node,
             DefaultDeserializationContext(this, property, path),
         )
     }
 
-    private fun findSerializer(type: Class<*>): JsonSerializer<*>? {
+    private fun findSerializer(type: Class<*>): DocumentBaseSerializer<*>? {
         val boxed = boxedType(type)
         return serializers[type]
             ?: serializers[boxed]
             ?: serializers.entries.firstOrNull { it.key.isAssignableFrom(boxed) }?.value
     }
 
-    private fun findDeserializer(type: Class<*>): JsonDeserializer<*>? {
+    private fun findDeserializer(type: Class<*>): DocumentBaseDeserializer<*>? {
         val boxed = boxedType(type)
         return deserializers[type]
             ?: deserializers[boxed]
@@ -425,22 +425,22 @@ public abstract class DocumentMapper protected constructor(
         return converter
     }
 
-    private fun propertySerializer(property: DocumentProperty?): JsonSerializer<*>? {
+    private fun propertySerializer(property: DocumentProperty?): DocumentBaseSerializer<*>? {
         val converter = propertyConverter(property) ?: return null
-        return converter as? JsonSerializer<*>
+        return converter as? DocumentBaseSerializer<*>
     }
 
-    private fun propertyDeserializer(property: DocumentProperty?): JsonDeserializer<*>? {
+    private fun propertyDeserializer(property: DocumentProperty?): DocumentBaseDeserializer<*>? {
         val converter = propertyConverter(property) ?: return null
-        return converter as? JsonDeserializer<*>
+        return converter as? DocumentBaseDeserializer<*>
     }
 
     private fun instantiateConverter(property: DocumentProperty, converterType: Class<*>): Any {
         val instance = objectInstance(converterType) ?: constructorInstance(property, converterType)
-        if (instance !is JsonSerializer<*> && instance !is JsonDeserializer<*>) {
+        if (instance !is DocumentBaseSerializer<*> && instance !is DocumentBaseDeserializer<*>) {
             throw DocumentSerializationException(
                 "Converter ${converterType.name} for " +
-                    "${property.declaringClass.name}.${property.name} must implement JsonSerializer or JsonDeserializer",
+                    "${property.declaringClass.name}.${property.name} must implement DocumentBaseSerializer or DocumentBaseDeserializer",
             )
         }
         return instance

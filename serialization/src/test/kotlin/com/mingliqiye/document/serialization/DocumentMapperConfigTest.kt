@@ -161,7 +161,7 @@ class DocumentMapperConfigTest {
         var other: String? = null
     }
 
-    private class ConfigLabelConverter : JsonConverter<String> {
+    private class ConfigLabelConverter : DocumentBaseConverter<String> {
 
         var property: DocumentProperty? = null
 

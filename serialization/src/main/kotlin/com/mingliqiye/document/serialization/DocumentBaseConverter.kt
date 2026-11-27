@@ -8,6 +8,6 @@ package com.mingliqiye.document.serialization
  *
  * @param T 转换类型
  */
-public interface JsonConverter<T> :
-    JsonSerializer<T>,
-    JsonDeserializer<T>
+public interface DocumentBaseConverter<T> :
+    DocumentBaseSerializer<T>,
+    DocumentBaseDeserializer<T>

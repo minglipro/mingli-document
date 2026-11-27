@@ -5,8 +5,8 @@ import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.json.exception.JsonParseException
 import com.mingliqiye.document.serialization.DeserializationContext
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapper
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.SerializationContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -52,7 +52,7 @@ class JsonMapperTest {
 
     private data class Money(val amount: Int)
 
-    private class MoneyConverter : JsonConverter<Money> {
+    private class MoneyConverter : DocumentBaseConverter<Money> {
         override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
 
         override fun serialize(value: Money, context: SerializationContext): Node = StringNode.of("${value.amount} CNY")

@@ -7,20 +7,20 @@ import java.util.LinkedHashMap
  */
 internal class DefaultModuleSetupContext : ModuleSetupContext {
 
-    private val serializers = LinkedHashMap<Class<*>, JsonSerializer<*>>()
-    private val deserializers = LinkedHashMap<Class<*>, JsonDeserializer<*>>()
+    private val serializers = LinkedHashMap<Class<*>, DocumentBaseSerializer<*>>()
+    private val deserializers = LinkedHashMap<Class<*>, DocumentBaseDeserializer<*>>()
     private var objectInstantiator: ObjectInstantiator? = null
     private var propertyMetadataResolver: PropertyMetadataResolver? = null
 
-    override fun addSerializer(serializer: JsonSerializer<*>) {
+    override fun addSerializer(serializer: DocumentBaseSerializer<*>) {
         serializers[serializer.getType().getRawType()] = serializer
     }
 
-    override fun addDeserializer(deserializer: JsonDeserializer<*>) {
+    override fun addDeserializer(deserializer: DocumentBaseDeserializer<*>) {
         deserializers[deserializer.getType().getRawType()] = deserializer
     }
 
-    override fun addConverter(converter: JsonConverter<*>) {
+    override fun addConverter(converter: DocumentBaseConverter<*>) {
         addSerializer(converter)
         addDeserializer(converter)
     }
@@ -33,9 +33,9 @@ internal class DefaultModuleSetupContext : ModuleSetupContext {
         propertyMetadataResolver = resolver
     }
 
-    fun serializers(): Map<Class<*>, JsonSerializer<*>> = serializers
+    fun serializers(): Map<Class<*>, DocumentBaseSerializer<*>> = serializers
 
-    fun deserializers(): Map<Class<*>, JsonDeserializer<*>> = deserializers
+    fun deserializers(): Map<Class<*>, DocumentBaseDeserializer<*>> = deserializers
 
     fun objectInstantiator(): ObjectInstantiator? = objectInstantiator
 

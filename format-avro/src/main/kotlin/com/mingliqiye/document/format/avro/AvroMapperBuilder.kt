@@ -1,9 +1,9 @@
 package com.mingliqiye.document.format.avro
 
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapperBuilder
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 import org.apache.avro.Schema
@@ -20,8 +20,8 @@ public class AvroMapperBuilder internal constructor(
 ) : DocumentMapperBuilder<AvroMapper>() {
 
     override fun createMapper(
-        serializers: Map<Class<*>, JsonSerializer<*>>,
-        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+        deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
     ): AvroMapper = createMapper(
@@ -33,8 +33,8 @@ public class AvroMapperBuilder internal constructor(
     )
 
     override fun createMapper(
-        serializers: Map<Class<*>, JsonSerializer<*>>,
-        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+        deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
         config: DocumentMapperConfig,

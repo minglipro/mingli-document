@@ -379,7 +379,7 @@ val mapper = CsvMapper(schema)
 
 ### 自定义转换器
 
-实现 `JsonSerializer` / `JsonDeserializer`，通过 Builder 注册或字段注解使用。
+实现 `DocumentBaseSerializer` / `DocumentBaseDeserializer`，通过 Builder 注册或字段注解使用。
 
 ### Token 直读
 

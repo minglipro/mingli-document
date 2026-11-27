@@ -1,7 +1,7 @@
 package com.mingliqiye.document.format.yaml
 
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
@@ -23,7 +23,7 @@ public class YamlConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): YamlConfigBuilder {
         base.field(declaringClass, name, converter)
         return this

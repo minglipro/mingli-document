@@ -1,10 +1,10 @@
 package com.mingliqiye.document.format.toml
 
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
@@ -16,8 +16,8 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * 外部只使用这个 Mapper，不需要接触内部读写实现。
  */
 public open class TomlMapper internal constructor(
-    serializers: Map<Class<*>, JsonSerializer<*>>,
-    deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
     config: DocumentMapperConfig,

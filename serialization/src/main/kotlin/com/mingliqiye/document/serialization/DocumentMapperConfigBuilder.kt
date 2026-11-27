@@ -7,7 +7,7 @@ import java.util.LinkedHashMap
  */
 public class DocumentMapperConfigBuilder {
 
-    private val fieldConverters = LinkedHashMap<FieldKey, JsonConverter<*>>()
+    private val fieldConverters = LinkedHashMap<FieldKey, DocumentBaseConverter<*>>()
     private var missingFieldPolicy = MissingFieldPolicy.KEEP_DEFAULT
     private var failOnUnknownFields = false
     private var writeNulls = true
@@ -24,7 +24,7 @@ public class DocumentMapperConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): DocumentMapperConfigBuilder {
         fieldConverters[FieldKey(declaringClass, name)] = converter
         return this

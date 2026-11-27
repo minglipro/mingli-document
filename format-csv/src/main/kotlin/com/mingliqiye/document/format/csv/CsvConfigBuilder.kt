@@ -1,7 +1,7 @@
 package com.mingliqiye.document.format.csv
 
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
@@ -25,7 +25,7 @@ public class CsvConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): CsvConfigBuilder {
         base.field(declaringClass, name, converter)
         return this

@@ -1,7 +1,7 @@
 package com.mingliqiye.document.format.json
 
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
@@ -26,7 +26,7 @@ public class JsonConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): JsonConfigBuilder {
         base.field(declaringClass, name, converter)
         return this

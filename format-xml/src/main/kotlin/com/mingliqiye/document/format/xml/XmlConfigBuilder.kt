@@ -1,7 +1,7 @@
 package com.mingliqiye.document.format.xml
 
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
@@ -33,7 +33,7 @@ public class XmlConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): XmlConfigBuilder {
         base.field(declaringClass, name, converter)
         return this

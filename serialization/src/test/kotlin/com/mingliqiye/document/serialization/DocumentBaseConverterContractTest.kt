@@ -14,18 +14,18 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /**
- * [JsonSerializer] / [JsonDeserializer] / [JsonConverter] 契约测试。
+ * [DocumentBaseSerializer] / [DocumentBaseDeserializer] / [DocumentBaseConverter] 契约测试。
  *
  * 覆盖方向、`getType()` 和 `context.property` 的可用性。
  */
-class JsonConverterContractTest {
+class DocumentBaseConverterContractTest {
 
     @Test
     fun converterExposesTypeAndBothDirections() {
         val converter = LabelConverter()
 
-        assertTrue(JsonSerializer::class.java.isAssignableFrom(JsonConverter::class.java))
-        assertTrue(JsonDeserializer::class.java.isAssignableFrom(JsonConverter::class.java))
+        assertTrue(DocumentBaseSerializer::class.java.isAssignableFrom(DocumentBaseConverter::class.java))
+        assertTrue(DocumentBaseDeserializer::class.java.isAssignableFrom(DocumentBaseConverter::class.java))
         assertEquals(Label::class.java, converter.getType().getRawType())
         assertEquals(Label::class.java, converter.getType().type)
     }
@@ -125,7 +125,7 @@ class JsonConverterContractTest {
 /**
  * 测试用数字转换器：写入和读取时都 +100。
  */
-private class NumericConverter : JsonConverter<Int> {
+private class NumericConverter : DocumentBaseConverter<Int> {
 
     override fun getType(): DocumentTypeReference<Int> = DocumentTypeReference.of()
 
@@ -159,7 +159,7 @@ private class LabelHolder {
 /**
  * 记录上下文并把字段名写入文本的双向转换器。
  */
-private class LabelConverter : JsonConverter<Label> {
+private class LabelConverter : DocumentBaseConverter<Label> {
 
     var serializeContext: SerializationContext? = null
     var deserializeContext: DeserializationContext? = null
@@ -182,7 +182,7 @@ private class LabelConverter : JsonConverter<Label> {
 /**
  * 无法还原时返回 `null` 的反序列化器。
  */
-private class NullReturningDeserializer : JsonDeserializer<Label> {
+private class NullReturningDeserializer : DocumentBaseDeserializer<Label> {
     override fun getType(): DocumentTypeReference<Label> = DocumentTypeReference.of()
 
     override fun deserialize(node: Node, context: DeserializationContext): Label? = null

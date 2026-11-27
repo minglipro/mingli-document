@@ -157,7 +157,7 @@ class DefaultDocumentMapperTest {
         val exception = assertFailsWith<DocumentSerializationException> {
             mapper.toNode(InvalidConverterBean())
         }
-        assertTrue(exception.message.orEmpty().contains("must implement JsonSerializer or JsonDeserializer"))
+        assertTrue(exception.message.orEmpty().contains("must implement DocumentBaseSerializer or DocumentBaseDeserializer"))
     }
 
     @Test
@@ -275,7 +275,7 @@ class DefaultDocumentMapperTest {
         var money: Money = Money(0)
     }
 
-    private class UpperStringSerializer : JsonSerializer<String> {
+    private class UpperStringSerializer : DocumentBaseSerializer<String> {
         override fun getType(): DocumentTypeReference<String> = DocumentTypeReference.of()
 
         override fun serialize(value: String, context: SerializationContext): Node = StringNode.of(value.uppercase())
@@ -293,7 +293,7 @@ class DefaultDocumentMapperTest {
         var name: String = ""
     }
 
-    private class GlobalMoneyConverter : JsonConverter<Money> {
+    private class GlobalMoneyConverter : DocumentBaseConverter<Money> {
         override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
 
         override fun serialize(value: Money, context: SerializationContext): Node = StringNode.of("${value.amount} GLOBAL")
@@ -307,7 +307,7 @@ class DefaultDocumentMapperTest {
         var money: Money = Money(0)
     }
 
-    private class LabeledMoneyConverter : JsonConverter<Money> {
+    private class LabeledMoneyConverter : DocumentBaseConverter<Money> {
         override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
 
         override fun serialize(value: Money, context: SerializationContext): Node {
@@ -321,7 +321,7 @@ class DefaultDocumentMapperTest {
         }
     }
 
-    private class MoneyConverter : JsonConverter<Money> {
+    private class MoneyConverter : DocumentBaseConverter<Money> {
         override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
 
         override fun serialize(value: Money, context: SerializationContext): Node = StringNode.of("${value.amount} CNY")

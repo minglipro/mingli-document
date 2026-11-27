@@ -1,9 +1,9 @@
 package com.mingliqiye.document.format.csv
 
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapperBuilder
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
@@ -29,8 +29,8 @@ public class CsvMapperBuilder internal constructor() : DocumentMapperBuilder<Csv
     }
 
     override fun createMapper(
-        serializers: Map<Class<*>, JsonSerializer<*>>,
-        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+        deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
     ): CsvMapper = createMapper(
@@ -42,8 +42,8 @@ public class CsvMapperBuilder internal constructor() : DocumentMapperBuilder<Csv
     )
 
     override fun createMapper(
-        serializers: Map<Class<*>, JsonSerializer<*>>,
-        deserializers: Map<Class<*>, JsonDeserializer<*>>,
+        serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+        deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
         propertyMetadataResolver: PropertyMetadataResolver?,
         config: DocumentMapperConfig,

@@ -101,7 +101,7 @@ gradle :benchmarks:jmh
 需要可扩展或跨模块使用的能力必须有接口：
 
 - 格式读写入口使用 Mapper
-- 转换器实现 `JsonSerializer` / `JsonDeserializer`
+- 转换器实现 `DocumentBaseSerializer` / `DocumentBaseDeserializer`
 - Schema 实现 `DocumentSchema`
 - 自定义实例化实现 `ObjectInstantiator`
 

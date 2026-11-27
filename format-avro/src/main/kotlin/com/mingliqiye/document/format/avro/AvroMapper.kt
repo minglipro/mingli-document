@@ -3,9 +3,9 @@ package com.mingliqiye.document.format.avro
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 import org.apache.avro.Schema
@@ -46,8 +46,8 @@ public open class AvroMapper internal constructor(
     public val writerSchema: Schema,
     /** reader Schema：读取时使用的期望 Schema；等于 writer Schema 表示不做演进。 */
     public val readerSchema: Schema,
-    serializers: Map<Class<*>, JsonSerializer<*>>,
-    deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
     config: DocumentMapperConfig,
