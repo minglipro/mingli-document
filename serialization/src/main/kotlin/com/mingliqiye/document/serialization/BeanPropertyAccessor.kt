@@ -1,6 +1,8 @@
 package com.mingliqiye.document.serialization
 
 import java.lang.reflect.Type
+import java.util.function.BiConsumer
+import java.util.function.Function
 
 /**
  * 预编译的 Bean 属性访问器。
@@ -9,8 +11,8 @@ import java.lang.reflect.Type
  */
 internal class BeanPropertyAccessor(
     val metadata: DocumentProperty,
-    private val getter: ((Any) -> Any?)?,
-    private val setter: ((Any, Any?) -> Unit)?,
+    private val getter: Function<Any, Any?>?,
+    private val setter: BiConsumer<Any, Any?>?,
     val valueType: Type,
 ) {
 
@@ -23,10 +25,10 @@ internal class BeanPropertyAccessor(
         get() = setter != null
 
     /** 读取属性值。 */
-    fun read(bean: Any): Any? = getter?.invoke(bean)
+    fun read(bean: Any): Any? = getter?.apply(bean)
 
     /** 写入属性值。 */
     fun write(bean: Any, value: Any?) {
-        setter?.invoke(bean, value)
+        setter?.accept(bean, value)
     }
 }

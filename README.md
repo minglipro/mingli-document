@@ -1055,24 +1055,26 @@ Avro/Protobuf 目前是 Schema 适配层，完整 wire 编解码后续接入。
 
 | Benchmark | 本项目 | Jackson |
 |---|---:|---:|
-| JSON 解析树 | 0.475 ms | 0.328 ms |
-| JSON → Bean | 0.785 ms | 0.316 ms |
-| JSON → data class | 0.816 ms | 0.316 ms |
-| Bean → JSON | 0.774 ms | 0.217 ms |
+| JSON 解析树 | 0.487 ms | 0.307 ms |
+| JSON → Bean | 0.702 ms | 0.290 ms |
+| JSON → data class | 0.750 ms | 0.290 ms |
+| Bean → JSON | 0.728 ms | 0.201 ms |
 
 Token 直读/直写：
 
 | Benchmark | Token 路径 | Node/旧直读路径 | 提升 |
 |---|---:|---:|---:|
-| JSON → Java Bean | 0.812 ms | 0.907 ms | 约 10% |
-| JSON → Kotlin data class | 0.806 ms | 0.839 ms | 约 4% |
-| CBOR → Bean | 0.917 ms | 1.175 ms | 约 22% |
-| Bean → CBOR | 0.716 ms | 1.316 ms | 约 46% |
+| JSON → Java Bean | 0.745 ms | 0.910 ms | 约 18% |
+| JSON → Kotlin data class | 0.807 ms | 0.870 ms | 约 7% |
+| CBOR → Bean | 0.918 ms | 1.300 ms | 约 29% |
+| Bean → CBOR | 0.701 ms | 1.381 ms | 约 49% |
 
 说明：
 
-- JSON Token 读取已做 **Token 对象零分配** 和 **数字原地解析**：`intValue/longValue` 不生成数字字符串
-- JSON Token 路径目前与旧 `JsonValueReader` 直读基本持平，Java Bean 场景略快
+- JSON Token 读取已做 **Token 对象零分配**、**数字原地解析** 和 **懒路径构建**
+- 解码/写出路径不再为每个字段创建 `"$path.$field"` 字符串，只在错误或回退时生成
+- JSON 字符串写出增加无转义快速路径
+- JSON Token 路径已快于旧 `JsonValueReader` 直读：Java Bean 约 18%，Kotlin data class 约 7%
 - CBOR Token 路径通过省掉 Node 树获得明显收益
 - 数字受 JVM、硬件与 Gradle 构建环境影响，只用于同轮相对比较
 - 详细方法和结果见 [benchmarks/README.md](benchmarks/README.md)

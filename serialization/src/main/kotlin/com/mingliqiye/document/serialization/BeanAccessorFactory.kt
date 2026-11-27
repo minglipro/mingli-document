@@ -19,22 +19,22 @@ internal object BeanAccessorFactory {
     private val getterSam: MethodType = MethodType.methodType(Any::class.java, Any::class.java)
     private val setterSam: MethodType = MethodType.methodType(Void.TYPE, Any::class.java, Any::class.java)
 
-    fun getter(method: Method): ((Any) -> Any?)? {
+    fun getter(method: Method): Function<Any, Any?>? {
         val handle = methodHandle(method) ?: return null
         return getterFromHandle(handle)
     }
 
-    fun setter(method: Method): ((Any, Any?) -> Unit)? {
+    fun setter(method: Method): BiConsumer<Any, Any?>? {
         val handle = methodHandle(method) ?: return null
         return setterFromHandle(handle)
     }
 
-    fun fieldGetter(field: Field): ((Any) -> Any?)? {
+    fun fieldGetter(field: Field): Function<Any, Any?>? {
         val handle = fieldHandle(field, setter = false) ?: return null
         return getterFromHandle(handle)
     }
 
-    fun fieldSetter(field: Field): ((Any, Any?) -> Unit)? {
+    fun fieldSetter(field: Field): BiConsumer<Any, Any?>? {
         val handle = fieldHandle(field, setter = true) ?: return null
         return setterFromHandle(handle)
     }
@@ -54,7 +54,7 @@ internal object BeanAccessorFactory {
         null
     }
 
-    private fun getterFromHandle(handle: MethodHandle): ((Any) -> Any?)? = try {
+    private fun getterFromHandle(handle: MethodHandle): Function<Any, Any?>? = try {
         val adapted = handle.asType(MethodType.methodType(Any::class.java, Any::class.java))
         val callSite = LambdaMetafactory.metafactory(
             MethodHandles.lookup(),
@@ -64,13 +64,13 @@ internal object BeanAccessorFactory {
             adapted,
             getterSam,
         )
-        val function = callSite.target.invokeWithArguments() as Function<Any, Any>
-        { bean -> function.apply(bean) }
+        val function = callSite.target.invokeWithArguments() as Function<Any, Any?>
+        function
     } catch (_: Throwable) {
         null
     }
 
-    private fun setterFromHandle(handle: MethodHandle): ((Any, Any?) -> Unit)? = try {
+    private fun setterFromHandle(handle: MethodHandle): BiConsumer<Any, Any?>? = try {
         val adapted = handle.asType(MethodType.methodType(Void.TYPE, Any::class.java, Any::class.java))
         val callSite = LambdaMetafactory.metafactory(
             MethodHandles.lookup(),
@@ -81,7 +81,7 @@ internal object BeanAccessorFactory {
             setterSam,
         )
         val consumer = callSite.target.invokeWithArguments() as BiConsumer<Any, Any?>
-        { bean, value -> consumer.accept(bean, value) }
+        consumer
     } catch (_: Throwable) {
         null
     }

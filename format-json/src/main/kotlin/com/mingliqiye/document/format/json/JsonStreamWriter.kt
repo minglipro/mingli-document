@@ -180,6 +180,17 @@ internal class JsonStreamWriter(
     }
 
     private fun appendString(value: String) {
+        var needsEscape = false
+        for (ch in value) {
+            if (ch == '"' || ch == '\\' || ch < ' ') {
+                needsEscape = true
+                break
+            }
+        }
+        if (!needsEscape) {
+            builder.append('"').append(value).append('"')
+            return
+        }
         builder.append('"')
         for (ch in value) {
             when (ch) {

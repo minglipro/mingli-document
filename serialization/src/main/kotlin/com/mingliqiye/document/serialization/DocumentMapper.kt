@@ -478,7 +478,7 @@ public abstract class DocumentMapper protected constructor(
         reader: DocumentTokenReader,
         targetType: Type,
         property: DocumentProperty?,
-        path: String,
+        path: DecodePath,
     ): Any? = readTokenValue(reader, targetType, property, path)
 
     /**
@@ -514,7 +514,7 @@ public abstract class DocumentMapper protected constructor(
      */
     public fun fromTokens(reader: DocumentTokenReader, targetType: Type): Any? {
         reader.nextToken() ?: throw DocumentSerializationException("Empty token stream")
-        val result = readTokenValue(reader, targetType, null, "$")
+        val result = readTokenValue(reader, targetType, null, DecodePath("$"))
         if (reader.nextToken() != null) {
             throw DocumentSerializationException("Unexpected trailing token content")
         }
@@ -525,7 +525,7 @@ public abstract class DocumentMapper protected constructor(
         reader: DocumentTokenReader,
         type: Type,
         property: DocumentProperty?,
-        path: String,
+        path: DecodePath,
     ): Any? {
         val token = reader.currentToken
             ?: throw DocumentSerializationException("No current token at $path")
@@ -542,7 +542,7 @@ public abstract class DocumentMapper protected constructor(
         }
         if (rawType != null) {
             if (propertyDeserializer(property) != null || findDeserializer(rawType) != null) {
-                return deserializeValue(TokenTreeReader.readNode(reader), type, path, property)
+                return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
             }
             val instantiator = objectInstantiator
             if (token == DocumentTokenType.START_OBJECT &&
@@ -557,7 +557,7 @@ public abstract class DocumentMapper protected constructor(
                 if (streamed != null) {
                     return streamed
                 }
-                return deserializeValue(TokenTreeReader.readNode(reader), type, path, property)
+                return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
             }
         }
         return when (type) {
@@ -578,7 +578,7 @@ public abstract class DocumentMapper protected constructor(
         }
     }
 
-    private fun readTokenClass(reader: DocumentTokenReader, type: Class<*>, path: String): Any? {
+    private fun readTokenClass(reader: DocumentTokenReader, type: Class<*>, path: DecodePath): Any? {
         if (Node::class.java.isAssignableFrom(type) || type == Any::class.java) {
             return TokenTreeReader.readNode(reader)
         }
@@ -602,7 +602,7 @@ public abstract class DocumentMapper protected constructor(
             type == BigDecimal::class.java -> readTokenNumber(reader, type, path)
             type == BigInteger::class.java -> readTokenNumber(reader, type, path)
             type == ByteArray::class.java -> readTokenBinary(reader, path)
-            type.isEnum -> enumValue(type, readTokenString(reader, path), path)
+            type.isEnum -> enumValue(type, readTokenString(reader, path), path.toString())
             type.isArray -> readTokenArray(reader, type.componentType, path)
             Collection::class.java.isAssignableFrom(type) ->
                 readTokenCollection(reader, Any::class.java, type, path)
@@ -617,7 +617,7 @@ public abstract class DocumentMapper protected constructor(
     private fun readTokenParameterized(
         reader: DocumentTokenReader,
         type: ParameterizedType,
-        path: String,
+        path: DecodePath,
     ): Any? {
         val rawType = type.rawType as? Class<*>
             ?: return readTokenValue(reader, type.rawType, null, path)
@@ -635,18 +635,18 @@ public abstract class DocumentMapper protected constructor(
                     path,
                 )
 
-            else -> deserializeValue(TokenTreeReader.readNode(reader), type, path)
+            else -> deserializeValue(TokenTreeReader.readNode(reader), type, path.toString())
         }
     }
 
-    private fun readTokenString(reader: DocumentTokenReader, path: String): String {
+    private fun readTokenString(reader: DocumentTokenReader, path: DecodePath): String {
         if (reader.currentToken != DocumentTokenType.STRING) {
             throw DocumentSerializationException("Expected string at $path but was ${reader.currentToken}")
         }
         return reader.textValue ?: throw DocumentSerializationException("Missing string value at $path")
     }
 
-    private fun readTokenBoolean(reader: DocumentTokenReader, path: String): Boolean {
+    private fun readTokenBoolean(reader: DocumentTokenReader, path: DecodePath): Boolean {
         if (reader.currentToken != DocumentTokenType.BOOLEAN) {
             throw DocumentSerializationException("Expected boolean at $path but was ${reader.currentToken}")
         }
@@ -656,7 +656,7 @@ public abstract class DocumentMapper protected constructor(
     private fun readTokenNumber(
         reader: DocumentTokenReader,
         type: Class<*>,
-        path: String,
+        path: DecodePath,
     ): Any {
         if (reader.currentToken != DocumentTokenType.NUMBER) {
             throw DocumentSerializationException("Expected number at $path but was ${reader.currentToken}")
@@ -701,7 +701,7 @@ public abstract class DocumentMapper protected constructor(
         }
     }
 
-    private fun readTokenBinary(reader: DocumentTokenReader, path: String): ByteArray = when (reader.currentToken) {
+    private fun readTokenBinary(reader: DocumentTokenReader, path: DecodePath): ByteArray = when (reader.currentToken) {
         DocumentTokenType.BINARY ->
             reader.binaryValue
                 ?: throw DocumentSerializationException("Missing binary value at $path")
@@ -713,7 +713,7 @@ public abstract class DocumentMapper protected constructor(
         else -> throw DocumentSerializationException("Expected binary at $path but was ${reader.currentToken}")
     }
 
-    private fun readTokenBean(reader: DocumentTokenReader, type: Class<*>, path: String): Any {
+    private fun readTokenBean(reader: DocumentTokenReader, type: Class<*>, path: DecodePath): Any {
         if (reader.currentToken != DocumentTokenType.START_OBJECT) {
             throw DocumentSerializationException("Expected object at $path but was ${reader.currentToken}")
         }
@@ -732,10 +732,11 @@ public abstract class DocumentMapper protected constructor(
                     reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
                     if (accessor != null && accessor.canWrite) {
                         seen?.add(fieldName)
-                        accessor.write(
-                            instance,
-                            readTokenValue(reader, accessor.valueType, accessor.metadata, "$path.$fieldName"),
-                        )
+                        val mark = path.mark()
+                        path.field(fieldName)
+                        val value = readTokenValue(reader, accessor.valueType, accessor.metadata, path)
+                        path.truncate(mark)
+                        accessor.write(instance, value)
                     } else {
                         if (config.failOnUnknownFields && fieldName !in metadata.knownFields) {
                             throw DocumentSerializationException(
@@ -750,7 +751,7 @@ public abstract class DocumentMapper protected constructor(
             }
         }
         if (trackSeen) {
-            applyMissingFields(instance, metadata, seen ?: emptySet(), path)
+            applyMissingFields(instance, metadata, seen ?: emptySet(), path.toString())
         }
         return instance
     }
@@ -759,7 +760,7 @@ public abstract class DocumentMapper protected constructor(
         reader: DocumentTokenReader,
         elementType: Type,
         rawType: Class<*>,
-        path: String,
+        path: DecodePath,
     ): Any {
         if (reader.currentToken != DocumentTokenType.START_ARRAY) {
             throw DocumentSerializationException("Expected array at $path but was ${reader.currentToken}")
@@ -771,7 +772,10 @@ public abstract class DocumentMapper protected constructor(
                 null -> throw DocumentSerializationException("Unexpected end of array at $path")
                 DocumentTokenType.END_ARRAY -> return collection
                 else -> {
-                    collection.add(readTokenValue(reader, elementType, null, "$path[$index]"))
+                    val mark = path.mark()
+                    path.index(index)
+                    collection.add(readTokenValue(reader, elementType, null, path))
+                    path.truncate(mark)
                     index++
                 }
             }
@@ -783,7 +787,7 @@ public abstract class DocumentMapper protected constructor(
         keyType: Type,
         valueType: Type,
         rawType: Class<*>,
-        path: String,
+        path: DecodePath,
     ): Any {
         if (reader.currentToken != DocumentTokenType.START_OBJECT) {
             throw DocumentSerializationException("Expected object at $path but was ${reader.currentToken}")
@@ -797,10 +801,13 @@ public abstract class DocumentMapper protected constructor(
                     val key = deserializeMapKey(
                         reader.textValue ?: throw DocumentSerializationException("Missing field name at $path"),
                         keyType,
-                        path,
+                        path.toString(),
                     )
                     reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
-                    map[key] = readTokenValue(reader, valueType, null, "$path.$key")
+                    val mark = path.mark()
+                    path.field(key.toString())
+                    map[key] = readTokenValue(reader, valueType, null, path)
+                    path.truncate(mark)
                 }
 
                 else -> throw DocumentSerializationException("Expected field name or end of object at $path")
@@ -811,7 +818,7 @@ public abstract class DocumentMapper protected constructor(
     private fun readTokenArray(
         reader: DocumentTokenReader,
         componentType: Type,
-        path: String,
+        path: DecodePath,
     ): Any {
         if (reader.currentToken != DocumentTokenType.START_ARRAY) {
             throw DocumentSerializationException("Expected array at $path but was ${reader.currentToken}")
@@ -829,7 +836,12 @@ public abstract class DocumentMapper protected constructor(
                     return result
                 }
 
-                else -> values.add(readTokenValue(reader, componentType, null, "$path[${values.size}]"))
+                else -> {
+                    val mark = path.mark()
+                    path.index(values.size)
+                    values.add(readTokenValue(reader, componentType, null, path))
+                    path.truncate(mark)
+                }
             }
         }
     }
@@ -1150,7 +1162,7 @@ public abstract class DocumentMapper protected constructor(
      * @param writer 格式写出器
      */
     public fun writeTo(value: Any?, writer: DocumentValueWriter) {
-        writeValue(value, IdentityHashMap(), 0, null, "$", writer)
+        writeValue(value, IdentityHashMap(), 0, null, DecodePath("$"), writer)
     }
 
     private fun writeValue(
@@ -1158,7 +1170,7 @@ public abstract class DocumentMapper protected constructor(
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
         property: DocumentProperty?,
-        path: String,
+        path: DecodePath,
         writer: DocumentValueWriter,
     ) {
         if (depth > MAX_SERIALIZATION_DEPTH) {
@@ -1166,13 +1178,13 @@ public abstract class DocumentMapper protected constructor(
         }
         if (value != null && value !is Node) {
             propertySerializer(property)?.let { serializer ->
-                writer.writeNode(serializeWithSerializer(serializer, value, property, path))
+                writer.writeNode(serializeWithSerializer(serializer, value, property, path.toString()))
                 return
             }
             val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
                 ?: findSerializer(value.javaClass)
             if (serializer != null) {
-                writer.writeNode(serializeWithSerializer(serializer, value, property, path))
+                writer.writeNode(serializeWithSerializer(serializer, value, property, path.toString()))
                 return
             }
         }
@@ -1189,7 +1201,10 @@ public abstract class DocumentMapper protected constructor(
                 writer.startObject()
                 for ((key, child) in value) {
                     writer.fieldName(key?.toString() ?: "null")
-                    writeValue(child, seen, depth + 1, null, "$path.$key", writer)
+                    val mark = path.mark()
+                    path.field(key?.toString() ?: "null")
+                    writeValue(child, seen, depth + 1, null, path, writer)
+                    path.truncate(mark)
                 }
                 writer.endObject()
             }
@@ -1197,7 +1212,10 @@ public abstract class DocumentMapper protected constructor(
             is Iterable<*> -> {
                 writer.startArray()
                 for (element in value) {
-                    writeValue(element, seen, depth + 1, null, "$path[]", writer)
+                    val mark = path.mark()
+                    path.literal("[]")
+                    writeValue(element, seen, depth + 1, null, path, writer)
+                    path.truncate(mark)
                 }
                 writer.endArray()
             }
@@ -1205,7 +1223,10 @@ public abstract class DocumentMapper protected constructor(
             is Array<*> -> {
                 writer.startArray()
                 for (element in value) {
-                    writeValue(element, seen, depth + 1, null, "$path[]", writer)
+                    val mark = path.mark()
+                    path.literal("[]")
+                    writeValue(element, seen, depth + 1, null, path, writer)
+                    path.truncate(mark)
                 }
                 writer.endArray()
             }
@@ -1225,13 +1246,16 @@ public abstract class DocumentMapper protected constructor(
         value: Any,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
-        path: String,
+        path: DecodePath,
         writer: DocumentValueWriter,
     ) {
         val length = ReflectArray.getLength(value)
         writer.startArray()
         for (index in 0 until length) {
-            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, "$path[$index]", writer)
+            val mark = path.mark()
+            path.index(index)
+            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, path, writer)
+            path.truncate(mark)
         }
         writer.endArray()
     }
@@ -1240,7 +1264,7 @@ public abstract class DocumentMapper protected constructor(
         bean: Any,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
-        path: String,
+        path: DecodePath,
         writer: DocumentValueWriter,
     ) {
         withCycleCheck(bean, seen) {
@@ -1255,14 +1279,17 @@ public abstract class DocumentMapper protected constructor(
                     continue
                 }
                 writer.fieldName(metadata.documentName)
+                val mark = path.mark()
+                path.field(metadata.name)
                 writeValue(
                     value,
                     seen,
                     depth + 1,
                     metadata,
-                    "$path.${metadata.name}",
+                    path,
                     writer,
                 )
+                path.truncate(mark)
             }
             writer.endObject()
         }
@@ -1707,25 +1734,27 @@ public abstract class DocumentMapper protected constructor(
             readMethod?.isAccessible = true
             writeMethod?.isAccessible = true
             field?.isAccessible = true
-            val getter: ((Any) -> Any?)? = when {
-                readMethod != null -> BeanAccessorFactory.getter(readMethod) ?: { bean -> invoke(readMethod, bean) }
+            val getter: java.util.function.Function<Any, Any?>? = when {
+                readMethod != null -> BeanAccessorFactory.getter(readMethod) ?: java.util.function.Function<Any, Any?> { bean -> invoke(readMethod, bean) }
                 field != null && !Modifier.isStatic(field.modifiers) && !field.isSynthetic ->
-                    BeanAccessorFactory.fieldGetter(field) ?: { bean -> readField(field, bean) }
+                    BeanAccessorFactory.fieldGetter(field) ?: java.util.function.Function<Any, Any?> { bean -> readField(field, bean) }
 
                 else -> null
             }
-            val setter: ((Any, Any?) -> Unit)? = when {
-                writeMethod != null -> BeanAccessorFactory.setter(writeMethod) ?: { bean, value ->
-                    invoke(writeMethod, bean, value)
-                    Unit
-                }
+            val setter: java.util.function.BiConsumer<Any, Any?>? = when {
+                writeMethod != null -> BeanAccessorFactory.setter(writeMethod)
+                    ?: java.util.function.BiConsumer<Any, Any?> { bean, value ->
+                        invoke(writeMethod, bean, value)
+                    }
+
                 field != null &&
                     !Modifier.isStatic(field.modifiers) &&
                     !Modifier.isFinal(field.modifiers) &&
                     !field.isSynthetic ->
-                    BeanAccessorFactory.fieldSetter(field) ?: { bean, value ->
-                        writeField(field, bean, value)
-                    }
+                    BeanAccessorFactory.fieldSetter(field)
+                        ?: java.util.function.BiConsumer<Any, Any?> { bean, value ->
+                            writeField(field, bean, value)
+                        }
 
                 else -> null
             }
