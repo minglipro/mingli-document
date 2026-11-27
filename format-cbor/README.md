@@ -42,12 +42,23 @@ val restored = mapper.parse(file, User::class.java)
 - Token 直读/直写
 - 文件/流读写
 - 整数最小长度、bignum、tag 4 decimal
+- canonical map key 排序
+
+## Canonical CBOR
+
+```kotlin
+val bytes = mapper.formatCanonicalBytes(value)
+val nodeBytes = node.toCanonicalCborBytes()
+```
+
+对象 key 按 UTF-8 长度升序、同长度按字节序排序，数组保持原顺序。
 
 ## 限制
 
 - CBOR tag 不单独保留
 - NaN / Infinity 拒绝
 - 非字符串 map key 支持有限
+- canonical 只保证 map key 顺序与整数最短编码，不覆盖所有 RFC 8949 确定性要求
 
 ## 构建
 

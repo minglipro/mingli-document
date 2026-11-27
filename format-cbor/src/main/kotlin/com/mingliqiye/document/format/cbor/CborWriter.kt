@@ -30,7 +30,9 @@ private val CBOR_FACTORY: CBORFactory = CBORFactory()
  *
  * 每个对象/数组都按实际元素数量写成定长 CBOR。
  */
-public class CborWriter {
+public class CborWriter(
+    private val canonical: Boolean = false,
+) {
 
     /**
      * 写出节点并返回 CBOR 字节。
@@ -63,7 +65,12 @@ public class CborWriter {
 
     private fun writeObject(generator: CBORGenerator, node: ObjectNode) {
         generator.writeStartObject(node.size)
-        for ((name, value) in node.asMap()) {
+        val entries = if (canonical) {
+            node.asMap().entries.sortedWith(CANONICAL_KEY_ORDER)
+        } else {
+            node.asMap().entries.toList()
+        }
+        for ((name, value) in entries) {
             generator.writeFieldName(name)
             writeValue(generator, value)
         }
@@ -115,3 +122,38 @@ public class CborWriter {
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
 public fun Node.toCborBytes(): ByteArray = CborWriter().write(this)
+
+/**
+ * 将文档树按 canonical map key 顺序写成 CBOR 字节。
+ *
+ * 对象 key 按 UTF-8 编码长度升序、同长度按字节序排序；数组保持原顺序。
+ * 整数已使用最短编码形式。
+ *
+ * @return CBOR 二进制内容
+ * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
+ */
+public fun Node.toCanonicalCborBytes(): ByteArray = CborWriter(canonical = true).write(this)
+
+private val CANONICAL_KEY_ORDER: Comparator<Map.Entry<String, Node>> =
+    Comparator { left, right ->
+        val leftBytes = left.key.toByteArray(Charsets.UTF_8)
+        val rightBytes = right.key.toByteArray(Charsets.UTF_8)
+        val lengthCompare = leftBytes.size.compareTo(rightBytes.size)
+        if (lengthCompare != 0) {
+            lengthCompare
+        } else {
+            compareBytes(leftBytes, rightBytes)
+        }
+    }
+
+private fun compareBytes(left: ByteArray, right: ByteArray): Int {
+    for (index in left.indices) {
+        val leftValue = left[index].toInt() and 0xFF
+        val rightValue = right[index].toInt() and 0xFF
+        val comparison = leftValue.compareTo(rightValue)
+        if (comparison != 0) {
+            return comparison
+        }
+    }
+    return 0
+}

@@ -93,6 +93,18 @@ public open class CborMapper internal constructor(
         }
     }
 
+    /**
+     * 将 Java 实体写成 canonical CBOR 字节。
+     *
+     * 与 [formatBytes] 不同，本方法先构建 Node 树，再按 canonical map key 顺序写出；
+     * 适合需要稳定字节输出的签名、缓存键等场景。
+     *
+     * @param value Java 实体、集合、Map 或 Node
+     * @return CBOR 二进制内容
+     * @throws com.mingliqiye.document.format.cbor.exception.CborException 写出失败时抛出
+     */
+    public fun formatCanonicalBytes(value: Any?): ByteArray = CborWriter(canonical = true).write(toNode(value))
+
     public companion object {
 
         /**
