@@ -167,3 +167,19 @@
 - Ryu / Schubfach
 - Jazzer / JQF 持续 fuzz
 - 运行期 / 编译期代码生成
+---
+
+## 1.4.0 交付状态
+
+- master / v1.4.0 已推送 GitHub
+- 私服 1.4.0 全模块发布成功
+- 全量构建与 749 tests 通过
+- 原生 Token Reader 覆盖 JSON/CBOR/Smile/Ion/CSV/Properties/TOML/YAML/XML
+- JSON Double 使用 Schubfach
+- 新增 fuzzContinuous 持续随机 fuzz
+- dev 本地保持未推送
+
+仍延后：
+
+- Jazzer / JQF 覆盖率引导 fuzz
+- 运行期 / 编译期代码生成
