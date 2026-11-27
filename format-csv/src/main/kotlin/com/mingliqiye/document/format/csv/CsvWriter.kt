@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.csv
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -11,6 +12,7 @@ import com.mingliqiye.document.format.csv.exception.CsvException
 import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVPrinter
 import java.io.StringWriter
+import java.util.Base64
 
 /**
  * 将文档树写成 CSV 文本。
@@ -92,6 +94,7 @@ internal class CsvWriter(
         is StringNode -> node.value
         is NumberNode -> node.raw
         is BooleanNode -> node.value.toString()
+        is BinaryNode -> Base64.getEncoder().encodeToString(node.value)
         is ObjectNode, is ArrayNode -> throw CsvException("Nested CSV cell values are not supported: ${node.type}")
     }
 }

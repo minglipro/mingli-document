@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.toml
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -10,6 +11,7 @@ import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.toml.exception.TomlException
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.util.Base64
 
 private const val MAX_INTEGER_DIGITS = 18
 
@@ -81,6 +83,7 @@ internal class TomlWriter {
             is StringNode -> builder.append(formatString(node.value))
             is NumberNode -> builder.append(formatNumber(node))
             is BooleanNode -> builder.append(node.value)
+            is BinaryNode -> builder.append(formatString(Base64.getEncoder().encodeToString(node.value)))
             is NullNode -> throw TomlException("TOML does not support null values")
         }
     }

@@ -122,7 +122,9 @@ fun main() {
 | `toNode(value)` | 任意实体、集合、`Map`、数组或 `Node` → 文档树 |
 | `fromNode(node, Class)` / `fromNode(node, DocumentTypeReference)` | 文档树 → Java 实体（支持泛型类型） |
 | `parse(source, Class)` / `parse(source, DocumentTypeReference)` | 文本 → Java 实体 |
+| `parse(byteArray, Class)` / `parse(byteArray, DocumentTypeReference)` | 二进制 → Java 实体（二进制 Mapper） |
 | `format(value)` / `formatPretty(value)` | Java 实体 → 紧凑 / 格式化文本 |
+| `formatBytes(value)` | Java 实体 → 二进制（二进制 Mapper） |
 | `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
 
 > `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` 继承 `DocumentMapper`；格式模块内部 Codec 不对外暴露。
@@ -898,6 +900,31 @@ val restored = mapper.parse(mapper.format(user), User::class.java)
 - 当前使用 String API，只支持文本 Ion，暂不支持二进制 Ion；
 - Ion BLOB/CLOB 暂时映射为 Base64 字符串；
 - symbol/timestamp 写出为字符串，Ion 注解忽略。
+
+## 二进制节点与字节 API
+
+`core` 现在提供 `BinaryNode`：
+
+```kotlin
+val bytes = BinaryNode.of(byteArrayOf(1, 2, 3))
+val raw = bytes.asBinary()
+```
+
+`BinaryNode` 会复制输入/输出数组，并实现内容相等性。
+
+`DocumentMapperApi` 增加字节 API：
+
+```kotlin
+mapper.parse(bytes, User::class.java)
+mapper.formatBytes(user)
+```
+
+- 文本格式 Mapper 默认不支持字节 API，会抛 `DocumentSerializationException`；
+- 二进制格式 Mapper 通过 `DocumentMapper` 的二进制解析/写出函数接入；
+- Java `ByteArray` Bean 字段会映射为 `BinaryNode`；
+- JSON/XML/YAML/Properties/TOML/CSV 暂时以 Base64 字符串兼容写出，Ion 原生映射为 blob。
+
+这是 CBOR、Smile、Ion binary 等格式的基础 API。
 
 ## 性能基准
 

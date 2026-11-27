@@ -32,6 +32,10 @@ public sealed interface Node {
     public val isBoolean: Boolean
         get() = type == NodeType.BOOLEAN
 
+    /** 是否为二进制。 */
+    public val isBinary: Boolean
+        get() = type == NodeType.BINARY
+
     /** 是否为 null。 */
     public val isNull: Boolean
         get() = type == NodeType.NULL
@@ -90,4 +94,15 @@ public sealed interface Node {
 
     /** 转为布尔值；类型不匹配时返回 `null`。 */
     public fun asBooleanOrNull(): Boolean? = (this as? BooleanNode)?.value
+
+    /**
+     * 转为二进制内容。
+     *
+     * @throws DocumentTypeException 当前节点不是二进制时抛出
+     */
+    public fun asBinary(): ByteArray = asBinaryOrNull()
+        ?: throw DocumentTypeException("Expected binary but was $type")
+
+    /** 转为二进制内容；类型不匹配时返回 `null`。 */
+    public fun asBinaryOrNull(): ByteArray? = (this as? BinaryNode)?.value
 }

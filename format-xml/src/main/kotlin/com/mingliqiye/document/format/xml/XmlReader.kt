@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.xml
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -12,6 +13,7 @@ import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
 import java.math.BigDecimal
+import java.util.Base64
 import javax.xml.parsers.DocumentBuilderFactory
 
 /**
@@ -62,6 +64,7 @@ public class XmlReader(
             "string" -> StringNode.of(element.textContent)
             "number" -> toNumberNode(element.textContent)
             "boolean" -> toBooleanNode(element.textContent)
+            "binary" -> BinaryNode.of(Base64.getDecoder().decode(element.textContent.trim()))
             else -> inferNode(element)
         }
     }

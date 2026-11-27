@@ -4,6 +4,7 @@ import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
 import com.mingliqiye.document.annotation.DocumentNumberFormat
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
@@ -26,6 +27,7 @@ import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.util.Base64
 import java.util.IdentityHashMap
 import java.util.LinkedHashMap
 import java.util.LinkedHashSet
@@ -58,6 +60,8 @@ public abstract class DocumentMapper protected constructor(
     private val objectInstantiator: ObjectInstantiator?,
     private val propertyMetadataResolver: PropertyMetadataResolver?,
     private val config: DocumentMapperConfig,
+    private val parseBytes: ((ByteArray) -> Node)? = null,
+    private val writeBytes: ((Node, Boolean) -> ByteArray)? = null,
 ) : DocumentMapperApi {
 
     /**
@@ -145,6 +149,44 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = fromNode(parseText(source), targetType)
+
+    /**
+     * 将字节数组解析为 Java 实体。
+     *
+     * @param source 二进制内容
+     * @param targetType 目标类型
+     * @return Java 实体
+     */
+    override fun <T> parse(source: ByteArray, targetType: Class<T>): T {
+        val parser = parseBytes
+            ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
+        return fromNode(parser(source), targetType)
+    }
+
+    /**
+     * 将字节数组解析为指定泛型类型。
+     *
+     * @param source 二进制内容
+     * @param targetType 目标类型引用
+     * @return Java 实体
+     */
+    override fun <T> parse(source: ByteArray, targetType: DocumentTypeReference<T>): T {
+        val parser = parseBytes
+            ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
+        return fromNode(parser(source), targetType)
+    }
+
+    /**
+     * 将 Java 实体序列化为字节数组。
+     *
+     * @param value Java 实体
+     * @return 二进制内容
+     */
+    override fun formatBytes(value: Any?): ByteArray {
+        val writer = writeBytes
+            ?: throw DocumentSerializationException("$formatName mapper does not support binary writing")
+        return writer(toNode(value), false)
+    }
 
     /**
      * 使用格式写出函数将 Java 实体序列化为文本。
@@ -425,6 +467,7 @@ public abstract class DocumentMapper protected constructor(
             return reader.readNode()
         }
         return when {
+            type == ByteArray::class.java -> binaryValue(reader.readNode(), path)
             type == String::class.java || type == CharSequence::class.java -> reader.readString()
             type == Char::class.java || type == Character::class.java -> readCharacter(reader, path)
             type == Boolean::class.java || type == java.lang.Boolean::class.java -> reader.readBoolean()
@@ -467,6 +510,12 @@ public abstract class DocumentMapper protected constructor(
 
             else -> deserializeValue(reader.readNode(), type, path)
         }
+    }
+
+    private fun binaryValue(node: Node, path: String): ByteArray = when (node) {
+        is BinaryNode -> node.value
+        is StringNode -> Base64.getDecoder().decode(node.value)
+        else -> throw DocumentSerializationException("Expected binary or Base64 string at $path")
     }
 
     private fun readCharacter(reader: DocumentValueReader, path: String): Char {
@@ -670,6 +719,7 @@ public abstract class DocumentMapper protected constructor(
         return when (value) {
             null -> NullNode.INSTANCE
             is Node -> value
+            is ByteArray -> BinaryNode.of(value)
             is CharSequence -> StringNode.of(value.toString())
             is Char -> StringNode.of(value.toString())
             is Boolean -> BooleanNode.of(value)
@@ -757,6 +807,7 @@ public abstract class DocumentMapper protected constructor(
         when (value) {
             null -> writer.writeNull()
             is Node -> writer.writeNode(value)
+            is ByteArray -> writer.writeNode(BinaryNode.of(value))
             is CharSequence -> writer.writeString(value.toString())
             is Char -> writer.writeString(value.toString())
             is Boolean -> writer.writeBoolean(value)
@@ -982,6 +1033,7 @@ public abstract class DocumentMapper protected constructor(
             return node
         }
         return when {
+            type == ByteArray::class.java -> binaryValue(node, path)
             type == String::class.java || type == CharSequence::class.java -> node.asString()
             type == Char::class.java || type == Character::class.java -> {
                 val value = node.asString()

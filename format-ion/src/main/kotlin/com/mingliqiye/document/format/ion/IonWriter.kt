@@ -3,6 +3,7 @@ package com.mingliqiye.document.format.ion
 import com.amazon.ion.IonType
 import com.amazon.ion.system.IonTextWriterBuilder
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -52,6 +53,7 @@ internal class IonWriter(
             is NumberNode -> writeNumber(writer, node)
             is BooleanNode -> writer.writeBool(node.value)
             is NullNode -> writer.writeNull()
+            is BinaryNode -> writer.writeBlob(node.value)
         }
     }
 

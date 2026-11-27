@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.yaml
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -11,6 +12,7 @@ import org.yaml.snakeyaml.DumperOptions
 import org.yaml.snakeyaml.Yaml
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.util.Base64
 
 /**
  * 将文档树写成 YAML 文本。
@@ -41,6 +43,7 @@ internal class YamlWriter(
         is NumberNode -> toPlainNumber(node)
         is StringNode -> node.value
         is BooleanNode -> node.value
+        is BinaryNode -> Base64.getEncoder().encodeToString(node.value)
         is NullNode -> null
     }
 

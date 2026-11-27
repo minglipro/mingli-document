@@ -9,5 +9,6 @@ public enum class NodeType(public val value: String) {
     NUMBER("number"),
     STRING("string"),
     BOOLEAN("boolean"),
+    BINARY("binary"),
     NULL("null"),
 }

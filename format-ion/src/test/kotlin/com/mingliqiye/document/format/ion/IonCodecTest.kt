@@ -8,7 +8,6 @@ import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.ion.exception.IonParseException
 import java.math.BigDecimal
-import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -102,12 +101,12 @@ class IonCodecTest {
         assertEquals("sym", obj["symbol"]?.asString())
         assertEquals("2024-01-02T03:04:05Z", obj["at"]?.asString())
         assertEquals(
-            Base64.getEncoder().encodeToString("hello".toByteArray(Charsets.UTF_8)),
-            obj["data"]?.asString(),
+            "hello",
+            obj["data"]?.asBinary()?.toString(Charsets.UTF_8),
         )
         assertEquals(
-            Base64.getEncoder().encodeToString("hi".toByteArray(Charsets.UTF_8)),
-            obj["clob"]?.asString(),
+            "hi",
+            obj["clob"]?.asBinary()?.toString(Charsets.UTF_8),
         )
     }
 

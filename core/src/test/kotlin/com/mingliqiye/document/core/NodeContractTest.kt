@@ -25,6 +25,7 @@ class NodeContractTest {
             NullNode.INSTANCE to NodeType.NULL,
             BooleanNode.of(true) to NodeType.BOOLEAN,
             StringNode.of("text") to NodeType.STRING,
+            BinaryNode.of(byteArrayOf(1, 2, 3)) to NodeType.BINARY,
             NumberNode.of(1) to NodeType.NUMBER,
             ArrayNode.EMPTY to NodeType.ARRAY,
             ObjectNode.EMPTY to NodeType.OBJECT,
@@ -37,6 +38,7 @@ class NodeContractTest {
             assertEquals(expectedType == NodeType.NUMBER, node.isNumber)
             assertEquals(expectedType == NodeType.STRING, node.isString)
             assertEquals(expectedType == NodeType.BOOLEAN, node.isBoolean)
+            assertEquals(expectedType == NodeType.BINARY, node.isBinary)
             assertEquals(expectedType == NodeType.NULL, node.isNull)
         }
     }
@@ -44,7 +46,7 @@ class NodeContractTest {
     @Test
     fun nodeTypeExposesFormatNames() {
         assertEquals(
-            listOf("object", "array", "number", "string", "boolean", "null"),
+            listOf("object", "array", "number", "string", "boolean", "binary", "null"),
             NodeType.values().map { it.value },
         )
     }

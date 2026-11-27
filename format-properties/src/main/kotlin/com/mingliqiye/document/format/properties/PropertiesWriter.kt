@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.properties
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -8,6 +9,7 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.properties.exception.PropertiesException
+import java.util.Base64
 
 /**
  * 将文档树写成 Java Properties 文本。
@@ -53,6 +55,7 @@ internal class PropertiesWriter {
             is StringNode -> addLine(path, node.value)
             is NumberNode -> addLine(path, node.raw)
             is BooleanNode -> addLine(path, node.value.toString())
+            is BinaryNode -> addLine(path, Base64.getEncoder().encodeToString(node.value))
         }
     }
 

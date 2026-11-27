@@ -1,12 +1,14 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
+import java.util.Base64
 
 private const val HEX_DIGITS = "0123456789abcdef"
 
@@ -36,6 +38,7 @@ internal class JsonWriter(
             is NumberNode -> builder.append(node.raw)
             is StringNode -> appendString(node.value)
             is BooleanNode -> builder.append(if (node.value) "true" else "false")
+            is BinaryNode -> appendString(Base64.getEncoder().encodeToString(node.value))
             is NullNode -> builder.append("null")
         }
     }

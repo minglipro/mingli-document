@@ -1,12 +1,14 @@
 package com.mingliqiye.document.format.xml
 
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
+import java.util.Base64
 
 /**
  * 将文档树写成 XML 文本。
@@ -41,6 +43,7 @@ internal class XmlWriter(
             is StringNode -> writeScalar(name, "string", node.value, indent)
             is NumberNode -> writeScalar(name, "number", node.raw, indent)
             is BooleanNode -> writeScalar(name, "boolean", node.value.toString(), indent)
+            is BinaryNode -> writeScalar(name, "binary", Base64.getEncoder().encodeToString(node.value), indent)
         }
     }
 

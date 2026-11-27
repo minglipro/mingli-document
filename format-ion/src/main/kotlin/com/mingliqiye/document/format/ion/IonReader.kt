@@ -4,6 +4,7 @@ import com.amazon.ion.IonSystem
 import com.amazon.ion.IonType
 import com.amazon.ion.system.IonSystemBuilder
 import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
@@ -12,7 +13,6 @@ import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.ion.exception.IonParseException
 import java.io.StringReader
-import java.util.Base64
 
 /**
  * Ion 读取入口。
@@ -26,7 +26,7 @@ import java.util.Base64
  * - `int` / `float` / `decimal` → [NumberNode]（保留 [NumberNode.raw]）
  * - `string` / `symbol` → [StringNode]
  * - `timestamp` → [StringNode]（Ion 时间戳文本，ISO 8601 风格）
- * - `blob` / `clob` → [StringNode]（Base64 编码，Node 模型暂无二进制节点）
+ * - `blob` / `clob` → [BinaryNode]
  * - `list` / `sexp` → [ArrayNode]
  * - `struct` → [ObjectNode]
  *
@@ -74,7 +74,7 @@ public class IonReader(
             IonType.DECIMAL -> NumberNode.ofRaw(reader.bigDecimalValue().toString())
             IonType.TIMESTAMP -> StringNode.of(requireTimestamp(reader))
             IonType.SYMBOL, IonType.STRING -> StringNode.of(reader.stringValue())
-            IonType.CLOB, IonType.BLOB -> StringNode.of(Base64.getEncoder().encodeToString(reader.newBytes()))
+            IonType.CLOB, IonType.BLOB -> BinaryNode.of(reader.newBytes())
             IonType.LIST, IonType.SEXP -> readArrayNode(reader)
             IonType.STRUCT -> readObjectNode(reader)
             IonType.DATAGRAM -> throw IonParseException("Unexpected Ion datagram value")
