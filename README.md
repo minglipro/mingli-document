@@ -5,7 +5,7 @@
 `com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
 
 - **格式无关**：`core` 只定义节点树与类型引用，不依赖任何具体格式；
-- **JSON/YAML/XML Mapper**：`format-json` 提供 `JsonMapper`，`format-yaml` 提供 `YamlMapper`，`format-xml` 提供 `XmlMapper`，均继承通用 `DocumentMapper`；
+- **JSON/YAML/XML/Properties Mapper**：`format-json` 提供 `JsonMapper`，`format-yaml` 提供 `YamlMapper`，`format-xml` 提供 `XmlMapper`，`format-properties` 提供 `PropertiesMapper`，均继承通用 `DocumentMapper`；
 - **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
 
 ## 模块与依赖
@@ -18,6 +18,7 @@
 | `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
 | `format-xml` | XML Mapper `XmlMapper`、`XmlReader` | `serialization`、`core` |
+| `format-properties` | Properties Mapper `PropertiesMapper`、`PropertiesReader` | `serialization`、`core` |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 | `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 
@@ -27,6 +28,7 @@
 format-json ──► serialization ──► core ──► exception ──► mingli-exception
 format-yaml ──► serialization
 format-xml  ──► serialization
+format-properties ──► serialization
 serialization-kotlin ──► serialization
 serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
@@ -34,7 +36,7 @@ annotation：项目内无依赖
 ```
 
 - `benchmarks` 是开发工具模块，不对外发布；
-- `core` 不依赖任何具体格式；`format-json` / `format-yaml` / `format-xml` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
+- `core` 不依赖任何具体格式；`format-json` / `format-yaml` / `format-xml` / `format-properties` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
 - 外部使用方只需要引入对应格式模块（如 `format-json`）即可获得 `JsonMapper`；不需要接触内部 Codec 实现。
 
 ## 坐标
@@ -51,6 +53,7 @@ dependencies {
     implementation("com.mingliqiye.document:format-json:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-yaml:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-xml:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-properties:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
     // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
     implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
@@ -765,6 +768,50 @@ val restored = mapper.parse(xml, User::class.java)
 - 字段名中的非法 XML 字符会编码为 `_xHHHH_`；
 - 解析器禁用 DOCTYPE 与外部实体，避免 XXE。
 
+## Properties 支持
+
+`PropertiesMapper` 将树/Bean 展平成 Java Properties 的 `key=value` 文本：
+
+```kotlin
+import com.mingliqiye.document.format.properties.PropertiesMapper
+import com.mingliqiye.document.format.properties.toPropertiesNode
+import com.mingliqiye.document.format.properties.toPropertiesString
+
+val node = """
+    user.name=小于
+    user.age=18
+    tags[0]=a
+    tags[1]=b
+""".trimIndent().toPropertiesNode()
+
+println(node.toPropertiesString())
+
+val mapper = PropertiesMapper()
+val text = mapper.format(user)
+val restored = mapper.parse(text, User::class.java)
+```
+
+路径约定：
+
+```text
+user.name       -> 对象字段
+tags[0]         -> 数组元素
+matrix[0][1]    -> 嵌套数组
+```
+
+字段名中的 `%`、`.`、`[`、`]` 使用百分号编码：
+
+```text
+user%2Ename     -> 字段名 "user.name"
+```
+
+约束：
+
+- 根节点必须是对象或数组；
+- Properties 只有字符串值，读取时按 `true` / `false` / 数字 / 字符串推断；
+- 空对象、空数组不会写出；`null` 字段会写成空值；
+- 不保留 Java Properties 的注释与原始顺序。
+
 ## 性能基准
 
 `benchmarks` 模块提供 JMH 基准。JDK8、1000 个 Bean（约 128 KB JSON）的结果：
@@ -801,6 +848,7 @@ gradle :serialization:test
 gradle :format-json:test
 gradle :format-yaml:test
 gradle :format-xml:test
+gradle :format-properties:test
 gradle :serialization-kotlin:test
 
 # 自动格式化 Kotlin 代码
@@ -816,10 +864,10 @@ gradle ktlintFormat
 
 当前已实现的范围：
 
-- 格式实现有 JSON（`format-json`）、YAML（`format-yaml`）和 XML（`format-xml`）；
+- 格式实现有 JSON（`format-json`）、YAML（`format-yaml`）、XML（`format-xml`）和 Properties（`format-properties`）；
 - Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
 - Java Bean 需要无参构造器；Kotlin data class 可配合 `serialization-kotlin` 使用主构造器反序列化；
-- `JsonMapper` / `YamlMapper` / `XmlMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
+- `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
 - 序列化检测循环引用，最大嵌套深度为 128；JSON 解析最大嵌套深度为 512。
 
 **尚未实现 / 限制**：
@@ -839,5 +887,6 @@ gradle ktlintFormat
 | `JsonParseException` | `format-json`（`com.mingliqiye.document.format.json.exception`） | JSON/JSONC 语法错误 |
 | `YamlParseException` | `format-yaml`（`com.mingliqiye.document.format.yaml.exception`） | YAML 语法错误或不支持的类型 |
 | `XmlParseException` | `format-xml`（`com.mingliqiye.document.format.xml.exception`） | XML 语法错误或不支持的内容 |
+| `PropertiesParseException` | `format-properties`（`com.mingliqiye.document.format.properties.exception`） | Properties 语法错误或路径冲突 |
 
 更多代码规范、提交规范与模块约束见 [CONTRIBUTING.md](CONTRIBUTING.md)。
