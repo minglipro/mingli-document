@@ -22,6 +22,7 @@ public class DocumentMapperConfigBuilder {
     private var atomicFileWrite = false
     private var createParentDirectories = false
     private var maxInputSize = 0L
+    private var maxStringLength = 0
     private var maxNodeDepth = 0
     private var maxNodeCount = 0L
     private var resolveReferences = false
@@ -207,6 +208,18 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置 Node 树中单个字符串最大长度，0 表示不限制。
+     *
+     * @param max 最大长度
+     * @return 当前构建器
+     */
+    public fun maxStringLength(max: Int): DocumentMapperConfigBuilder {
+        require(max >= 0) { "maxStringLength must be >= 0" }
+        this.maxStringLength = max
+        return this
+    }
+
+    /**
      * 设置 Node 树最大深度，0 表示不限制。
      *
      * @param max 最大深度
@@ -284,6 +297,7 @@ public class DocumentMapperConfigBuilder {
         atomicFileWrite,
         createParentDirectories,
         maxInputSize,
+        maxStringLength,
         maxNodeDepth,
         maxNodeCount,
         resolveReferences,

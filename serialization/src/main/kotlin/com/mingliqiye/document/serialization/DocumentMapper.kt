@@ -139,8 +139,15 @@ public abstract class DocumentMapper protected constructor(
     override fun toNode(value: Any?): Node {
         val references = if (config.writeReferences) IdentityReferenceTracker() else null
         val node = serializeValue(value, IdentityHashMap(), 0, null, "$", references = references)
-        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
         return node
+    }
+
+    /**
+     * 按当前配置校验 Node 树深度/节点数；供文本格式 Token 路径使用。
+     */
+    protected fun validateNodeLimits(node: Node) {
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
     }
 
     /**
@@ -152,7 +159,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: Class<T>): T {
-        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
         val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
         @Suppress("UNCHECKED_CAST")
         return deserializeValue(source, targetType, "$") as T
@@ -177,7 +184,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T {
-        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
         val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
         @Suppress("UNCHECKED_CAST")
         return deserializeValue(source, targetType.type, "$") as T

@@ -29,6 +29,8 @@ public open class DocumentMapperConfig protected constructor(
     public val createParentDirectories: Boolean = false,
     /** 单次输入最大字节数；0 表示不限制。 */
     public val maxInputSize: Long = 0L,
+    /** Node 树中单个字符串最大长度；0 表示不限制。 */
+    public val maxStringLength: Int = 0,
     /** Node 树最大深度；0 表示不限制。 */
     public val maxNodeDepth: Int = 0,
     /** Node 树最大节点数；0 表示不限制。 */
@@ -64,6 +66,7 @@ public open class DocumentMapperConfig protected constructor(
         other.atomicFileWrite,
         other.createParentDirectories,
         other.maxInputSize,
+        other.maxStringLength,
         other.maxNodeDepth,
         other.maxNodeCount,
         other.resolveReferences,
@@ -117,6 +120,7 @@ public open class DocumentMapperConfig protected constructor(
             atomicFileWrite: Boolean,
             createParentDirectories: Boolean,
             maxInputSize: Long,
+            maxStringLength: Int,
             maxNodeDepth: Int,
             maxNodeCount: Long,
             resolveReferences: Boolean,
@@ -133,6 +137,7 @@ public open class DocumentMapperConfig protected constructor(
             atomicFileWrite,
             createParentDirectories,
             maxInputSize,
+            maxStringLength,
             maxNodeDepth,
             maxNodeCount,
             resolveReferences,

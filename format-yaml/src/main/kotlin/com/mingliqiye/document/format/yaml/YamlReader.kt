@@ -17,6 +17,7 @@ import com.mingliqiye.document.format.yaml.exception.YamlParseException
 public class YamlReader @JvmOverloads constructor(
     private val source: String,
     private val maxDepth: Int = 0,
+    private val maxAliases: Int = 0,
 ) {
 
     /**
@@ -27,7 +28,7 @@ public class YamlReader @JvmOverloads constructor(
      *
      * @throws YamlParseException YAML 格式非法或包含不支持的类型时抛出
      */
-    public fun read(): Node = YamlNodeMapping.readRoot(source, maxDepth)
+    public fun read(): Node = YamlNodeMapping.readRoot(source, maxDepth, maxAliases)
 
     public companion object {
 

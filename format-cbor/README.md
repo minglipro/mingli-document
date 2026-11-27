@@ -5,7 +5,7 @@ CBOR 二进制格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:cbor:1.2.0")
+implementation("com.mingliqiye.document.format:cbor:1.3.0")
 ```
 
 ## 主要 API
@@ -43,6 +43,25 @@ val restored = mapper.parse(file, User::class.java)
 - 文件/流读写
 - 整数最小长度、bignum、tag 4 decimal
 - canonical map key 排序
+- 可选 CBOR tag 保真
+
+## Tag 保真
+
+默认关闭；开启后使用包装对象：
+
+```kotlin
+val mapper = CborMapper(
+    CborConfig.builder()
+        .preserveTags(true)
+        .build(),
+)
+```
+
+```json
+{"$cborTag":100,"value":"abc"}
+```
+
+写出时使用 `CBORGenerator.writeTag` 还原 tag。默认模式忽略 tag，保持原行为。
 
 ## Canonical CBOR
 

@@ -29,9 +29,19 @@ private val CBOR_FACTORY: CBORFactory = CBORFactory()
  * - [NumberNode] → 整数或十进制分数，见 [writeNumber]
  *
  * 每个对象/数组都按实际元素数量写成定长 CBOR。
+ *
+ * [preserveTags] 为 `true` 时识别 CBOR tag 包装对象
+ * `{"$cborTag": <tag 整数>, "value": <Node>}`：先写 `CBORGenerator.writeTag`，
+ * 再递归写出 `value`，从而支持对象/数组/标量上的 tag 以及嵌套 tag。
+ * 只有恰好两个字段、tag 为 `>= 0` 整数且包含 `value` 字段的对象才算包装；
+ * 其余对象（tag 非整数、value 缺失或多字段）按普通对象写出。
+ *
+ * @param canonical 是否按 canonical map key 顺序写出
+ * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  */
 public class CborWriter(
     private val canonical: Boolean = false,
+    private val preserveTags: Boolean = false,
 ) {
 
     /**
@@ -52,6 +62,14 @@ public class CborWriter(
     }
 
     private fun writeValue(generator: CBORGenerator, node: Node) {
+        if (preserveTags && node is ObjectNode) {
+            val tagged = CborTagWrapper.unwrap(node)
+            if (tagged != null) {
+                writeTag(generator, tagged.tag)
+                writeValue(generator, tagged.value)
+                return
+            }
+        }
         when (node) {
             is ObjectNode -> writeObject(generator, node)
             is ArrayNode -> writeArray(generator, node)
@@ -60,6 +78,14 @@ public class CborWriter(
             is BooleanNode -> generator.writeBoolean(node.value)
             is NullNode -> generator.writeNull()
             is BinaryNode -> generator.writeBinary(node.value)
+        }
+    }
+
+    private fun writeTag(generator: CBORGenerator, tag: Int) {
+        try {
+            generator.writeTag(tag)
+        } catch (e: IllegalArgumentException) {
+            throw CborException("Invalid CBOR tag $tag", e)
         }
     }
 
@@ -118,10 +144,11 @@ public class CborWriter(
 /**
  * 将文档树写成 CBOR 字节。
  *
+ * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @return CBOR 二进制内容
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
-public fun Node.toCborBytes(): ByteArray = CborWriter().write(this)
+public fun Node.toCborBytes(preserveTags: Boolean = false): ByteArray = CborWriter(preserveTags = preserveTags).write(this)
 
 /**
  * 将文档树按 canonical map key 顺序写成 CBOR 字节。
@@ -129,10 +156,11 @@ public fun Node.toCborBytes(): ByteArray = CborWriter().write(this)
  * 对象 key 按 UTF-8 编码长度升序、同长度按字节序排序；数组保持原顺序。
  * 整数已使用最短编码形式。
  *
+ * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @return CBOR 二进制内容
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
-public fun Node.toCanonicalCborBytes(): ByteArray = CborWriter(canonical = true).write(this)
+public fun Node.toCanonicalCborBytes(preserveTags: Boolean = false): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags).write(this)
 
 private val CANONICAL_KEY_ORDER: Comparator<Map.Entry<String, Node>> =
     Comparator { left, right ->

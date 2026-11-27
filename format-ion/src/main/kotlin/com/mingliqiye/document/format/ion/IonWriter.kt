@@ -21,10 +21,15 @@ import java.math.BigInteger
  * 数字按 [NumberNode.raw] 区分 int / decimal：不含小数点或指数的写为 int，
  * 其余写为 decimal；[BinaryNode] 写为 Ion blob。
  *
+ * [preserveTypes] = true 时识别 [IonTypeFidelity] 包装对象并写成对应的
+ * timestamp / symbol / clob / blob。
+ *
  * @param pretty 是否格式化输出
+ * @param preserveTypes 是否识别类型保真包装对象
  */
 internal class IonWriter(
     private val pretty: Boolean,
+    private val preserveTypes: Boolean = false,
 ) {
 
     /**
@@ -33,7 +38,7 @@ internal class IonWriter(
     fun write(node: Node): String {
         val builder = StringBuilder()
         val writer = createWriter(builder)
-        writeIonNode(writer, node)
+        writeIonNode(writer, node, preserveTypes)
         writer.finish()
         return builder.toString()
     }
@@ -49,13 +54,18 @@ internal class IonWriter(
  * 把文档树写入任意 ion-java 写出器（文本或二进制）。
  *
  * [BinaryNode] 写出为 Ion blob；[StringNode] 写出为 Ion string；Ion 的
- * symbol / clob / 注解信息不会写出。文本 [IonWriter] 与 [IonBinaryWriter]
- * 共用该实现。
+ * symbol / clob / 注解信息默认不写出。[preserveTypes] = true 时识别
+ * [IonTypeFidelity] 包装对象并还原为对应 Ion 类型。文本 [IonWriter] 与
+ * [IonBinaryWriter] 共用该实现。
  */
-internal fun writeIonNode(writer: com.amazon.ion.IonWriter, node: Node) {
+internal fun writeIonNode(
+    writer: com.amazon.ion.IonWriter,
+    node: Node,
+    preserveTypes: Boolean = false,
+) {
     when (node) {
-        is ObjectNode -> writeObject(writer, node)
-        is ArrayNode -> writeArray(writer, node)
+        is ObjectNode -> writeObject(writer, node, preserveTypes)
+        is ArrayNode -> writeArray(writer, node, preserveTypes)
         is StringNode -> writer.writeString(node.value)
         is NumberNode -> writeNumber(writer, node)
         is BooleanNode -> writer.writeBool(node.value)
@@ -64,19 +74,22 @@ internal fun writeIonNode(writer: com.amazon.ion.IonWriter, node: Node) {
     }
 }
 
-private fun writeObject(writer: com.amazon.ion.IonWriter, node: ObjectNode) {
+private fun writeObject(writer: com.amazon.ion.IonWriter, node: ObjectNode, preserveTypes: Boolean) {
+    if (preserveTypes && IonTypeFidelity.writeWrapped(writer, node)) {
+        return
+    }
     writer.stepIn(IonType.STRUCT)
     for ((name, child) in node.asMap()) {
         writer.setFieldName(name)
-        writeIonNode(writer, child)
+        writeIonNode(writer, child, preserveTypes)
     }
     writer.stepOut()
 }
 
-private fun writeArray(writer: com.amazon.ion.IonWriter, node: ArrayNode) {
+private fun writeArray(writer: com.amazon.ion.IonWriter, node: ArrayNode, preserveTypes: Boolean) {
     writer.stepIn(IonType.LIST)
     for (child in node) {
-        writeIonNode(writer, child)
+        writeIonNode(writer, child, preserveTypes)
     }
     writer.stepOut()
 }

@@ -38,8 +38,8 @@
 - [x] Avro：非默认 codec、appendTo\n- [ ] Avro：完整 logical type
 - [ ] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
-- [ ] CBOR：tag 保留、CBOR sequence\n- [x] CBOR：canonical map key 排序
-- [ ] Ion：timestamp / symbol / annotation 类型保真
+- [ ] CBOR sequence\n- [x] CBOR：canonical map key 排序\n- [x] CBOR：可选 tag 保真
+- [x] Ion：timestamp / symbol / clob / blob 类型保真
 - [ ] YAML：自定义 tag、跨文档 anchor
 - [ ] TOML：注释保留
 - [ ] CSV：嵌套结构 / 多级 Schema
@@ -49,7 +49,7 @@
 
 ## 阶段 3：性能与流式
 
-- [ ] YAML / XML / Properties / TOML / CSV 原生 Token Reader
+- [x] CSV 原生 Token Reader\n- [ ] YAML / XML / Properties / TOML 原生 Token Reader
 - [x] JSON 紧凑模式纯字节写出
 - [ ] Ryu / Schubfach 数字格式化
 - [ ] 运行期代码生成
@@ -66,8 +66,8 @@
 - [x] Protobuf 解析器 maxDepth
 - [x] Avro 解析器 maxDepth\n- [x] Ion 解析器 maxDepth\n- [x] YAML 解析器 maxDepth\n- [ ] XML / Properties / TOML / CSV maxDepth
 - [x] 全格式 maxInputSize
-- [ ] 全格式 maxStringLength
-- [ ] YAML alias 扩张限制
+- [x] Node 树 maxStringLength
+- [x] YAML alias 扩张限制
 - [ ] Jazzer / JQF 持续 fuzz
 - [ ] 安全测试基线
 

@@ -5,7 +5,7 @@ CSV 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:csv:1.2.0")
+implementation("com.mingliqiye.document.format:csv:1.3.0")
 ```
 
 ## 主要 API
@@ -60,6 +60,7 @@ val mapper = CsvMapper(schema)
 - CSV Schema
 - 文件/流读写
 - Token 直读 Bean
+- 原生 CSV Token Reader
 
 ## 限制
 

@@ -80,7 +80,19 @@ public open class CsvMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(parseCsv(source, mapperConfig))
+    override fun createTextTokenReader(source: String): DocumentTokenReader {
+        val csvConfig = mapperConfig as? CsvConfig
+        if (csvConfig?.schema != null) {
+            val node = parseCsv(source, mapperConfig)
+            validateNodeLimits(node)
+            return NodeTokenReader(node)
+        }
+        return CsvTokenReader(
+            source,
+            csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER,
+            csvConfig?.header ?: DEFAULT_CSV_HEADER,
+        )
+    }
 
     public companion object {
 

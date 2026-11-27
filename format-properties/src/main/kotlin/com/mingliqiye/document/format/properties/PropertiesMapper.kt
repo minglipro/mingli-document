@@ -49,7 +49,11 @@ public open class PropertiesMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(PropertiesReader(source).read())
+    override fun createTextTokenReader(source: String): DocumentTokenReader {
+        val node = PropertiesReader(source).read()
+        validateNodeLimits(node)
+        return NodeTokenReader(node)
+    }
 
     public companion object {
 
