@@ -131,6 +131,7 @@ fun main() {
 | `parse(byteArray, Class)` / `parse(byteArray, DocumentTypeReference)` | 二进制 → Java 实体（二进制 Mapper） |
 | `format(value)` / `formatPretty(value)` | Java 实体 → 紧凑 / 格式化文本 |
 | `formatBytes(value)` | Java 实体 → 二进制（二进制 Mapper） |
+| `fromTokens(tokenReader, Class)` / `fromTokens(tokenReader, DocumentTypeReference)` | Token 流 → Java 实体 |
 | `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
 
 > `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` / `CborMapper` / `SmileMapper` 继承 `DocumentMapper` 或 `BinaryDocumentMapper`；格式模块内部 Codec 不对外暴露。
@@ -918,6 +919,7 @@ val bytes = node.toIonBytes()
 限制：
 
 - 二进制 Ion 当前交由 ion-java 自动识别文本/二进制输入；
+- 二进制 `parse(ByteArray)` 使用 Token 直读 Bean；
 - Ion BLOB/CLOB 映射为 `BinaryNode`，CLOB 写出统一为 BLOB；
 - symbol/timestamp 写出为字符串，Ion 注解忽略。
 
@@ -951,6 +953,7 @@ val smileBytes2 = smileNode.toSmileBytes()
 限制：
 
 - 文本 API `parse(String)` / `format` 不支持，由 `BinaryDocumentMapper` 抛出异常；
+- CBOR/Smile 的 `parse(ByteArray)` 使用 Token 直读 Bean；
 - CBOR/Smile 都是单根单文档；多根流不支持；
 - CBOR byte string 映射为 `BinaryNode`；Smile 使用 Jackson Smile 二进制扩展令牌；
 - CBOR 非有限浮点（NaN/Infinity）拒绝；JSON 兼容层未覆盖所有 CBOR tag。
@@ -981,7 +984,17 @@ mapper.formatBytes(user)
 
 ## Streaming Token API
 
-`serialization` 现在提供格式无关的流式 Token 契约：
+`serialization` 提供格式无关的 Token 契约，并支持 **Token 直连 Bean**：
+
+```text
+byte[] -> DocumentTokenReader
+             ↓
+      DocumentMapper.fromTokens
+             ↓
+           Bean
+```
+
+核心类型：
 
 ```kotlin
 DocumentToken
@@ -991,20 +1004,17 @@ DocumentTokenWriter
 BinaryDocumentMapper
 ```
 
-二进制格式模块可以：
-
-```text
-byte[] -> DocumentTokenReader -> Node
-Node -> DocumentTokenWriter -> byte[]
+```kotlin
+val bean = mapper.fromTokens(tokenReader, User::class.java)
 ```
 
-`BinaryDocumentMapper` 是二进制 Mapper 基类：
+- CBOR、Smile、Ion binary 的 `parse(ByteArray)` 优先走 Token 直读 Bean；
+- 普通 Bean 不构建完整 Node 树；
+- 集合、Map、数组、标量都直接消费 Token；
+- 字段转换器、data class 等仍需要 Node 的局部兼容路径使用 `TokenTreeReader`；
+- Node 树 API、`fromNode`、`toNode` 保持可用。
 
-- 文本 `parse(String)` / `format` 默认抛不支持异常
-- `parse(ByteArray)` / `formatBytes` 使用字节读写函数
-- Bean 映射、转换器、配置仍复用 `DocumentMapper`
-
-这层 API 为后续 CBOR/Smile/Ion binary 提供统一入口。
+`BinaryDocumentMapper` 是二进制 Mapper 基类：文本 API 不支持，字节 API 走 Token 或 Node fallback。
 
 ## 性能基准
 

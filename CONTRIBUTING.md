@@ -468,5 +468,6 @@ build(serialization): 补充 format-json 测试依赖
 - [x] Ion 二进制适配器接入（`format-ion`）
 - [x] CBOR 适配器接入（`format-cbor`）
 - [x] Smile 适配器接入（`format-smile`）
+- [x] Token 直连 Bean 解码（CBOR/Smile/Ion binary）
 - [ ] 补充 CI 门禁
 - [ ] document 私服发布配置
