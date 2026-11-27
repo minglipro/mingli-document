@@ -5,3 +5,5 @@ log
 *.log
 .kotlin
 *.iml
+jmh-result.text
+*.jmh

@@ -1,0 +1,21 @@
+plugins {
+    kotlin("jvm")
+    id("org.jlleitschuh.gradle.ktlint")
+}
+
+kotlin {
+    jvmToolchain(8)
+    explicitApi()
+}
+
+dependencies {
+    api(project(":core"))
+    api(project(":exception"))
+    api(project(":serialization"))
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.15.3")
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
