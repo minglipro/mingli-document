@@ -37,7 +37,7 @@ public open class XmlMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "xml",
-    { source -> XmlReader.from(source, config as? XmlConfig).read() },
+    { source -> XmlReader.from(source, config as? XmlConfig, config.maxNodeDepth).read() },
     { node, pretty -> XmlWriter.from(config as? XmlConfig).write(node, pretty) },
     serializers,
     deserializers,
@@ -47,6 +47,7 @@ public open class XmlMapper internal constructor(
 ) {
 
     private val xmlConfig: XmlConfig? = config as? XmlConfig
+    private val maxNodeDepth: Int = config.maxNodeDepth
 
     /**
      * 创建默认 XML 映射器。
@@ -82,7 +83,7 @@ public open class XmlMapper internal constructor(
         return XmlWriter.from(xmlConfig, rootName).write(toNode(value), pretty)
     }
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(XmlReader.from(source, xmlConfig).read())
+    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(XmlReader.from(source, xmlConfig, maxNodeDepth).read())
 
     public companion object {
 
