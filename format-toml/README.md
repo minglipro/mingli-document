@@ -39,6 +39,7 @@ val text = mapper.format(user)
 - 内联表写出
 - 文件/流读写
 - Token 直读 Bean
+- 原生 TOML Token Reader
 
 ## 限制
 

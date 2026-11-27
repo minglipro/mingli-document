@@ -32,6 +32,8 @@ public open class TomlMapper internal constructor(
     config,
 ) {
 
+    private val mapperConfig: DocumentMapperConfig = config
+
     /**
      * 创建默认 TOML 映射器。
      */
@@ -51,9 +53,12 @@ public open class TomlMapper internal constructor(
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
     override fun createTextTokenReader(source: String): DocumentTokenReader {
-        val node = TomlReader(source).read()
-        validateNodeLimits(node)
-        return NodeTokenReader(node)
+        if (mapperConfig.maxNodeDepth > 0 || mapperConfig.maxNodeCount > 0 || mapperConfig.maxStringLength > 0) {
+            val node = TomlReader(source).read()
+            validateNodeLimits(node)
+            return NodeTokenReader(node)
+        }
+        return TomlTokenReader(source)
     }
 
     public companion object {
