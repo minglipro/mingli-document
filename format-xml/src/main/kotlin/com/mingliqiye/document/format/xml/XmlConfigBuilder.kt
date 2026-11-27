@@ -187,6 +187,45 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 注册多态子类型。
+     *
+     * @param baseClass 基类/接口
+     * @param typeName 类型名
+     * @param subtypeClass 子类型
+     * @return 当前构建器
+     */
+    public fun subtype(baseClass: Class<*>, typeName: String, subtypeClass: Class<*>): XmlConfigBuilder {
+        base.subtype(baseClass, typeName, subtypeClass)
+        return this
+    }
+
+    /**
+     * 注册多态子类型并覆盖类型属性名。
+     *
+     * @param baseClass 基类/接口
+     * @param typeName 类型名
+     * @param subtypeClass 子类型
+     * @param typeProperty 类型属性名
+     * @return 当前构建器
+     */
+    public fun subtype(baseClass: Class<*>, typeName: String, subtypeClass: Class<*>, typeProperty: String): XmlConfigBuilder {
+        base.subtype(baseClass, typeName, subtypeClass, typeProperty)
+        return this
+    }
+
+    /**
+     * 覆盖指定多态基类的类型属性名。
+     *
+     * @param baseClass 基类/接口
+     * @param typeProperty 类型属性名
+     * @return 当前构建器
+     */
+    public fun typeProperty(baseClass: Class<*>, typeProperty: String): XmlConfigBuilder {
+        base.typeProperty(baseClass, typeProperty)
+        return this
+    }
+
+    /**
      * 构建配置。
      */
     public fun build(): XmlConfig {
