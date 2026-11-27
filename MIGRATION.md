@@ -1,4 +1,16 @@
-# 从 1.0.0 迁移到 1.1.0/1.2.0/1.3.0/1.4.0
+# 从 1.0.0 迁移到 1.1.0/1.2.0/1.3.0/1.4.0/1.5.0
+
+## 1.5.0
+
+1.5.0 保持 1.4.0 API 兼容，新增 fuzz 工具链：
+
+```text
+Jazzer 目标
+fuzzJazzer Gradle 任务
+fuzzContinuous Gradle 任务
+```
+
+无需迁移。
 
 ## 1.4.0
 
@@ -47,10 +59,10 @@ remoteReferenceResolver
 请统一升级：
 
 ```kotlin
-implementation(platform("com.mingliqiye.document:mingli-document-bom:1.4.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:1.5.0"))
 ```
 
-或者手动把版本从 `1.0.0` 改为 `1.4.0`。
+或者手动把版本从 `1.0.0` 改为 `1.5.0`。
 
 ## 转换器接口改名
 

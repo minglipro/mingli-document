@@ -40,6 +40,28 @@ gradle :fuzz:test
 gradle :fuzz:fuzzContinuous -PfuzzSeconds=60
 ```
 
+Jazzer 覆盖率引导 fuzz：
+
+```bash
+gradle :fuzz:fuzzJazzer -PfuzzSeconds=30 -PjazzerTarget=com.mingliqiye.document.fuzz.JsonJazzerTarget
+```
+
+可用目标：
+
+```text
+JsonJazzerTarget
+YamlJazzerTarget
+XmlJazzerTarget
+PropertiesJazzerTarget
+TomlJazzerTarget
+CsvJazzerTarget
+IonJazzerTarget
+CborJazzerTarget
+SmileJazzerTarget
+AvroJazzerTarget
+ProtobufJazzerTarget
+```
+
 `fuzzContinuous` 按时间持续生成文本/二进制畸形输入，遇到 StackOverflow 或 OOM
 会以非零退出码终止；普通异常视为被解析器拒绝。
 
