@@ -4,6 +4,7 @@ import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.StringNode
+import com.mingliqiye.document.format.json.JsonMapper
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -31,7 +32,7 @@ class JsonConverterContractTest {
     @Test
     fun beanPropertyContextIsAvailableInBothDirections() {
         val converter = LabelConverter()
-        val mapper = DocumentMapperApi.builder().addConverter(converter).build()
+        val mapper = JsonMapper.builder().addConverter(converter).build()
         val holder = LabelHolder().apply {
             label = Label("v")
             note = "plain"
@@ -67,7 +68,7 @@ class JsonConverterContractTest {
     @Test
     fun rootValueHasNoPropertyContext() {
         val converter = LabelConverter()
-        val mapper = DocumentMapperApi.builder().addConverter(converter).build()
+        val mapper = JsonMapper.builder().addConverter(converter).build()
 
         val node = mapper.toNode(Label("root"))
         assertEquals("?=root", node.asString())
@@ -86,7 +87,7 @@ class JsonConverterContractTest {
 
     @Test
     fun deserializerMayReturnNullForUnconvertibleNode() {
-        val mapper = DocumentMapperApi.builder().addDeserializer(NullReturningDeserializer()).build()
+        val mapper = JsonMapper.builder().addDeserializer(NullReturningDeserializer()).build()
 
         assertNull(mapper.fromNode(StringNode.of("anything"), Label::class.java))
     }

@@ -8,7 +8,7 @@ import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.format.json.JsonCodec
+import com.mingliqiye.document.format.json.JsonMapper
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -25,25 +25,24 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun builderConfigurationReturnsSameBuilderInstance() {
-        val builder = DocumentMapperApi.builder()
+        val builder = JsonMapper.builder()
 
-        assertSame(builder, builder.codec(JsonCodec))
-        assertSame(builder, builder.codec(null))
+        assertSame(builder, builder)
         assertSame(builder, builder.addSerializer(TokenSerializer()))
         assertSame(builder, builder.addDeserializer(TokenDeserializer()))
         assertSame(builder, builder.addConverter(TokenConverter()))
     }
 
     @Test
-    fun builderBuildsMapperWithConfiguredCodec() {
-        val mapper = DocumentMapperApi.builder().codec(JsonCodec).build()
+    fun mapperUsesJsonFormat() {
+        val mapper = JsonMapper()
 
         assertEquals("""{"a":1}""", mapper.format(mapOf("a" to 1)))
     }
 
     @Test
     fun builderRegistersBidirectionalConverter() {
-        val mapper = DocumentMapperApi.builder().addConverter(TokenConverter()).build()
+        val mapper = JsonMapper.builder().addConverter(TokenConverter()).build()
 
         assertEquals("#x", mapper.toNode(Token("x")).asString())
         assertEquals("x", mapper.fromNode(StringNode.of("#x"), Token::class.java).value)
@@ -51,13 +50,13 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun serializerAndDeserializerRegistrationsAreIndependent() {
-        val serializerOnly = DocumentMapperApi.builder().addSerializer(TokenSerializer()).build()
+        val serializerOnly = JsonMapper.builder().addSerializer(TokenSerializer()).build()
         assertEquals("#t", serializerOnly.toNode(Token("t")).asString())
         assertFailsWith<DocumentSerializationException> {
             serializerOnly.fromNode(StringNode.of("#t"), Token::class.java)
         }
 
-        val deserializerOnly = DocumentMapperApi.builder().addDeserializer(TokenDeserializer()).build()
+        val deserializerOnly = JsonMapper.builder().addDeserializer(TokenDeserializer()).build()
         assertEquals("u", deserializerOnly.fromNode(StringNode.of("#u"), Token::class.java).value)
         val beanNode = deserializerOnly.toNode(Token("u")).asObject()
         assertEquals("u", beanNode["value"]?.asString())
@@ -65,7 +64,7 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun toNodeMapsScalarsCollectionsAndBeans() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
 
         assertSame(NullNode.INSTANCE, mapper.toNode(null))
         assertEquals(NodeType.STRING, mapper.toNode("text").type)
@@ -97,7 +96,7 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun fromNodeBuildsBeansAndGenericContainers() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val beanNode = ObjectNode.of(
             "id" to NumberNode.of(9),
             "name" to StringNode.of("小于"),
@@ -127,7 +126,7 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun toNodeFromNodeRoundTripKeepsBeanValues() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val source = AccountBean().apply {
             id = 11
             name = "round"
@@ -144,7 +143,7 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun codecBackedTextApisUseConfiguredCodec() {
-        val mapper = DocumentMapperApi.builder().codec(JsonCodec).build()
+        val mapper = JsonMapper()
         val source = AccountBean().apply {
             id = 3
             name = "json"
@@ -171,8 +170,8 @@ class DocumentMapperApiContractTest {
     }
 
     @Test
-    fun textApisFailWithoutCodec() {
-        val mapper = DocumentMapperApi.builder().build()
+    fun textApisFailWithoutFormat() {
+        val mapper = DefaultDocumentMapper()
         val bean = AccountBean()
 
         assertFailsWith<DocumentSerializationException> { mapper.format(bean) }
@@ -185,7 +184,7 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun convertUsesDocumentTreeAsIntermediate() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val source = AccountBean().apply {
             id = 1
             name = "a"
@@ -206,7 +205,7 @@ class DocumentMapperApiContractTest {
 
     @Test
     fun reifiedHelpersDelegateToDocumentTypeReference() {
-        val mapper = DocumentMapperApi.builder().codec(JsonCodec).build()
+        val mapper = JsonMapper()
         val node = ObjectNode.of("id" to NumberNode.of(7), "name" to StringNode.of("seven"))
 
         with(DocumentMapperApi) {

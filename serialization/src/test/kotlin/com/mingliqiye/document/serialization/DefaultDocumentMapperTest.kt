@@ -7,7 +7,7 @@ import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.format.json.JsonCodec
+import com.mingliqiye.document.format.json.JsonMapper
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -23,7 +23,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun mapperApi() {
-        val mapper: DocumentMapperApi = DefaultDocumentMapper(JsonCodec)
+        val mapper: DocumentMapperApi = JsonMapper()
         val source = User().apply {
             name = "api"
             age = 9
@@ -79,7 +79,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun customConverter() {
-        val mapper = DocumentMapperApi.builder()
+        val mapper = JsonMapper.builder()
             .addConverter(MoneyConverter())
             .build()
 
@@ -92,7 +92,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun fieldLevelConverter() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val wallet = Wallet().apply { money = Money(12) }
 
         val node = mapper.toNode(wallet).asObject()
@@ -104,7 +104,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun fieldLevelConverterHasPriorityOverGlobalConverter() {
-        val mapper = DocumentMapperApi.builder()
+        val mapper = JsonMapper.builder()
             .addConverter(GlobalMoneyConverter())
             .build()
         val wallet = Wallet().apply { money = Money(12) }
@@ -118,7 +118,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun fieldConverterWithoutUseSiteTarget() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val wallet = NaturalWallet().apply { money = Money(12) }
 
         val node = mapper.toNode(wallet).asObject()
@@ -129,7 +129,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun fieldConverterOnGetterTarget() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val wallet = GetterWallet().apply { money = Money(12) }
 
         val node = mapper.toNode(wallet).asObject()
@@ -140,7 +140,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun serializerOnlyFieldConverterFallsBackForDeserialization() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val source = UpperStringBean().apply { name = "abc" }
 
         val node = mapper.toNode(source).asObject()
@@ -151,7 +151,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun invalidFieldConverterThrows() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
 
         val exception = assertFailsWith<DocumentSerializationException> {
             mapper.toNode(InvalidConverterBean())
@@ -161,7 +161,7 @@ class DefaultDocumentMapperTest {
 
     @Test
     fun fieldLevelConverterReadsPropertyAnnotations() {
-        val mapper = DocumentMapperApi.builder().build()
+        val mapper = JsonMapper.builder().build()
         val wallet = LabeledWallet().apply { money = Money(12) }
 
         val node = mapper.toNode(wallet).asObject()

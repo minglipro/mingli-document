@@ -6,9 +6,9 @@ import com.mingliqiye.document.core.Node
 /**
  * Java 实体与文档树之间的映射 API。
  *
- * 对应 `mingli-utils` 的 `JsonApi`，区别是：
+ * 对应 Jackson 的 `ObjectMapper` 抽象，区别是：
  * - 这里不直接绑定 JSON，而是面向统一的 [Node] 树；
- * - 文本解析/格式化通过可选的 `DocumentCodec` 注入；
+ * - 文本解析/格式化由 `JsonMapper`、`YamlMapper` 等格式模块子类注入；
  * - 提供实体与实体、实体与树之间的转换。
  */
 public interface DocumentMapperApi {
@@ -92,11 +92,6 @@ public interface DocumentMapperApi {
     public fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D
 
     public companion object {
-
-        /**
-         * 创建 Mapper 构建器。
-         */
-        public fun builder(): DocumentMapperBuilder = DefaultDocumentMapperBuilder()
 
         /**
          * 按 reified 泛型参数把文档树反序列化为 Java 实体。

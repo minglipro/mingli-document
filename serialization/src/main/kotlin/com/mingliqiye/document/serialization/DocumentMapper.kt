@@ -9,7 +9,6 @@ import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.core.codec.DocumentCodec
 import com.mingliqiye.document.exception.DocumentException
 import java.beans.IntrospectionException
 import java.beans.Introspector
@@ -45,10 +44,10 @@ public class DocumentSerializationException @JvmOverloads constructor(
 ) : DocumentException(message, throwable)
 
 /**
- * Java 实体与 [Node] 树之间的通用映射器。
+ * Java 实体与 [Node] 树之间的通用映射器基类。
  *
  * 该模块只负责实体与树之间的转换，不绑定 JSON/YAML/XML；具体格式由
- * `format-json` 等模块负责。
+ * `format-json`、`format-yaml` 等模块提供 [DocumentMapper] 子类。
  *
  * 支持的 Java 类型：
  * - 基本类型及包装类型、String、枚举、BigDecimal、BigInteger
@@ -57,19 +56,27 @@ public class DocumentSerializationException @JvmOverloads constructor(
  *
  * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
-internal class DefaultDocumentMapper internal constructor(
-    /** 可选的文本格式编解码器；用于 [parse] / [format] 便捷方法。 */
-    public val codec: DocumentCodec?,
+public abstract class DocumentMapper protected constructor(
+    /** 格式名称，例如 json、yaml。 */
+    public val formatName: String,
+    private val parseText: (String) -> Node,
+    private val writeText: (Node, Boolean) -> String,
     private val serializers: Map<Class<*>, JsonSerializer<*>>,
     private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
 ) : DocumentMapperApi {
 
     /**
-     * 创建只做树映射、不解析文本的 Mapper。
+     * 创建不带文本编解码能力的映射器基类构造器。
      *
-     * @param codec 可选的文本格式编解码器
+     * @param formatName 格式名称
+     * @param parseText 文本解析函数
+     * @param writeText 文本写出函数
      */
-    public constructor(codec: DocumentCodec? = null) : this(codec, emptyMap(), emptyMap())
+    protected constructor(
+        formatName: String,
+        parseText: (String) -> Node,
+        writeText: (Node, Boolean) -> String,
+    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap())
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
@@ -120,42 +127,42 @@ internal class DefaultDocumentMapper internal constructor(
     }
 
     /**
-     * 使用配置的 [codec] 将文本解析为 Java 实体。
+     * 使用格式解析函数将文本解析为 Java 实体。
      *
      * @param source 格式文本
      * @param targetType 目标类型
      * @return Java 实体
-     * @throws DocumentSerializationException 未配置 codec 或反序列化失败时抛出
+     * @throws DocumentSerializationException 反序列化失败时抛出
      */
-    override fun <T> parse(source: String, targetType: Class<T>): T = fromNode(requireCodec().parse(source), targetType)
+    override fun <T> parse(source: String, targetType: Class<T>): T = fromNode(parseText(source), targetType)
 
     /**
-     * 使用配置的 [codec] 将文本解析为指定泛型类型。
+     * 使用格式解析函数将文本解析为指定泛型类型。
      *
      * @param source 格式文本
      * @param targetType 目标类型引用
      * @return Java 实体
-     * @throws DocumentSerializationException 未配置 codec 或反序列化失败时抛出
+     * @throws DocumentSerializationException 反序列化失败时抛出
      */
-    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = fromNode(requireCodec().parse(source), targetType)
+    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = fromNode(parseText(source), targetType)
 
     /**
-     * 使用配置的 [codec] 将 Java 实体序列化为文本。
+     * 使用格式写出函数将 Java 实体序列化为文本。
      *
      * @param value Java 实体
      * @return 格式文本
-     * @throws DocumentSerializationException 未配置 codec 或序列化失败时抛出
+     * @throws DocumentSerializationException 序列化失败时抛出
      */
-    override fun format(value: Any?): String = requireCodec().write(toNode(value), false)
+    override fun format(value: Any?): String = writeText(toNode(value), false)
 
     /**
-     * 使用配置的 [codec] 将 Java 实体序列化为格式化文本。
+     * 使用格式写出函数将 Java 实体序列化为格式化文本。
      *
      * @param value Java 实体
      * @return 格式化文本
-     * @throws DocumentSerializationException 未配置 codec 或序列化失败时抛出
+     * @throws DocumentSerializationException 序列化失败时抛出
      */
-    override fun formatPretty(value: Any?): String = requireCodec().write(toNode(value), true)
+    override fun formatPretty(value: Any?): String = writeText(toNode(value), true)
 
     /**
      * 将任意对象转换为指定 Java 类型。
@@ -174,10 +181,6 @@ internal class DefaultDocumentMapper internal constructor(
      * @return 目标对象
      */
     override fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D = fromNode(toNode(source), destinationType)
-
-    private fun requireCodec(): DocumentCodec = codec ?: throw DocumentSerializationException(
-        "DefaultDocumentMapper has no DocumentCodec; build with DocumentMapperApi.builder().codec(...) to use parse/format",
-    )
 
     private fun serializeWithSerializer(
         serializer: JsonSerializer<*>,
@@ -794,3 +797,13 @@ internal class DefaultDocumentMapper internal constructor(
         }
     }
 }
+
+/**
+ * 不带格式实现的内部 Mapper，用于只做树映射的场景与测试。
+ */
+internal class DefaultDocumentMapper :
+    DocumentMapper(
+        "none",
+        { throw DocumentSerializationException("This DocumentMapper has no text parser") },
+        { _, _ -> throw DocumentSerializationException("This DocumentMapper has no text writer") },
+    )

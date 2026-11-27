@@ -1,17 +1,18 @@
 package com.mingliqiye.document.format.yaml
 
 import com.mingliqiye.document.core.Node
-import com.mingliqiye.document.core.codec.DocumentCodec
 
 /**
- * YAML 格式编解码器。
+ * YAML 文本编解码内部实现，仅供 [YamlMapper] 与同模块测试使用。
  */
-public object YamlCodec : DocumentCodec {
+internal object YamlCodec {
 
-    override val format: String
-        get() = "yaml"
+    /** 格式名称。 */
+    val format: String = "yaml"
 
-    override fun parse(source: String): Node = YamlReader(source).read()
+    /** 解析 YAML 文本。 */
+    fun parse(source: String): Node = YamlReader(source).read()
 
-    override fun write(node: Node, pretty: Boolean): String = YamlWriter(pretty).write(node)
+    /** 写出 YAML 文本。 */
+    fun write(node: Node, pretty: Boolean): String = YamlWriter(pretty).write(node)
 }

@@ -10,6 +10,7 @@ kotlin {
 
 dependencies {
     api(project(":core"))
+    api(project(":serialization"))
     testImplementation(kotlin("test"))
 }
 

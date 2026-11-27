@@ -1,17 +1,18 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.core.Node
-import com.mingliqiye.document.core.codec.DocumentCodec
 
 /**
- * JSON 格式编解码器。
+ * JSON 文本编解码内部实现，仅供 [JsonMapper] 与同模块测试使用。
  */
-public object JsonCodec : DocumentCodec {
+internal object JsonCodec {
 
-    override val format: String
-        get() = "json"
+    /** 格式名称。 */
+    val format: String = "json"
 
-    override fun parse(source: String): Node = JsonReader(source).read()
+    /** 解析 JSON 文本。 */
+    fun parse(source: String): Node = JsonReader(source).read()
 
-    override fun write(node: Node, pretty: Boolean): String = JsonWriter(pretty).write(node)
+    /** 写出 JSON 文本。 */
+    fun write(node: Node, pretty: Boolean): String = JsonWriter(pretty).write(node)
 }
