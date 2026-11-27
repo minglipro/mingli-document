@@ -74,7 +74,7 @@ core
 DocumentMapperApi          -> DefaultDocumentMapper
 DocumentCodec              -> JsonCodec
 Node                       -> DefaultObjectNode 等
-BeanIntrospector           -> DefaultBeanIntrospector
+JsonConverter              -> 用户自定义实现
 ```
 
 ### 3.2 不强制接口化的内容
@@ -86,10 +86,13 @@ BeanIntrospector           -> DefaultBeanIntrospector
 - 不可变值对象
 - 异常类层次
 - 纯数据 DTO
+- 模块内部的具体实现类（`internal` 或 `private`）
 
 判断标准：
 
 > 如果这个类型没有可替换行为，不要为了“全部接口化”增加空接口。
+
+内部实现类只是实现细节，不需要为了拆分而暴露成 SPI。只有当调用方确实需要替换该行为时，才把它提升为公开接口。
 
 ### 3.3 命名
 
@@ -149,15 +152,16 @@ Node
 ```text
 DocumentMapperApi
     └── DefaultDocumentMapper
-
-内部 SPI：
-BeanIntrospector
-NodeSerializer
-NodeDeserializer
-ConverterRegistry
 ```
 
-`DefaultDocumentMapper` 只负责编排，不继续堆积反射、类型转换和集合处理细节。
+`DefaultDocumentMapper` 负责编排，内部可通过 `private` 方法或 `internal` 具体类组织反射、类型转换和集合处理。
+
+规则：
+
+- 不新增内部 SPI 接口，除非确认存在第二个可替换实现；
+- 不引入 Java `ServiceLoader` / `META-INF/services` 自动发现；
+- 对外扩展点只保留：`DocumentCodec`、`JsonSerializer`、`JsonDeserializer`、`JsonConverter`；
+- 未来 YAML/XML 只实现 `DocumentCodec`，不依赖 `serialization` 内部实现。
 
 ---
 
