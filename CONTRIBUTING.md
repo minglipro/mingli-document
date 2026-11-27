@@ -248,7 +248,7 @@ Maven 坐标：
 版本与分组在根 `gradle.properties`：
 
 ```properties
-projectVersion=1.0-SNAPSHOT
+projectVersion=1.0.0
 projectGroup=com.mingliqiye.document
 formatProjectGroup=com.mingliqiye.document.format
 jvmVersion=8

@@ -50,10 +50,10 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:json:1.0.0")
 
     // 需要 Kotlin data class 时
-    implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:serialization-kotlin:1.0.0")
 }
 ```
 
