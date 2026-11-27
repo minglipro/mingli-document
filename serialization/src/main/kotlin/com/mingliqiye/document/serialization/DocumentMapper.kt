@@ -372,15 +372,15 @@ public abstract class DocumentMapper protected constructor(
             type == String::class.java || type == CharSequence::class.java -> reader.readString()
             type == Char::class.java || type == Character::class.java -> readCharacter(reader, path)
             type == Boolean::class.java || type == java.lang.Boolean::class.java -> reader.readBoolean()
-            type == Byte::class.java || type == java.lang.Byte::class.java -> readNumberNode(reader).toByte()
-            type == Short::class.java || type == java.lang.Short::class.java -> readNumberNode(reader).toShort()
-            type == Int::class.java || type == java.lang.Integer::class.java -> readNumberNode(reader).toInt()
-            type == Long::class.java || type == java.lang.Long::class.java -> readNumberNode(reader).toLong()
-            type == Float::class.java || type == java.lang.Float::class.java -> readNumberNode(reader).toFloat()
-            type == Double::class.java || type == java.lang.Double::class.java -> readNumberNode(reader).toDouble()
-            type == BigDecimal::class.java -> readNumberNode(reader).value
-            type == BigInteger::class.java -> readNumberNode(reader).toBigInteger()
-            type == Number::class.java -> readNumberNode(reader).value
+            type == Byte::class.java || type == java.lang.Byte::class.java -> readNumberValue(reader, type)
+            type == Short::class.java || type == java.lang.Short::class.java -> readNumberValue(reader, type)
+            type == Int::class.java || type == java.lang.Integer::class.java -> readNumberValue(reader, type)
+            type == Long::class.java || type == java.lang.Long::class.java -> readNumberValue(reader, type)
+            type == Float::class.java || type == java.lang.Float::class.java -> readNumberValue(reader, type)
+            type == Double::class.java || type == java.lang.Double::class.java -> readNumberValue(reader, type)
+            type == BigDecimal::class.java -> readNumberValue(reader, type)
+            type == BigInteger::class.java -> readNumberValue(reader, type)
+            type == Number::class.java -> readNumberValue(reader, type)
             type.isEnum -> enumValue(type, reader.readString(), path)
             type.isArray -> readReflectArray(reader, type.componentType, path)
             Collection::class.java.isAssignableFrom(type) -> readCollection(reader, Any::class.java, type, path)
@@ -421,7 +421,19 @@ public abstract class DocumentMapper protected constructor(
         return value[0]
     }
 
-    private fun readNumberNode(reader: DocumentValueReader): NumberNode = NumberNode.ofRaw(reader.readNumberRaw())
+    private fun readNumberValue(reader: DocumentValueReader, type: Class<*>): Any {
+        val raw = reader.readNumberRaw()
+        return when (type) {
+            Byte::class.java, java.lang.Byte::class.java -> raw.toByteOrNull() ?: BigDecimal(raw).byteValueExact()
+            Short::class.java, java.lang.Short::class.java -> raw.toShortOrNull() ?: BigDecimal(raw).shortValueExact()
+            Int::class.java, java.lang.Integer::class.java -> raw.toIntOrNull() ?: BigDecimal(raw).intValueExact()
+            Long::class.java, java.lang.Long::class.java -> raw.toLongOrNull() ?: BigDecimal(raw).longValueExact()
+            Float::class.java, java.lang.Float::class.java -> raw.toFloatOrNull() ?: BigDecimal(raw).toFloat()
+            Double::class.java, java.lang.Double::class.java -> raw.toDoubleOrNull() ?: BigDecimal(raw).toDouble()
+            BigInteger::class.java -> raw.toBigIntegerOrNull() ?: BigDecimal(raw).toBigIntegerExact()
+            else -> BigDecimal(raw)
+        }
+    }
 
     private fun readCollection(
         reader: DocumentValueReader,
