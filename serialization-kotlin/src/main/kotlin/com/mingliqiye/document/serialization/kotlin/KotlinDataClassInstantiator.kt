@@ -7,7 +7,9 @@ import com.mingliqiye.document.serialization.InstantiationContext
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import java.lang.reflect.Field
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.jvm.kotlin
+import kotlin.reflect.KFunction
 import kotlin.reflect.KParameter
 import kotlin.reflect.KProperty1
 import kotlin.reflect.full.memberProperties
@@ -25,46 +27,63 @@ import kotlin.reflect.jvm.javaType
  */
 internal object KotlinDataClassInstantiator : ObjectInstantiator {
 
+    private val cache = ConcurrentHashMap<Class<*>, DataClassMetadata>()
+
     override fun instantiate(
         type: Class<*>,
         node: ObjectNode,
         context: InstantiationContext,
     ): Any? {
-        val kClass = type.kotlin
-        if (!kClass.isData) {
+        if (!type.kotlin.isData) {
             return null
         }
-        val constructor = kClass.primaryConstructor ?: return null
-        constructor.isAccessible = true
+        val metadata = cache.computeIfAbsent(type, ::createMetadata)
         val arguments = LinkedHashMap<KParameter, Any?>()
 
-        for (parameter in constructor.parameters) {
-            if (parameter.kind != KParameter.Kind.VALUE) {
+        for (parameterMetadata in metadata.parameters) {
+            val parameter = parameterMetadata.parameter
+            if (parameterMetadata.ignored) {
                 continue
             }
-            val propertyName = parameter.name ?: continue
-            val property = kClass.memberProperties.firstOrNull { it.name == propertyName }
-            if (isIgnored(type, property, propertyName)) {
-                continue
-            }
-            val fieldName = documentName(type, property, parameter, propertyName)
-            val valueNode = node[fieldName]
+            val valueNode = node[parameterMetadata.fieldName]
             if (valueNode == null) {
                 if (parameter.isOptional) {
                     continue
                 }
                 throw DocumentSerializationException(
-                    "Missing required data class parameter '$propertyName' at ${context.path}",
+                    "Missing required data class parameter '${parameter.name}' at ${context.path}",
                 )
             }
             arguments[parameter] = context.deserialize(valueNode, parameter.type.javaType)
         }
 
         return try {
-            constructor.callBy(arguments)
+            metadata.constructor.callBy(arguments)
         } catch (e: Exception) {
             throw DocumentSerializationException("Cannot instantiate data class ${type.name}", e)
         }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun createMetadata(type: Class<*>): DataClassMetadata {
+        val kClass = type.kotlin
+        val constructor = kClass.primaryConstructor as KFunction<Any>?
+            ?: throw DocumentSerializationException("Data class ${type.name} has no primary constructor")
+        constructor.isAccessible = true
+        val properties = kClass.memberProperties.associateBy { it.name }
+        val parameters = constructor.parameters
+            .filter { it.kind == KParameter.Kind.VALUE }
+            .map { parameter ->
+                val propertyName = parameter.name
+                    ?: throw DocumentSerializationException("Data class ${type.name} has unnamed parameter")
+                val property = properties[propertyName]
+                DataClassParameterMetadata(
+                    parameter = parameter,
+                    fieldName = documentName(type, property, parameter, propertyName),
+                    ignored = isIgnored(type, property, propertyName),
+                )
+            }
+        return DataClassMetadata(constructor, parameters)
     }
 
     private fun documentName(

@@ -70,6 +70,7 @@ public abstract class DocumentMapper protected constructor(
     ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null, null)
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
+    private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
 
     /**
@@ -763,7 +764,15 @@ public abstract class DocumentMapper protected constructor(
         else -> throw DocumentSerializationException("Unsupported component type: $type")
     }
 
-    private fun documentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty {
+    private fun documentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty =
+        documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
+            .computeIfAbsent(property.name) { createDocumentProperty(type, property) }
+
+    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty =
+        documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
+            .computeIfAbsent(field.name) { createDocumentProperty(type, field) }
+
+    private fun createDocumentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty {
         val field = findField(type, property.name)
         val elements = listOfNotNull(property.readMethod, property.writeMethod, field)
         val propertyType = property.readMethod?.genericReturnType
@@ -778,7 +787,7 @@ public abstract class DocumentMapper protected constructor(
         )
     }
 
-    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(
+    private fun createDocumentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(
         type,
         field.name,
         field.genericType,
