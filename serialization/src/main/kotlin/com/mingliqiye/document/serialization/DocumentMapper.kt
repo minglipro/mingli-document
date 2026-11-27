@@ -153,7 +153,7 @@ public abstract class DocumentMapper protected constructor(
      */
     override fun <T> fromNode(node: Node, targetType: Class<T>): T {
         NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
-        val source = if (config.resolveReferences) ReferenceResolver.resolve(node) else node
+        val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
         @Suppress("UNCHECKED_CAST")
         return deserializeValue(source, targetType, "$") as T
     }
@@ -178,7 +178,7 @@ public abstract class DocumentMapper protected constructor(
      */
     override fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T {
         NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
-        val source = if (config.resolveReferences) ReferenceResolver.resolve(node) else node
+        val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
         @Suppress("UNCHECKED_CAST")
         return deserializeValue(source, targetType.type, "$") as T
     }

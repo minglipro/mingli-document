@@ -630,6 +630,6 @@ private fun buildLegacyDescriptor(): Descriptor {
     ).findMessageTypeByName("Legacy")
 }
 
-private val personDescriptor: Descriptor by lazy { buildPersonDescriptor() }
+internal val personDescriptor: Descriptor by lazy { buildPersonDescriptor() }
 
 private val legacyDescriptor: Descriptor by lazy { buildLegacyDescriptor() }

@@ -32,8 +32,9 @@ import java.io.StringReader
  *
  * @param source Ion 文本
  */
-public class IonReader(
+public class IonReader @JvmOverloads constructor(
     private val source: String,
+    private val maxDepth: Int = 0,
 ) {
 
     /**
@@ -41,7 +42,7 @@ public class IonReader(
      *
      * @throws IonParseException Ion 格式非法、根值缺失或存在多个根值时抛出
      */
-    public fun read(): Node = readIonNode(ION_SYSTEM.newReader(StringReader(source)))
+    public fun read(): Node = readIonNode(ION_SYSTEM.newReader(StringReader(source)), maxDepth)
 
     public companion object {
 
@@ -65,9 +66,9 @@ public class IonReader(
  * 读取完成后关闭底层读取器；ion-java 的 `IonException` 统一转换为
  * [IonParseException]。文本 [IonReader] 与 [IonBinaryReader] 共用该实现。
  */
-internal fun readIonNode(reader: com.amazon.ion.IonReader): Node {
+internal fun readIonNode(reader: com.amazon.ion.IonReader, maxDepth: Int = 0): Node {
     try {
-        return readDocument(reader)
+        return readDocument(reader, maxDepth)
     } catch (e: com.amazon.ion.IonException) {
         throw IonParseException("Invalid Ion: ${e.message}", e)
     } finally {
@@ -75,17 +76,17 @@ internal fun readIonNode(reader: com.amazon.ion.IonReader): Node {
     }
 }
 
-private fun readDocument(reader: com.amazon.ion.IonReader): Node {
+private fun readDocument(reader: com.amazon.ion.IonReader, maxDepth: Int): Node {
     val firstType = reader.next()
         ?: throw IonParseException("Ion document has no top-level value")
-    val node = readValue(reader, firstType)
+    val node = readValue(reader, firstType, 1, maxDepth)
     if (reader.next() != null) {
         throw IonParseException("Ion document must contain exactly one top-level value")
     }
     return node
 }
 
-private fun readValue(reader: com.amazon.ion.IonReader, type: IonType): Node {
+private fun readValue(reader: com.amazon.ion.IonReader, type: IonType, depth: Int, maxDepth: Int): Node {
     if (reader.isNullValue()) {
         return NullNode.INSTANCE
     }
@@ -98,8 +99,8 @@ private fun readValue(reader: com.amazon.ion.IonReader, type: IonType): Node {
         IonType.TIMESTAMP -> StringNode.of(requireTimestamp(reader))
         IonType.SYMBOL, IonType.STRING -> StringNode.of(reader.stringValue())
         IonType.CLOB, IonType.BLOB -> BinaryNode.of(reader.newBytes())
-        IonType.LIST, IonType.SEXP -> readArrayNode(reader)
-        IonType.STRUCT -> readObjectNode(reader)
+        IonType.LIST, IonType.SEXP -> readArrayNode(reader, depth, maxDepth)
+        IonType.STRUCT -> readObjectNode(reader, depth, maxDepth)
         IonType.DATAGRAM -> throw IonParseException("Unexpected Ion datagram value")
     }
 }
@@ -118,28 +119,36 @@ private fun requireTimestamp(reader: com.amazon.ion.IonReader): String {
     return timestamp.toString()
 }
 
-private fun readArrayNode(reader: com.amazon.ion.IonReader): ArrayNode {
+private fun readArrayNode(reader: com.amazon.ion.IonReader, depth: Int, maxDepth: Int): ArrayNode {
+    checkDepth(depth, maxDepth)
     reader.stepIn()
     val elements = ArrayList<Node>()
     while (true) {
         val childType = reader.next() ?: break
-        elements.add(readValue(reader, childType))
+        elements.add(readValue(reader, childType, depth + 1, maxDepth))
     }
     reader.stepOut()
     return ArrayNode.from(elements)
 }
 
-private fun readObjectNode(reader: com.amazon.ion.IonReader): ObjectNode {
+private fun readObjectNode(reader: com.amazon.ion.IonReader, depth: Int, maxDepth: Int): ObjectNode {
+    checkDepth(depth, maxDepth)
     reader.stepIn()
     val fields = LinkedHashMap<String, Node>()
     while (true) {
         val childType = reader.next() ?: break
         val fieldName = reader.getFieldName()
             ?: throw IonParseException("Ion struct field is missing a name")
-        fields[fieldName] = readValue(reader, childType)
+        fields[fieldName] = readValue(reader, childType, depth + 1, maxDepth)
     }
     reader.stepOut()
     return ObjectNode.from(fields)
+}
+
+private fun checkDepth(depth: Int, maxDepth: Int) {
+    if (maxDepth > 0 && depth > maxDepth) {
+        throw IonParseException("Ion nesting depth $depth exceeds maxDepth $maxDepth")
+    }
 }
 
 private fun closeQuietly(reader: com.amazon.ion.IonReader) {

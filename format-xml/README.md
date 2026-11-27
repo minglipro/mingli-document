@@ -5,7 +5,7 @@ XML 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:xml:1.1.0")
+implementation("com.mingliqiye.document.format:xml:1.2.0")
 ```
 
 ## 主要 API
@@ -50,6 +50,7 @@ val mapper = XmlMapper(
 - `PREFIX` / `CLARK` 命名空间
 - 混合内容 `PRESERVE` / `PRESERVE_ORDERED` / `REJECT`
 - `PRESERVE_ORDERED` 使用 `#content` 数组保留文本与子元素顺序
+- 解析深度限制
 - XXE 防护
 - Token 直读 Bean
 

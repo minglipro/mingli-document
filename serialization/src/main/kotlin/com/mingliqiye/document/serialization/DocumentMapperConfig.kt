@@ -44,6 +44,8 @@ public open class DocumentMapperConfig protected constructor(
      * 流式 `writeTo` 路径不参与引用写出。默认关闭，关闭时保持原有循环检测行为。
      */
     public val writeReferences: Boolean = false,
+    /** 可选远程 `$ref` 解析器；为 `null` 时远程引用会报错。 */
+    public val remoteReferenceResolver: RemoteReferenceResolver? = null,
     private val subtypeRegistries: Map<Class<*>, SubtypeRegistry> = emptyMap(),
 ) {
 
@@ -66,6 +68,7 @@ public open class DocumentMapperConfig protected constructor(
         other.maxNodeCount,
         other.resolveReferences,
         other.writeReferences,
+        other.remoteReferenceResolver,
         other.subtypeRegistries,
     )
 
@@ -118,6 +121,7 @@ public open class DocumentMapperConfig protected constructor(
             maxNodeCount: Long,
             resolveReferences: Boolean,
             writeReferences: Boolean = false,
+            remoteReferenceResolver: RemoteReferenceResolver? = null,
             subtypes: SubtypeRegistries = SubtypeRegistries.EMPTY,
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
@@ -133,6 +137,7 @@ public open class DocumentMapperConfig protected constructor(
             maxNodeCount,
             resolveReferences,
             writeReferences,
+            remoteReferenceResolver,
             subtypes.toMap(),
         )
     }

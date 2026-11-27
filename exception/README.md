@@ -12,7 +12,7 @@ DocumentTypeException
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:exception:1.1.0")
+implementation("com.mingliqiye.document:exception:1.2.0")
 ```
 
 ## 说明

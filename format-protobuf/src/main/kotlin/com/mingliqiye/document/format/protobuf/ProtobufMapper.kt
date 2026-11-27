@@ -24,9 +24,10 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
 public class ProtobufMapper @JvmOverloads constructor(
     public val descriptor: Descriptor,
     public val unknownFieldPolicy: ProtobufUnknownFieldPolicy = ProtobufUnknownFieldPolicy.FAIL,
+    public val maxDepth: Int = 0,
 ) : BinaryDocumentMapper(
     FORMAT_NAME,
-    { source -> ProtobufWireCodec.decode(descriptor, source, unknownFieldPolicy) },
+    { source -> ProtobufWireCodec.decode(descriptor, source, unknownFieldPolicy, maxDepth) },
     { node, _ -> ProtobufWireCodec.encode(descriptor, node) },
     emptyMap(),
     emptyMap(),

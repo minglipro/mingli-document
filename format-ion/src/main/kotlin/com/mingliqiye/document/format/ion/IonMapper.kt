@@ -29,14 +29,14 @@ public open class IonMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "ion",
-    { source -> IonReader(source).read() },
+    { source -> IonReader(source, config.maxNodeDepth).read() },
     { node, pretty -> IonWriter(pretty).write(node) },
     serializers,
     deserializers,
     objectInstantiator,
     propertyMetadataResolver,
     config,
-    { source -> IonBinaryReader(source).read() },
+    { source -> IonBinaryReader(source, config.maxNodeDepth).read() },
     { node, _ -> IonBinaryWriter().write(node) },
 ) {
 

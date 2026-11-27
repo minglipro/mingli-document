@@ -28,7 +28,7 @@ public open class YamlMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "yaml",
-    { source -> YamlReader(source).read() },
+    { source -> YamlReader(source, config.maxNodeDepth).read() },
     { node, pretty -> YamlWriter(pretty).write(node) },
     serializers,
     deserializers,
@@ -38,6 +38,7 @@ public open class YamlMapper internal constructor(
 ) {
 
     private val yamlConfig: YamlConfig? = config as? YamlConfig
+    private val maxNodeDepth: Int = config.maxNodeDepth
 
     /**
      * 创建默认 YAML 映射器。
@@ -109,7 +110,7 @@ public open class YamlMapper internal constructor(
      */
     public fun formatAll(values: Iterable<Any?>): String = YamlCodec.writeAll(values.map(::toNode), yamlConfig?.pretty == true)
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(YamlReader(source).read())
+    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(YamlReader(source, maxNodeDepth).read())
 
     public companion object {
 

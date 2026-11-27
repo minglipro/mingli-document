@@ -7,7 +7,7 @@ Protocol Buffers 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:protobuf:1.1.0")
+implementation("com.mingliqiye.document.format:protobuf:1.2.0")
 ```
 
 ## 主要 API
@@ -49,7 +49,20 @@ val mapper = ProtobufMapper(descriptor)
 - 嵌套 message
 - oneof
 - 未知字段策略 `FAIL` / `IGNORE`
+- 解析深度限制
 - 文件/流读写
+
+## 解析深度
+
+```kotlin
+val mapper = ProtobufMapper(
+    descriptor,
+    ProtobufUnknownFieldPolicy.FAIL,
+    maxDepth = 64,
+)
+```
+
+超过限制抛出 `ProtobufParseException`。
 
 ## 限制
 

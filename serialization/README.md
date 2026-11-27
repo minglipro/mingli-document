@@ -19,7 +19,7 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization:1.1.0")
+implementation("com.mingliqiye.document:serialization:1.2.0")
 ```
 
 ## 主要 API
@@ -112,6 +112,21 @@ val mapper = JsonMapper(
 ```
 
 仅 `toNode` / Node 路径支持；流式 `format` 仍保持原行为。
+
+远程 `$ref` 需要显式提供解析器：
+
+```kotlin
+val mapper = JsonMapper(
+    DocumentMapperConfig.builder()
+        .resolveReferences(true)
+        .remoteReferenceResolver { uri ->
+            loadDocument(uri) // 返回外部文档 Node
+        }
+        .build(),
+)
+```
+
+`remoteReferenceResolver` 默认 `null`，此时远程引用直接报错；URI 校验、IO 与缓存由调用方负责。
 
 ## 转换器
 

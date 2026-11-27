@@ -17,8 +17,9 @@ import java.io.ByteArrayInputStream
  *
  * @param source 二进制 Ion 内容
  */
-public class IonBinaryReader(
+public class IonBinaryReader @JvmOverloads constructor(
     private val source: ByteArray,
+    private val maxDepth: Int = 0,
 ) {
 
     /**
@@ -26,7 +27,7 @@ public class IonBinaryReader(
      *
      * @throws IonParseException Ion 数据非法、根值缺失或存在多个根值时抛出
      */
-    public fun read(): Node = readIonNode(ION_SYSTEM.newReader(ByteArrayInputStream(source)))
+    public fun read(): Node = readIonNode(ION_SYSTEM.newReader(ByteArrayInputStream(source)), maxDepth)
 
     public companion object {
 

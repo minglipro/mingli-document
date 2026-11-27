@@ -21,7 +21,7 @@ DocumentTypeReference
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:core:1.1.0")
+implementation("com.mingliqiye.document:core:1.2.0")
 ```
 
 ## 示例

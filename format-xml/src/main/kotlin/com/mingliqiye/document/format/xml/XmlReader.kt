@@ -14,6 +14,7 @@ import org.w3c.dom.Element
 import org.xml.sax.InputSource
 import java.io.StringReader
 import java.math.BigDecimal
+import java.util.ArrayDeque
 import java.util.Base64
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -57,6 +58,7 @@ public class XmlReader(
     private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     private val mixedContentPolicy: XmlMixedContentPolicy = XmlMixedContentPolicy.PRESERVE,
     private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
+    private val maxDepth: Int = 0,
 ) {
 
     init {
@@ -104,7 +106,29 @@ public class XmlReader(
             throw XmlParseException("Invalid XML: ${e.message}", e)
         }
         val root = document.documentElement ?: throw XmlParseException("XML document has no root element")
+        checkDepth(root)
         return toNode(root)
+    }
+
+    private fun checkDepth(root: Element) {
+        if (maxDepth <= 0) {
+            return
+        }
+        val stack = ArrayDeque<Pair<org.w3c.dom.Node, Int>>()
+        stack.addLast(root to 1)
+        while (stack.isNotEmpty()) {
+            val (current, depth) = stack.removeLast()
+            if (depth > maxDepth) {
+                throw XmlParseException("XML nesting depth $depth exceeds maxDepth $maxDepth")
+            }
+            val children = current.childNodes
+            for (index in 0 until children.length) {
+                val child = children.item(index)
+                if (child.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
+                    stack.addLast(child to depth + 1)
+                }
+            }
+        }
     }
 
     private fun toNode(element: Element): Node {
@@ -401,7 +425,7 @@ public class XmlReader(
          * @param xmlConfig XML 配置；`null` 时使用默认行为
          * @return XML 读取器
          */
-        internal fun from(source: String, xmlConfig: XmlConfig?): XmlReader = XmlReader(
+        internal fun from(source: String, xmlConfig: XmlConfig?, maxDepth: Int = 0): XmlReader = XmlReader(
             source,
             xmlConfig?.attributePrefix,
             xmlConfig?.namespaceAware == true,
@@ -410,6 +434,7 @@ public class XmlReader(
             xmlConfig?.itemsKey ?: XmlConfig.DEFAULT_ITEMS_KEY,
             xmlConfig?.mixedContentPolicy ?: XmlMixedContentPolicy.PRESERVE,
             xmlConfig?.contentKey ?: XmlConfig.DEFAULT_CONTENT_KEY,
+            maxDepth,
         )
     }
 }

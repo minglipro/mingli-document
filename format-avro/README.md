@@ -7,7 +7,7 @@ Apache Avro 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:avro:1.1.0")
+implementation("com.mingliqiye.document.format:avro:1.2.0")
 ```
 
 ## 主要 API
@@ -68,6 +68,7 @@ mapper.appendContainer(file, records)
 - OCF codec：null / deflate / snappy
 - appendTo 文件追加
 - writer/reader 双 Schema 演进
+- 解析深度限制
 - 文件/流读写
 
 ## 限制
