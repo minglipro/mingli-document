@@ -72,6 +72,14 @@ License: Apache License, Version 2.0
 https://github.com/amzn/ion-java
 https://www.apache.org/licenses/LICENSE-2.0
 
+Jackson (jackson-core, jackson-databind, jackson-annotations,
+jackson-dataformat-cbor, jackson-dataformat-smile) 2.15.3
+--------------------------------------------------------------------------------
+Copyright 2009-2024 FasterXML, LLC and contributors.
+License: Apache License, Version 2.0
+https://github.com/FasterXML/jackson
+https://www.apache.org/licenses/LICENSE-2.0
+
 The full Apache License, Version 2.0 text is included in the project LICENSE file.
 
 ANTLR 4 Runtime BSD 3-Clause notice

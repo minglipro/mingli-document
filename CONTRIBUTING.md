@@ -37,7 +37,9 @@
 | `format-properties` | Properties Mapper | `serialization`、`core` |
 | `format-toml` | TOML Mapper | `serialization`、`core`、Tomlj |
 | `format-csv` | CSV Mapper | `serialization`、`core`、Commons CSV |
-| `format-ion` | Ion Mapper | `serialization`、`core`、Ion Java |
+| `format-ion` | Ion Mapper（文本 + 二进制） | `serialization`、`core`、Ion Java |
+| `format-cbor` | CBOR Mapper | `serialization`、`core`、Jackson CBOR |
+| `format-smile` | Smile Mapper | `serialization`、`core`、Jackson Smile |
 | `serialization` | Java 实体与树之间的映射、DocumentMapper 基类 | `core`、`annotation` |
 | `serialization-kotlin` | Kotlin data class 模块函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 | `benchmarks` | JMH 性能基准（开发工具，不发布） | 各模块、JMH、Jackson（仅测试） |
@@ -58,13 +60,15 @@ core
 ├── format-toml
 ├── format-csv
 ├── format-ion
+├── format-cbor
+├── format-smile
       └── serialization-kotlin
 ```
 
 规则：
 
 - `core` 不能依赖任何具体格式模块。
-- `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`serialization`。
+- `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`format-cbor`、`format-smile`、`serialization`。
 - `format-*` 依赖 `serialization` 与 `core`，通过继承 `DocumentMapper` 暴露格式 Mapper。
 - `serialization-kotlin` 提供 `kotlinModule()` 与 kotlin-reflect，不绑定具体格式。
 - `serialization` 主代码不依赖具体格式。
@@ -174,7 +178,9 @@ DocumentMapperApi
           ├── PropertiesMapper（format-properties）
           ├── TomlMapper（format-toml）
           ├── CsvMapper（format-csv）
-          └── IonMapper（format-ion）
+          ├── IonMapper（format-ion）
+          ├── CborMapper（format-cbor）
+          └── SmileMapper（format-smile）
 ```
 
 `DocumentMapper` 负责编排与实体映射，内部通过 `private` 方法或 `internal` 具体类组织反射、类型转换和集合处理。
@@ -459,5 +465,8 @@ build(serialization): 补充 format-json 测试依赖
 - [x] TOML 适配器接入（`format-toml`）
 - [x] CSV 适配器接入（`format-csv`）
 - [x] Ion 文本适配器接入（`format-ion`）
+- [x] Ion 二进制适配器接入（`format-ion`）
+- [x] CBOR 适配器接入（`format-cbor`）
+- [x] Smile 适配器接入（`format-smile`）
 - [ ] 补充 CI 门禁
 - [ ] document 私服发布配置

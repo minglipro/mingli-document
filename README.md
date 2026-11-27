@@ -1,11 +1,11 @@
 # document
 
-格式无关的文档树模型 + JSON/YAML/XML/Properties/TOML/CSV/Ion 编解码 + Java Bean 映射。
+格式无关的文档树模型 + JSON/YAML/XML/Properties/TOML/CSV/Ion/CBOR/Smile 编解码 + Java Bean 映射。
 
 `com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
 
 - **格式无关**：`core` 只定义节点树与类型引用，不依赖任何具体格式；
-- **JSON/YAML/XML/Properties/TOML/CSV/Ion Mapper**：`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion` 分别提供对应 Mapper，均继承通用 `DocumentMapper`；
+- **多格式 Mapper**：`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`format-cbor`、`format-smile` 分别提供对应 Mapper，均继承通用 `DocumentMapper`；
 - **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
 
 ## 模块与依赖
@@ -21,7 +21,9 @@
 | `format-properties` | Properties Mapper `PropertiesMapper`、`PropertiesReader` | `serialization`、`core` |
 | `format-toml` | TOML Mapper `TomlMapper`、`TomlReader` | `serialization`、`core`、Tomlj |
 | `format-csv` | CSV Mapper `CsvMapper`、`CsvReader` | `serialization`、`core`、Commons CSV |
-| `format-ion` | Ion Mapper `IonMapper`、`IonReader`（文本 Ion） | `serialization`、`core`、Ion Java |
+| `format-ion` | Ion Mapper `IonMapper`、`IonReader`（文本 + 二进制） | `serialization`、`core`、Ion Java |
+| `format-cbor` | CBOR Mapper `CborMapper`（二进制） | `serialization`、`core`、Jackson CBOR |
+| `format-smile` | Smile Mapper `SmileMapper`（二进制） | `serialization`、`core`、Jackson Smile |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 | `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 
@@ -35,6 +37,8 @@ format-properties ──► serialization
 format-toml ──► serialization
 format-csv  ──► serialization
 format-ion  ──► serialization
+format-cbor ──► serialization
+format-smile ──► serialization
 serialization-kotlin ──► serialization
 serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
@@ -42,7 +46,7 @@ annotation：项目内无依赖
 ```
 
 - `benchmarks` 是开发工具模块，不对外发布；
-- `core` 不依赖任何具体格式；`format-json` / `format-yaml` / `format-xml` / `format-properties` / `format-toml` / `format-csv` / `format-ion` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
+- `core` 不依赖任何具体格式；所有 `format-*` 模块依赖 `serialization`，并继承其 `DocumentMapper`/`BinaryDocumentMapper` 基类。
 - 外部使用方只需要引入对应格式模块（如 `format-json`）即可获得 `JsonMapper`；不需要接触内部 Codec 实现。
 
 ## 坐标
@@ -63,6 +67,8 @@ dependencies {
     implementation("com.mingliqiye.document:format-toml:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-csv:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-ion:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-cbor:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-smile:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
     // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
     implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
@@ -127,7 +133,7 @@ fun main() {
 | `formatBytes(value)` | Java 实体 → 二进制（二进制 Mapper） |
 | `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
 
-> `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` 继承 `DocumentMapper`；格式模块内部 Codec 不对外暴露。
+> `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` / `CborMapper` / `SmileMapper` 继承 `DocumentMapper` 或 `BinaryDocumentMapper`；格式模块内部 Codec 不对外暴露。
 
 ## Kotlin data class
 
@@ -881,25 +887,72 @@ val text = mapper.format(users)
 
 ## Ion 支持
 
-`IonMapper` 先支持文本 Ion：
+`IonMapper` 同时支持文本 Ion 与二进制 Ion：
 
 ```kotlin
 import com.mingliqiye.document.format.ion.IonMapper
 import com.mingliqiye.document.format.ion.toIonNode
 import com.mingliqiye.document.format.ion.toIonString
+import com.mingliqiye.document.format.ion.toIonNode
 
 val node = """{ name: "小于", age: 18 }""".toIonNode()
 println(node.toIonString(pretty = true))
 
 val mapper = IonMapper()
-val restored = mapper.parse(mapper.format(user), User::class.java)
+val textRestored = mapper.parse(mapper.format(user), User::class.java)
+val binary = mapper.formatBytes(user)
+val binaryRestored = mapper.parse(binary, User::class.java)
+```
+
+二进制 Ion 也可单独使用：
+
+```kotlin
+import com.mingliqiye.document.format.ion.IonBinaryReader
+import com.mingliqiye.document.format.ion.IonBinaryWriter
+
+val node = IonBinaryReader.parse(bytes)
+val bytes = node.toIonBytes()
 ```
 
 限制：
 
-- 当前使用 String API，只支持文本 Ion，暂不支持二进制 Ion；
-- Ion BLOB/CLOB 暂时映射为 Base64 字符串；
+- 二进制 Ion 当前交由 ion-java 自动识别文本/二进制输入；
+- Ion BLOB/CLOB 映射为 `BinaryNode`，CLOB 写出统一为 BLOB；
 - symbol/timestamp 写出为字符串，Ion 注解忽略。
+
+## CBOR / Smile 支持
+
+CBOR 和 Smile 是二进制自描述格式，使用 `BinaryDocumentMapper` 的字节 API：
+
+```kotlin
+import com.mingliqiye.document.format.cbor.CborMapper
+import com.mingliqiye.document.format.smile.SmileMapper
+
+val cbor = CborMapper()
+val cborBytes = cbor.formatBytes(user)
+val cborRestored = cbor.parse(cborBytes, User::class.java)
+
+val smile = SmileMapper()
+val smileBytes = smile.formatBytes(user)
+val smileRestored = smile.parse(smileBytes, User::class.java)
+```
+
+也可直接操作文档树：
+
+```kotlin
+val node = cborBytes.toCborNode()
+val bytes = node.toCborBytes()
+
+val smileNode = smileBytes.toSmileNode()
+val smileBytes2 = smileNode.toSmileBytes()
+```
+
+限制：
+
+- 文本 API `parse(String)` / `format` 不支持，由 `BinaryDocumentMapper` 抛出异常；
+- CBOR/Smile 都是单根单文档；多根流不支持；
+- CBOR byte string 映射为 `BinaryNode`；Smile 使用 Jackson Smile 二进制扩展令牌；
+- CBOR 非有限浮点（NaN/Infinity）拒绝；JSON 兼容层未覆盖所有 CBOR tag。
 
 ## 二进制节点与字节 API
 
@@ -922,9 +975,35 @@ mapper.formatBytes(user)
 - 文本格式 Mapper 默认不支持字节 API，会抛 `DocumentSerializationException`；
 - 二进制格式 Mapper 通过 `DocumentMapper` 的二进制解析/写出函数接入；
 - Java `ByteArray` Bean 字段会映射为 `BinaryNode`；
-- JSON/XML/YAML/Properties/TOML/CSV 暂时以 Base64 字符串兼容写出，Ion 原生映射为 blob。
-
+- JSON/XML/YAML/Properties/TOML/CSV 暂时以 Base64 字符串兼容写出，Ion 原生映射为 blob；
 这是 CBOR、Smile、Ion binary 等格式的基础 API。
+
+## Streaming Token API
+
+`serialization` 现在提供格式无关的流式 Token 契约：
+
+```kotlin
+DocumentToken
+DocumentTokenType
+DocumentTokenReader
+DocumentTokenWriter
+BinaryDocumentMapper
+```
+
+二进制格式模块可以：
+
+```text
+byte[] -> DocumentTokenReader -> Node
+Node -> DocumentTokenWriter -> byte[]
+```
+
+`BinaryDocumentMapper` 是二进制 Mapper 基类：
+
+- 文本 `parse(String)` / `format` 默认抛不支持异常
+- `parse(ByteArray)` / `formatBytes` 使用字节读写函数
+- Bean 映射、转换器、配置仍复用 `DocumentMapper`
+
+这层 API 为后续 CBOR/Smile/Ion binary 提供统一入口。
 
 ## 性能基准
 
@@ -966,6 +1045,8 @@ gradle :format-properties:test
 gradle :format-toml:test
 gradle :format-csv:test
 gradle :format-ion:test
+gradle :format-cbor:test
+gradle :format-smile:test
 gradle :serialization-kotlin:test
 
 # 自动格式化 Kotlin 代码
@@ -981,10 +1062,10 @@ gradle ktlintFormat
 
 当前已实现的范围：
 
-- 格式实现有 JSON（`format-json`）、YAML（`format-yaml`）、XML（`format-xml`）、Properties（`format-properties`）、TOML（`format-toml`）、CSV（`format-csv`）和文本 Ion（`format-ion`）；
+- 格式实现有 JSON、YAML、XML、Properties、TOML、CSV、Ion（文本 + 二进制）、CBOR、Smile；
 - Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
 - Java Bean 需要无参构造器；Kotlin data class 可配合 `serialization-kotlin` 使用主构造器反序列化；
-- `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
+- `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` / `CborMapper` / `SmileMapper` 自带对应格式的文本或字节解析与写出；通用 `DocumentMapper` 不直接对外构造；
 - 序列化检测循环引用，最大嵌套深度为 128；JSON 解析最大嵌套深度为 512。
 
 **尚未实现 / 限制**：
@@ -1007,6 +1088,8 @@ gradle ktlintFormat
 | `PropertiesParseException` | `format-properties`（`com.mingliqiye.document.format.properties.exception`） | Properties 语法错误或路径冲突 |
 | `TomlParseException` | `format-toml`（`com.mingliqiye.document.format.toml.exception`） | TOML 语法错误 |
 | `CsvParseException` | `format-csv`（`com.mingliqiye.document.format.csv.exception`） | CSV 语法错误 |
-| `IonParseException` | `format-ion`（`com.mingliqiye.document.format.ion.exception`） | Ion 文本错误或根值数量不对 |
+| `IonParseException` | `format-ion`（`com.mingliqiye.document.format.ion.exception`） | Ion 文本/二进制错误或根值数量不对 |
+| `CborParseException` | `format-cbor`（`com.mingliqiye.document.format.cbor.exception`） | CBOR 解析错误 |
+| `SmileParseException` | `format-smile`（`com.mingliqiye.document.format.smile.exception`） | Smile 解析错误 |
 
 更多代码规范、提交规范与模块约束见 [CONTRIBUTING.md](CONTRIBUTING.md)。
