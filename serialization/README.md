@@ -113,6 +113,21 @@ val mapper = JsonMapper(
 
 仅 `toNode` / Node 路径支持；流式 `format` 仍保持原行为。
 
+远程 `$ref` 需要显式提供解析器：
+
+```kotlin
+val mapper = JsonMapper(
+    DocumentMapperConfig.builder()
+        .resolveReferences(true)
+        .remoteReferenceResolver { uri ->
+            loadDocument(uri) // 返回外部文档 Node
+        }
+        .build(),
+)
+```
+
+`remoteReferenceResolver` 默认 `null`，此时远程引用直接报错；URI 校验、IO 与缓存由调用方负责。
+
 ## 转换器
 
 实现 `DocumentBaseSerializer` 与/或 `DocumentBaseDeserializer`，通过：

@@ -26,6 +26,7 @@ public class DocumentMapperConfigBuilder {
     private var maxNodeCount = 0L
     private var resolveReferences = false
     private var writeReferences = false
+    private var remoteReferenceResolver: RemoteReferenceResolver? = null
 
     /**
      * 为指定字段绑定转换器。
@@ -257,6 +258,17 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置远程 `$ref` 解析器。
+     *
+     * @param resolver 远程引用解析器；`null` 表示禁用远程引用
+     * @return 当前构建器
+     */
+    public fun remoteReferenceResolver(resolver: RemoteReferenceResolver?): DocumentMapperConfigBuilder {
+        this.remoteReferenceResolver = resolver
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      *
      * @throws IllegalArgumentException 子类型注册项非法（如子类不可赋值给基类、
@@ -276,6 +288,7 @@ public class DocumentMapperConfigBuilder {
         maxNodeCount,
         resolveReferences,
         writeReferences,
+        remoteReferenceResolver,
         SubtypeRegistries.build(subtypeRegistrations, subtypeTypeProperties),
     )
 }
