@@ -54,32 +54,52 @@ annotation：项目内无依赖
 
 ## 坐标
 
-- group：`com.mingliqiye.document`
-- 当前版本：`1.0-SNAPSHOT`（在根 `build.gradle.kts` 中统一定义）
+- 普通模块 group：`com.mingliqiye.document`
+- 格式模块 group：`com.mingliqiye.document.format`
+- 版本：来自根 `gradle.properties` 的 `projectVersion`
 - 构建目标：JDK 8
 
-各模块的依赖坐标形如 `com.mingliqiye.document:<模块名>:1.0-SNAPSHOT`，例如（仓库配置以根 `build.gradle.kts` 为准：`mavenLocal`、`mingliqiye-public`、Maven Central）：
+分组配置也在根 `gradle.properties`：
+
+```properties
+projectVersion=1.0-SNAPSHOT
+projectGroup=com.mingliqiye.document
+formatProjectGroup=com.mingliqiye.document.format
+```
+
+各模块坐标：
+
+- 普通模块：`com.mingliqiye.document:<模块名>:<projectVersion>`
+- 格式模块：`com.mingliqiye.document.format:format-<格式名>:<projectVersion>`
+
+例如：
 
 ```kotlin
 dependencies {
     implementation("com.mingliqiye.document:serialization:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-json:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-yaml:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-xml:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-properties:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-toml:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-csv:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-ion:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-cbor:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-smile:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-json:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-yaml:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-xml:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-properties:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-toml:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-csv:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-ion:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-cbor:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-smile:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-avro:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document.format:format-protobuf:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:schema:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-avro:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:format-protobuf:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
-    // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
-    implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
 }
 ```
+
+发布：
+
+```bash
+gradle publishToMavenLocal
+```
+
+`benchmarks` 和 `fuzz` 是开发工具模块，不发布。
 
 ## 环境要求
 
