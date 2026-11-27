@@ -52,7 +52,31 @@ STRUCT      -> ObjectNode
 - 二进制 Ion
 - Token 直读 Bean
 - 解析深度限制
+- 可选 Ion 类型保真
 - 文件/流读写
+
+## 类型保真
+
+默认关闭；开启后 Node 路径保留：
+
+```kotlin
+val mapper = IonMapper(
+    IonConfig.builder()
+        .preserveTypes(true)
+        .build(),
+)
+```
+
+包装对象：
+
+```json
+{"$ionType":"timestamp","value":"2026-11-28T00:00:00Z"}
+{"$ionType":"symbol","value":"name"}
+{"$ionType":"clob","value":<BinaryNode>}
+{"$ionType":"blob","value":<BinaryNode>}
+```
+
+写出时自动还原为 Ion timestamp/symbol/clob/blob。开启后不走 Token 快路径；Bean 直读建议保持关闭。
 
 ## 解析深度
 

@@ -12,14 +12,18 @@ import java.io.ByteArrayInputStream
  * `IonSystem.newReader(InputStream)` 读取字节内容，该 API 依据 Ion 版本标记
  * 自动识别二进制/文本 Ion（二进制输入为主）并支持 GZIP 解压。
  *
- * 行为与文本 [IonReader] 一致：只支持单文档单根，Ion 注解不保留，
- * blob / clob 映射为 `BinaryNode`。
+ * 行为与文本 [IonReader] 一致：只支持单文档单根，Ion 注解不保留；默认
+ * blob / clob 映射为 `BinaryNode`。`preserveTypes = true` 时 timestamp /
+ * symbol / blob / clob 使用类型保真包装对象（见 [IonConfig.preserveTypes]）。
  *
  * @param source 二进制 Ion 内容
+ * @param maxDepth Node 树最大深度，0 表示不限制
+ * @param preserveTypes 是否保留 Ion 专属类型，默认 `false`
  */
 public class IonBinaryReader @JvmOverloads constructor(
     private val source: ByteArray,
     private val maxDepth: Int = 0,
+    private val preserveTypes: Boolean = false,
 ) {
 
     /**
@@ -27,7 +31,11 @@ public class IonBinaryReader @JvmOverloads constructor(
      *
      * @throws IonParseException Ion 数据非法、根值缺失或存在多个根值时抛出
      */
-    public fun read(): Node = readIonNode(ION_SYSTEM.newReader(ByteArrayInputStream(source)), maxDepth)
+    public fun read(): Node = readIonNode(
+        ION_SYSTEM.newReader(ByteArrayInputStream(source)),
+        maxDepth,
+        preserveTypes,
+    )
 
     public companion object {
 

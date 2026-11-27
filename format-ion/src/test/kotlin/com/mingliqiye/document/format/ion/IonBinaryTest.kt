@@ -192,7 +192,7 @@ class IonBinaryTest {
     private class CountingIonMapper : IonMapper() {
         var tokenReaderUsed: Boolean = false
 
-        override fun createTokenReader(source: ByteArray): DocumentTokenReader {
+        override fun createTokenReader(source: ByteArray): DocumentTokenReader? {
             tokenReaderUsed = true
             return super.createTokenReader(source)
         }
