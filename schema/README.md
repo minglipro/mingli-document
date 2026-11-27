@@ -30,7 +30,7 @@ NULL
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:schema:1.1.0")
+implementation("com.mingliqiye.document:schema:1.2.0")
 ```
 
 ## 示例

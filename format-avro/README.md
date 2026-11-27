@@ -7,7 +7,7 @@ Apache Avro 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:avro:1.1.0")
+implementation("com.mingliqiye.document.format:avro:1.2.0")
 ```
 
 ## 主要 API

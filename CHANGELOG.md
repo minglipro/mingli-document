@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0
+
+### 新增
+
+- Protobuf 解析深度限制：`ProtobufMapper(..., maxDepth)`
+- Avro 解析深度限制：`AvroWireReader(..., maxDepth)` / `config.maxNodeDepth`
+- Ion 文本/二进制解析深度限制：`IonReader` / `IonBinaryReader`
+- YAML 解析深度限制：SnakeYAML `nestingDepthLimit`
+- XML DOM 解析深度限制
+- 可插拔远程 `$ref`：`RemoteReferenceResolver`
+- GitHub Actions CI 修复 `gradlew` 可执行权限
+
+### 说明
+
+- 远程 `$ref` 默认关闭，需要显式配置 resolver
+- 所有深度限制默认 `0`，表示不限制
+- 1.2.0 保持 1.1.0 API 兼容
+
 ## 1.1.0
 
 ### 新增
