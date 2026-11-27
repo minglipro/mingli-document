@@ -33,6 +33,7 @@
 | `core` | 文档树、类型引用契约 | `exception` |
 | `format-json` | JSON Mapper | `serialization`、`core` |
 | `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
+| `format-xml` | XML Mapper | `serialization`、`core` |
 | `serialization` | Java 实体与树之间的映射、DocumentMapper 基类 | `core`、`annotation` |
 | `serialization-kotlin` | Kotlin data class 模块函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 | `benchmarks` | JMH 性能基准（开发工具，不发布） | 各模块、JMH、Jackson（仅测试） |
@@ -48,13 +49,14 @@ core
  └── serialization
       ├── format-json
       ├── format-yaml
+├── format-xml
       └── serialization-kotlin
 ```
 
 规则：
 
 - `core` 不能依赖任何具体格式模块。
-- `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`serialization`。
+- `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`format-xml`、`serialization`。
 - `format-*` 依赖 `serialization` 与 `core`，通过继承 `DocumentMapper` 暴露格式 Mapper。
 - `serialization-kotlin` 提供 `kotlinModule()` 与 kotlin-reflect，不绑定具体格式。
 - `serialization` 主代码不依赖具体格式。
@@ -159,7 +161,8 @@ Node
 DocumentMapperApi
     └── DocumentMapper（serialization 基类）
           ├── JsonMapper（format-json）
-          └── YamlMapper（format-yaml）
+          ├── YamlMapper（format-yaml）
+          └── XmlMapper（format-xml）
 ```
 
 `DocumentMapper` 负责编排与实体映射，内部通过 `private` 方法或 `internal` 具体类组织反射、类型转换和集合处理。
@@ -171,7 +174,7 @@ DocumentMapperApi
 - 不引入 Java `ServiceLoader` / `META-INF/services` 自动发现；
 - 内部格式 Codec 不对外暴露；
 - 对外扩展点只保留：`JsonSerializer`、`JsonDeserializer`、`JsonConverter`；
-- 未来 XML 模块继承 `DocumentMapper`，例如 `XmlMapper`。
+- 新增格式模块继承 `DocumentMapper`，例如 `XmlMapper`。
 - 跨格式能力通过 `DocumentModule` 注册，使用 `JsonMapper.builder().addModule(...)`。
 
 ---
@@ -439,6 +442,6 @@ build(serialization): 补充 format-json 测试依赖
 - [x] 接口契约测试补齐
 - [x] YAML 适配器接入（`format-yaml`）
 - [x] Kotlin data class 实例化模块（`serialization-kotlin`）
-- [ ] XML 适配器在 core API 稳定后接入
+- [x] XML 适配器接入（`format-xml`）
 - [ ] 补充 CI 门禁
 - [ ] document 私服发布配置

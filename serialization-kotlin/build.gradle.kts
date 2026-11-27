@@ -14,6 +14,7 @@ dependencies {
     implementation(kotlin("reflect"))
     testImplementation(project(":format-json"))
     testImplementation(project(":format-yaml"))
+    testImplementation(project(":format-xml"))
     testImplementation(kotlin("test"))
 }
 
