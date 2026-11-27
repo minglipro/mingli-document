@@ -22,5 +22,5 @@ import kotlin.reflect.KClass
     AnnotationTarget.FUNCTION,
 )
 public annotation class DocumentConverter(
-    val value: KClass<*>,
+    val value: KClass<out DocumentBaseConverter<*>>,
 )

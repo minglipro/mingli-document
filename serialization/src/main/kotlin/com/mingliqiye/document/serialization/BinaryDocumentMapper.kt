@@ -13,8 +13,8 @@ public abstract class BinaryDocumentMapper protected constructor(
     formatName: String,
     parseBytes: (ByteArray) -> Node,
     writeBytes: (Node, Boolean) -> ByteArray,
-    serializers: Map<Class<*>, JsonSerializer<*>>,
-    deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
     config: DocumentMapperConfig,
@@ -29,4 +29,7 @@ public abstract class BinaryDocumentMapper protected constructor(
     config,
     parseBytes,
     writeBytes,
-)
+) {
+
+    protected override val usesTextFormat: Boolean = false
+}

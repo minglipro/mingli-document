@@ -235,3 +235,10 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 https://github.com/protocolbuffers/protobuf
+
+snappy-java 1.1.10.5 (Apache Avro codec dependency)
+--------------------------------------------------------------------------------
+Copyright 2008-2024 Taro L. Saito and contributors.
+License: Apache License, Version 2.0
+https://github.com/xerial/snappy-java
+https://www.apache.org/licenses/LICENSE-2.0

@@ -1,11 +1,11 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
@@ -20,8 +20,8 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * - [format]/[formatPretty] 输出 JSON 文本，[formatBytes] 输出 UTF-8 字节。
  */
 public open class JsonMapper internal constructor(
-    serializers: Map<Class<*>, JsonSerializer<*>>,
-    deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
     config: DocumentMapperConfig,
@@ -60,9 +60,14 @@ public open class JsonMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun <T> parse(source: String, targetType: Class<T>): T = parseDirect(source, DocumentTypeReference.of(targetType))
+    override fun <T> parse(source: String, targetType: Class<T>): T = parseText(source, DocumentTypeReference.of(targetType))
 
-    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = parseDirect(source, targetType)
+    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = parseText(source, targetType)
+
+    private fun <T> parseText(source: String, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(source.length.toLong())
+        return parseDirect(source, targetType)
+    }
 
     /**
      * 创建字节输入的 Token 读取器，供基类 `parse(ByteArray, ...)` 使用。
@@ -81,7 +86,14 @@ public open class JsonMapper internal constructor(
      *
      * 等价于 [format] 结果的 UTF-8 字节；`pretty` 配置同样生效。
      */
-    override fun formatBytes(value: Any?): ByteArray = writeJson(value, pretty = prettyOutput).toByteArray(Charsets.UTF_8)
+    override fun formatBytes(value: Any?): ByteArray {
+        if (prettyOutput) {
+            return writeJson(value, pretty = true).toByteArray(Charsets.UTF_8)
+        }
+        val writer = JsonUtf8StreamWriter()
+        writeTo(value, writer)
+        return writer.toByteArray()
+    }
 
     private fun <T> parseDirect(source: String, targetType: DocumentTypeReference<T>): T = fromTokens(createJsonTokenReader(source), targetType)
 

@@ -33,7 +33,7 @@ class DocumentModuleTest {
 
     private data class Token(val value: String)
 
-    private class TokenConverter : JsonConverter<Token> {
+    private class TokenConverter : DocumentBaseConverter<Token> {
         override fun getType(): DocumentTypeReference<Token> = DocumentTypeReference.of()
 
         override fun serialize(value: Token, context: SerializationContext): Node = StringNode.of(value.value.uppercase())

@@ -26,6 +26,11 @@ import java.util.Base64
  * - 普通对象含 [textKey] 标量字段 → 视为混合内容，文本写在子元素之前。
  * `null` 属性被跳过，对象/数组属性字段抛 [IllegalArgumentException]。
  *
+ * 有序混合内容：对象/数组包装包含 [contentKey] 数组字段时（与读取策略无关），按数组顺序
+ * 交错写出文本项（`StringNode`，转义写出）与子元素项（单字段对象 `{元素名: 节点}`）；
+ * 数组元素项的元素名固定为 `item`。此时 [textKey] 与普通子元素字段作为兼容视图被忽略。
+ * 有序内容区域内部不插入 pretty 空白，避免格式缩进污染文本。
+ *
  * 命名空间模式为 [XmlNamespaceMode.CLARK] 时，字段名使用 `{uri}local`：
  * 写出时按首次出现顺序分配 `ns0`、`ns1`... 前缀，并在根元素生成 `xmlns:nsN` 声明。
  * [XmlNamespaceMode.PREFIX] 模式继续使用 `prefix:local` 与显式 `xmlns` 属性字段。
@@ -36,6 +41,7 @@ import java.util.Base64
  * @param namespaceMode 命名空间名称表示模式
  * @param textKey 文本字段名
  * @param itemsKey 带属性数组的数组字段名
+ * @param contentKey 有序混合内容的数组字段名
  */
 internal class XmlWriter(
     private val rootName: String,
@@ -44,17 +50,25 @@ internal class XmlWriter(
     private val namespaceMode: XmlNamespaceMode = XmlNamespaceMode.PREFIX,
     private val textKey: String = XmlConfig.DEFAULT_TEXT_KEY,
     private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
+    private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
 ) {
 
     init {
         require(attributePrefix?.isEmpty() != true) { "attributePrefix must not be empty" }
         require(textKey.isNotEmpty()) { "textKey must not be empty" }
         require(itemsKey.isNotEmpty()) { "itemsKey must not be empty" }
-        require(textKey != itemsKey) { "textKey and itemsKey must be different" }
+        require(contentKey.isNotEmpty()) { "contentKey must not be empty" }
+        require(textKey != itemsKey && textKey != contentKey && itemsKey != contentKey) {
+            "textKey, itemsKey and contentKey must be different"
+        }
         require(
             attributePrefix == null ||
-                (!textKey.startsWith(attributePrefix) && !itemsKey.startsWith(attributePrefix)),
-        ) { "textKey and itemsKey must not start with attributePrefix" }
+                (
+                    !textKey.startsWith(attributePrefix) &&
+                        !itemsKey.startsWith(attributePrefix) &&
+                        !contentKey.startsWith(attributePrefix)
+                    ),
+        ) { "textKey, itemsKey and contentKey must not start with attributePrefix" }
     }
 
     private val builder = StringBuilder()
@@ -72,42 +86,61 @@ internal class XmlWriter(
         return builder.toString()
     }
 
-    private fun writeElement(rawName: String, node: Node, indent: Int, isRoot: Boolean) {
+    private fun writeElement(
+        rawName: String,
+        node: Node,
+        indent: Int,
+        isRoot: Boolean,
+        compact: Boolean = false,
+    ) {
         if (node is ObjectNode) {
             if (isScalarWrapper(node)) {
-                writeScalarWrapper(rawName, node, indent, isRoot)
+                writeScalarWrapper(rawName, node, indent, isRoot, compact)
                 return
             }
             if (isArrayWrapper(node)) {
-                writeArrayWrapper(rawName, node, indent, isRoot)
+                writeArrayWrapper(rawName, node, indent, isRoot, compact)
                 return
             }
         }
         val name = encodeName(rawName)
         when (node) {
             is NullNode -> {
-                appendIndent(indent)
+                appendIndent(indent, compact)
                 appendStart(name, isRoot)
                 builder.append(" nil=\"true\"/>")
             }
 
-            is ObjectNode -> writeContainer(name, node, indent, isRoot)
-            is ArrayNode -> writeArray(name, node, indent, isRoot)
-            is StringNode -> writeScalar(name, "string", node.value, indent, isRoot)
-            is NumberNode -> writeScalar(name, "number", node.raw, indent, isRoot)
-            is BooleanNode -> writeScalar(name, "boolean", node.value.toString(), indent, isRoot)
-            is BinaryNode -> writeScalar(name, "binary", Base64.getEncoder().encodeToString(node.value), indent, isRoot)
+            is ObjectNode -> writeContainer(name, node, indent, isRoot, compact)
+            is ArrayNode -> writeArray(name, node, indent, isRoot, compact)
+            is StringNode -> writeScalar(name, "string", node.value, indent, isRoot, compact)
+            is NumberNode -> writeScalar(name, "number", node.raw, indent, isRoot, compact)
+            is BooleanNode -> writeScalar(name, "boolean", node.value.toString(), indent, isRoot, compact)
+            is BinaryNode -> writeScalar(
+                name,
+                "binary",
+                Base64.getEncoder().encodeToString(node.value),
+                indent,
+                isRoot,
+                compact,
+            )
         }
     }
 
     /**
      * 写出标量属性包装：`{ 属性字段..., textKey: 标量 }` → `<name type="..." 属性...>文本</name>`。
      */
-    private fun writeScalarWrapper(rawName: String, node: ObjectNode, indent: Int, isRoot: Boolean) {
+    private fun writeScalarWrapper(
+        rawName: String,
+        node: ObjectNode,
+        indent: Int,
+        isRoot: Boolean,
+        compact: Boolean,
+    ) {
         val text = requireNotNull(node[textKey])
         val name = encodeName(rawName)
         val attributes = collectWrapperAttributes(node)
-        appendIndent(indent)
+        appendIndent(indent, compact)
         appendStart(name, isRoot)
         if (text is NullNode) {
             builder.append(" nil=\"true\"")
@@ -124,16 +157,29 @@ internal class XmlWriter(
 
     /**
      * 写出数组属性包装：`{ 属性字段..., itemsKey: 数组, textKey?: 文本 }`。
+     *
+     * 含 [contentKey] 有序数组时按有序内容写出（忽略 [textKey] 与 [itemsKey] 兼容视图）。
      */
-    private fun writeArrayWrapper(rawName: String, node: ObjectNode, indent: Int, isRoot: Boolean) {
+    private fun writeArrayWrapper(
+        rawName: String,
+        node: ObjectNode,
+        indent: Int,
+        isRoot: Boolean,
+        compact: Boolean,
+    ) {
+        val content = node[contentKey] as? ArrayNode
         val items = node[itemsKey] as ArrayNode
         val name = encodeName(rawName)
         val attributes = collectWrapperAttributes(node)
         val text = wrapperText(node)
-        appendIndent(indent)
+        appendIndent(indent, compact)
         appendStart(name, isRoot)
         builder.append(" type=\"array\"")
         appendAttributes(attributes)
+        if (content != null) {
+            writeOrderedBody(content, indent, name, ARRAY_ITEM_NAME)
+            return
+        }
         if (text == null && items.size == 0) {
             builder.append("/>")
             return
@@ -148,18 +194,29 @@ internal class XmlWriter(
         }
         if (items.size > 0) {
             appendNewline()
-            appendIndent(indent)
+            appendIndent(indent, compact = false)
         }
         builder.append("</").append(name).append('>')
     }
 
-    private fun writeContainer(name: String, node: ObjectNode, indent: Int, isRoot: Boolean) {
+    private fun writeContainer(
+        name: String,
+        node: ObjectNode,
+        indent: Int,
+        isRoot: Boolean,
+        compact: Boolean,
+    ) {
         val attributes = ArrayList<Pair<String, String>>()
         val children = ArrayList<Map.Entry<String, Node>>()
         var text: Node? = null
+        var content: ArrayNode? = null
         for (entry in node.entries()) {
             val key = entry.key
             val value = entry.value
+            if (key == contentKey && value is ArrayNode) {
+                content = value
+                continue
+            }
             if (key == textKey && isNonNilScalar(value)) {
                 text = value
                 continue
@@ -173,10 +230,14 @@ internal class XmlWriter(
             }
             children.add(entry)
         }
-        appendIndent(indent)
+        appendIndent(indent, compact)
         appendStart(name, isRoot)
         builder.append(" type=\"object\"")
         appendAttributes(attributes)
+        if (content != null) {
+            writeOrderedBody(content, indent, name, expectedElementName = null)
+            return
+        }
         if (text == null && children.isEmpty()) {
             builder.append("/>")
             return
@@ -191,13 +252,63 @@ internal class XmlWriter(
         }
         if (children.isNotEmpty()) {
             appendNewline()
-            appendIndent(indent)
+            appendIndent(indent, compact = false)
         }
         builder.append("</").append(name).append('>')
     }
 
-    private fun writeArray(name: String, node: ArrayNode, indent: Int, isRoot: Boolean) {
-        appendIndent(indent)
+    /**
+     * 按 [contentKey] 数组顺序交错写出混合内容。
+     *
+     * 文本项 `StringNode` 直接转义写出；子元素项为单字段对象 `{元素名: 节点}`，
+     * 以紧凑方式写出（不加格式缩进）。[expectedElementName] 非空时校验元素名（数组固定 `item`）。
+     */
+    private fun writeOrderedBody(
+        content: ArrayNode,
+        indent: Int,
+        name: String,
+        expectedElementName: String?,
+    ) {
+        if (content.size == 0) {
+            builder.append("/>")
+            return
+        }
+        builder.append('>')
+        for (entry in content) {
+            when (entry) {
+                is StringNode -> appendEscapedText(entry.value)
+                is ObjectNode -> {
+                    val fields = entry.entries()
+                    if (fields.size != 1) {
+                        throw IllegalArgumentException(
+                            "Ordered mixed content element entry must have exactly one field but had ${fields.size}",
+                        )
+                    }
+                    val field = fields.first()
+                    if (expectedElementName != null && field.key != expectedElementName) {
+                        throw IllegalArgumentException(
+                            "Ordered mixed content element entry must be named '$expectedElementName' but was '${field.key}'",
+                        )
+                    }
+                    writeElement(field.key, field.value, indent + 1, isRoot = false, compact = true)
+                }
+
+                else -> throw IllegalArgumentException(
+                    "Ordered mixed content entry must be a StringNode or single-field ObjectNode but was ${entry.type}",
+                )
+            }
+        }
+        builder.append("</").append(name).append('>')
+    }
+
+    private fun writeArray(
+        name: String,
+        node: ArrayNode,
+        indent: Int,
+        isRoot: Boolean,
+        compact: Boolean,
+    ) {
+        appendIndent(indent, compact)
         appendStart(name, isRoot)
         builder.append(" type=\"array\"")
         if (node.size == 0) {
@@ -210,12 +321,19 @@ internal class XmlWriter(
             writeElement(ARRAY_ITEM_NAME, child, indent + 1, isRoot = false)
         }
         appendNewline()
-        appendIndent(indent)
+        appendIndent(indent, compact = false)
         builder.append("</").append(name).append('>')
     }
 
-    private fun writeScalar(name: String, type: String, value: String, indent: Int, isRoot: Boolean) {
-        appendIndent(indent)
+    private fun writeScalar(
+        name: String,
+        type: String,
+        value: String,
+        indent: Int,
+        isRoot: Boolean,
+        compact: Boolean,
+    ) {
+        appendIndent(indent, compact)
         appendStart(name, isRoot)
         builder.append(" type=\"").append(type).append("\">")
         appendEscapedText(value)
@@ -252,12 +370,12 @@ internal class XmlWriter(
     }
 
     /**
-     * 包装对象中除 [textKey] / [itemsKey] 外的字段都按属性处理；协议保留字段跳过。
+     * 包装对象中除 [textKey] / [itemsKey] / [contentKey] 外的字段都按属性处理；协议保留字段跳过。
      */
     private fun collectWrapperAttributes(node: ObjectNode): List<Pair<String, String>> {
         val attributes = ArrayList<Pair<String, String>>()
         for ((key, value) in node.asMap()) {
-            if (key == textKey || key == itemsKey || isReservedAttributeField(key)) {
+            if (key == textKey || key == itemsKey || key == contentKey || isReservedAttributeField(key)) {
                 continue
             }
             addAttribute(attributes, key, value)
@@ -316,7 +434,8 @@ internal class XmlWriter(
     }
 
     /**
-     * 数组属性包装判定：包含 [itemsKey] 数组字段，其余字段为属性字段或 [textKey] 标量。
+     * 数组属性包装判定：包含 [itemsKey] 数组字段，其余字段为属性字段、[textKey] 标量
+     * 或 [contentKey] 数组。
      */
     private fun isArrayWrapper(node: ObjectNode): Boolean {
         if (node[itemsKey] !is ArrayNode) {
@@ -327,6 +446,7 @@ internal class XmlWriter(
             when {
                 key == itemsKey -> Unit
                 key == textKey && isNonNilScalar(value) -> hasAttributeOrText = true
+                key == contentKey && value is ArrayNode -> hasAttributeOrText = true
                 isAttributeField(key) -> hasAttributeOrText = true
                 isReservedAttributeField(key) -> Unit
                 else -> return false
@@ -406,7 +526,7 @@ internal class XmlWriter(
         when (node) {
             is ObjectNode -> {
                 for ((key, child) in node.asMap()) {
-                    if (key == textKey || key == itemsKey) {
+                    if (key == textKey || key == itemsKey || key == contentKey) {
                         collectNamespaces(child)
                         continue
                     }
@@ -435,8 +555,8 @@ internal class XmlWriter(
         namespacePrefixes.getOrPut(uri) { "ns" + namespacePrefixes.size }
     }
 
-    private fun appendIndent(indent: Int) {
-        if (pretty) {
+    private fun appendIndent(indent: Int, compact: Boolean) {
+        if (pretty && !compact) {
             repeat(indent) { builder.append("  ") }
         }
     }
@@ -494,6 +614,7 @@ internal class XmlWriter(
             xmlConfig?.namespaceMode ?: XmlNamespaceMode.PREFIX,
             xmlConfig?.textKey ?: XmlConfig.DEFAULT_TEXT_KEY,
             xmlConfig?.itemsKey ?: XmlConfig.DEFAULT_ITEMS_KEY,
+            xmlConfig?.contentKey ?: XmlConfig.DEFAULT_CONTENT_KEY,
         )
     }
 }
@@ -508,6 +629,7 @@ internal class XmlWriter(
  * @param namespaceMode 命名空间名称表示模式
  * @param textKey 文本字段名
  * @param itemsKey 带属性数组的数组字段名
+ * @param contentKey 有序混合内容的数组字段名
  * @return XML 文本
  */
 public fun Node.toXmlString(
@@ -518,4 +640,13 @@ public fun Node.toXmlString(
     namespaceMode: XmlNamespaceMode = XmlNamespaceMode.PREFIX,
     textKey: String = XmlConfig.DEFAULT_TEXT_KEY,
     itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
-): String = XmlWriter(rootName, attributePrefix, namespaceAware, namespaceMode, textKey, itemsKey).write(this, pretty)
+    contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
+): String = XmlWriter(
+    rootName,
+    attributePrefix,
+    namespaceAware,
+    namespaceMode,
+    textKey,
+    itemsKey,
+    contentKey,
+).write(this, pretty)

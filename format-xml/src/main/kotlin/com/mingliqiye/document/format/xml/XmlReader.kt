@@ -32,9 +32,12 @@ import javax.xml.parsers.DocumentBuilderFactory
  * `xmlns` 声明不映射为字段（URI 已内嵌在名称中）；[XmlNamespaceMode.PREFIX] 模式
  * 继续保留 `prefix:local` 与 `xmlns` 属性字段。CLARK 模式要求 [namespaceAware] 为 `true`。
  *
- * 混合内容（直接文本 + 子元素）按 [mixedContentPolicy] 处理：PRESERVE 时直接文本
- * 首尾裁剪后写入 [textKey] 字段（与子元素相对顺序不保留），REJECT 时抛 [XmlParseException]。
- * 只有空白直接文本视为格式化缩进，不产生文本字段。
+ * 混合内容（直接文本 + 子元素）按 [mixedContentPolicy] 处理：
+ * - [XmlMixedContentPolicy.PRESERVE]：直接文本首尾裁剪后写入 [textKey] 字段（顺序不保留）；
+ * - [XmlMixedContentPolicy.PRESERVE_ORDERED]：在 [textKey] 兼容视图之外，额外按
+ *   `childNodes` 顺序输出 [contentKey] 有序数组（文本项为 `StringNode`，子元素项为
+ *   单字段对象 `{元素名: 节点}`；相邻文本节点合并、纯空白文本忽略）；
+ * - [XmlMixedContentPolicy.REJECT]：抛 [XmlParseException]。
  *
  * @param source XML 文本
  * @param attributePrefix 属性字段前缀；`null` 表示读取时忽略 XML attribute
@@ -43,6 +46,7 @@ import javax.xml.parsers.DocumentBuilderFactory
  * @param textKey 文本字段名，默认 `#text`
  * @param itemsKey 带属性数组的数组字段名，默认 `#items`
  * @param mixedContentPolicy 混合内容策略
+ * @param contentKey 有序混合内容的数组字段名，默认 `#content`
  */
 public class XmlReader(
     private val source: String,
@@ -52,17 +56,25 @@ public class XmlReader(
     private val textKey: String = XmlConfig.DEFAULT_TEXT_KEY,
     private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     private val mixedContentPolicy: XmlMixedContentPolicy = XmlMixedContentPolicy.PRESERVE,
+    private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
 ) {
 
     init {
         require(attributePrefix?.isEmpty() != true) { "attributePrefix must not be empty" }
         require(textKey.isNotEmpty()) { "textKey must not be empty" }
         require(itemsKey.isNotEmpty()) { "itemsKey must not be empty" }
-        require(textKey != itemsKey) { "textKey and itemsKey must be different" }
+        require(contentKey.isNotEmpty()) { "contentKey must not be empty" }
+        require(textKey != itemsKey && textKey != contentKey && itemsKey != contentKey) {
+            "textKey, itemsKey and contentKey must be different"
+        }
         require(
             attributePrefix == null ||
-                (!textKey.startsWith(attributePrefix) && !itemsKey.startsWith(attributePrefix)),
-        ) { "textKey and itemsKey must not start with attributePrefix" }
+                (
+                    !textKey.startsWith(attributePrefix) &&
+                        !itemsKey.startsWith(attributePrefix) &&
+                        !contentKey.startsWith(attributePrefix)
+                    ),
+        ) { "textKey, itemsKey and contentKey must not start with attributePrefix" }
         require(namespaceMode != XmlNamespaceMode.CLARK || namespaceAware) {
             "CLARK namespace mode requires namespaceAware"
         }
@@ -153,7 +165,7 @@ public class XmlReader(
 
     private fun toObjectNode(element: Element, attributes: List<Pair<String, Node>>): ObjectNode {
         val children = childElements(element)
-        val fields = LinkedHashMap<String, Node>(attributes.size + children.size + 1)
+        val fields = LinkedHashMap<String, Node>(attributes.size + children.size + 2)
         for ((name, value) in attributes) {
             fields[name] = value
         }
@@ -170,6 +182,7 @@ public class XmlReader(
             }
         }
         containerText(element, children)?.let { fields[textKey] = it }
+        orderedContent(element, children, forceItemName = false)?.let { fields[contentKey] = it }
         return ObjectNode.from(fields)
     }
 
@@ -180,16 +193,65 @@ public class XmlReader(
             values.add(toNode(child))
         }
         val text = containerText(element, children)
-        if (attributes.isEmpty() && text == null) {
+        val ordered = orderedContent(element, children, forceItemName = true)
+        if (attributes.isEmpty() && text == null && ordered == null) {
             return ArrayNode.from(values)
         }
-        val fields = LinkedHashMap<String, Node>(attributes.size + 2)
+        val fields = LinkedHashMap<String, Node>(attributes.size + 3)
         for ((name, value) in attributes) {
             fields[name] = value
         }
         fields[itemsKey] = ArrayNode.from(values)
         text?.let { fields[textKey] = it }
+        ordered?.let { fields[contentKey] = it }
         return ObjectNode.from(fields)
+    }
+
+    /**
+     * 按 `childNodes` 顺序生成有序混合内容数组；非混合内容或策略未开启时返回 `null`。
+     *
+     * 相邻文本/CDATA 节点合并为一个文本项，纯空白文本项忽略（视为格式化缩进）；
+     * 子元素项为单字段对象 `{元素名: 节点}`，[forceItemName] 为 `true` 时统一用 `item`
+     * （数组容器的子元素与元素名无关，写出时固定写回 `<item>`）。
+     */
+    private fun orderedContent(
+        element: Element,
+        children: List<Element>,
+        forceItemName: Boolean,
+    ): ArrayNode? {
+        if (mixedContentPolicy != XmlMixedContentPolicy.PRESERVE_ORDERED) {
+            return null
+        }
+        if (children.isEmpty() || directText(element).isBlank()) {
+            return null
+        }
+        val entries = ArrayList<Node>(children.size * 2 + 1)
+        val childNodes = element.childNodes
+        val text = StringBuilder()
+        for (index in 0 until childNodes.length) {
+            val child = childNodes.item(index)
+            when {
+                isTextNode(child) -> text.append(child.nodeValue)
+                child is Element -> {
+                    flushTextItem(text, entries)
+                    val name = if (forceItemName) ARRAY_ITEM_NAME else elementName(child)
+                    entries.add(ObjectNode.of(name to toNode(child)))
+                }
+            }
+        }
+        flushTextItem(text, entries)
+        return ArrayNode.from(entries)
+    }
+
+    private fun flushTextItem(text: StringBuilder, entries: MutableList<Node>) {
+        if (text.isEmpty()) {
+            return
+        }
+        val value = text.toString()
+        text.setLength(0)
+        if (value.isNotBlank()) {
+            entries.add(StringNode.of(value))
+        }
     }
 
     /**
@@ -263,14 +325,14 @@ public class XmlReader(
         val builder = StringBuilder()
         for (index in 0 until children.length) {
             val child = children.item(index)
-            val isText = child.nodeType == org.w3c.dom.Node.TEXT_NODE ||
-                child.nodeType == org.w3c.dom.Node.CDATA_SECTION_NODE
-            if (isText) {
+            if (isTextNode(child)) {
                 builder.append(child.nodeValue)
             }
         }
         return builder.toString()
     }
+
+    private fun isTextNode(node: org.w3c.dom.Node): Boolean = node.nodeType == org.w3c.dom.Node.TEXT_NODE || node.nodeType == org.w3c.dom.Node.CDATA_SECTION_NODE
 
     private fun inferScalar(text: String): Node {
         val trimmed = text.trim()
@@ -347,6 +409,7 @@ public class XmlReader(
             xmlConfig?.textKey ?: XmlConfig.DEFAULT_TEXT_KEY,
             xmlConfig?.itemsKey ?: XmlConfig.DEFAULT_ITEMS_KEY,
             xmlConfig?.mixedContentPolicy ?: XmlMixedContentPolicy.PRESERVE,
+            xmlConfig?.contentKey ?: XmlConfig.DEFAULT_CONTENT_KEY,
         )
     }
 }

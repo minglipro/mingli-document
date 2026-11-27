@@ -16,7 +16,7 @@ import java.util.Locale
 internal class DocumentNumberFormatConverter(
     pattern: String,
     locale: String,
-) : JsonConverter<Any> {
+) : DocumentBaseConverter<Any> {
 
     private val decimalFormat: DecimalFormat = DecimalFormat(
         pattern,

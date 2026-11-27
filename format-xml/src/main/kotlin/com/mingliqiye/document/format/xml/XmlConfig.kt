@@ -11,6 +11,8 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
  * 带属性的标量元素用 `{ 属性字段..., textKey: 标量 }` 包装对象表示，
  * 带属性的数组元素用 `{ 属性字段..., itemsKey: 数组 }` 包装对象表示。
  * 命名空间默认使用“前缀限定名 + `xmlns` 属性字段”表示，也可切换为 Clark 名称模式。
+ * 混合内容默认只保留 `textKey` 文本；[XmlMixedContentPolicy.PRESERVE_ORDERED] 时
+ * 额外输出 `contentKey` 有序数组以保留文本/子元素相对顺序。
  * 属性映射、Clark 模式与混合内容保留都存在默认值，保持原有 `type` / `nil` 协议兼容。
  */
 public class XmlConfig internal constructor(
@@ -46,6 +48,14 @@ public class XmlConfig internal constructor(
      * 该键在写出时保留给包装结构，不作为普通子元素名。
      */
     public val itemsKey: String,
+    /**
+     * 有序混合内容的数组字段名；默认 `#content`。
+     *
+     * [XmlMixedContentPolicy.PRESERVE_ORDERED] 读取时输出：文本项为 `StringNode`，
+     * 子元素项为单字段对象 `{元素名: 节点}`；写出时该字段存在则按其顺序交错输出。
+     * 该键在写出时保留给混合内容结构，不作为普通子元素名。
+     */
+    public val contentKey: String,
     /** 混合内容处理策略；默认 [XmlMixedContentPolicy.PRESERVE]。 */
     public val mixedContentPolicy: XmlMixedContentPolicy,
 ) : DocumentMapperConfig(base) {
@@ -68,6 +78,9 @@ public class XmlConfig internal constructor(
 
         /** 带属性数组包装的默认数组字段名。 */
         public const val DEFAULT_ITEMS_KEY: String = "#items"
+
+        /** 有序混合内容的默认数组字段名。 */
+        public const val DEFAULT_CONTENT_KEY: String = "#content"
 
         /**
          * 创建 XML 配置构建器。

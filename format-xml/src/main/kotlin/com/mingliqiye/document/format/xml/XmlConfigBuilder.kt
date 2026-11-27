@@ -1,7 +1,7 @@
 package com.mingliqiye.document.format.xml
 
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
@@ -19,6 +19,7 @@ public class XmlConfigBuilder {
     private var namespaceMode = XmlNamespaceMode.PREFIX
     private var textKey = XmlConfig.DEFAULT_TEXT_KEY
     private var itemsKey = XmlConfig.DEFAULT_ITEMS_KEY
+    private var contentKey = XmlConfig.DEFAULT_CONTENT_KEY
     private var mixedContentPolicy = XmlMixedContentPolicy.PRESERVE
 
     /**
@@ -32,7 +33,7 @@ public class XmlConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): XmlConfigBuilder {
         base.field(declaringClass, name, converter)
         return this
@@ -159,13 +160,90 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 设置有序混合内容的数组字段名，默认 `#content`。
+     *
+     * @param contentKey 有序内容字段名；不能为空
+     * @return 当前构建器
+     * @throws IllegalArgumentException 字段名为空时抛出
+     */
+    public fun contentKey(contentKey: String): XmlConfigBuilder {
+        require(contentKey.isNotEmpty()) { "contentKey must not be empty" }
+        this.contentKey = contentKey
+        return this
+    }
+
+    /**
      * 设置混合内容处理策略，默认 [XmlMixedContentPolicy.PRESERVE]。
+     *
+     * 使用 [XmlMixedContentPolicy.PRESERVE_ORDERED] 时额外输出 `contentKey` 有序数组，
+     * 写出时按该数组顺序交错输出文本与子元素。
      *
      * @param policy 混合内容策略
      * @return 当前构建器
      */
     public fun mixedContentPolicy(policy: XmlMixedContentPolicy): XmlConfigBuilder {
         this.mixedContentPolicy = policy
+        return this
+    }
+
+    /**
+     * 注册多态子类型。
+     *
+     * @param baseClass 基类/接口
+     * @param typeName 类型名
+     * @param subtypeClass 子类型
+     * @return 当前构建器
+     */
+    public fun subtype(baseClass: Class<*>, typeName: String, subtypeClass: Class<*>): XmlConfigBuilder {
+        base.subtype(baseClass, typeName, subtypeClass)
+        return this
+    }
+
+    /**
+     * 注册多态子类型并覆盖类型属性名。
+     *
+     * @param baseClass 基类/接口
+     * @param typeName 类型名
+     * @param subtypeClass 子类型
+     * @param typeProperty 类型属性名
+     * @return 当前构建器
+     */
+    public fun subtype(baseClass: Class<*>, typeName: String, subtypeClass: Class<*>, typeProperty: String): XmlConfigBuilder {
+        base.subtype(baseClass, typeName, subtypeClass, typeProperty)
+        return this
+    }
+
+    /**
+     * 覆盖指定多态基类的类型属性名。
+     *
+     * @param baseClass 基类/接口
+     * @param typeProperty 类型属性名
+     * @return 当前构建器
+     */
+    public fun typeProperty(baseClass: Class<*>, typeProperty: String): XmlConfigBuilder {
+        base.typeProperty(baseClass, typeProperty)
+        return this
+    }
+
+    /**
+     * 设置反序列化前是否解析本地 $ref。
+     *
+     * @param resolve 是否解析引用
+     * @return 当前构建器
+     */
+    public fun resolveReferences(resolve: Boolean): XmlConfigBuilder {
+        base.resolveReferences(resolve)
+        return this
+    }
+
+    /**
+     * 设置序列化时是否输出对象身份 $ref。
+     *
+     * @param write 是否输出引用
+     * @return 当前构建器
+     */
+    public fun writeReferences(write: Boolean): XmlConfigBuilder {
+        base.writeReferences(write)
         return this
     }
 
@@ -179,11 +257,17 @@ public class XmlConfigBuilder {
             effectiveAware -> XmlConfig.DEFAULT_ATTRIBUTE_PREFIX
             else -> null
         }
-        require(textKey != itemsKey) { "textKey and itemsKey must be different" }
+        require(textKey != itemsKey && textKey != contentKey && itemsKey != contentKey) {
+            "textKey, itemsKey and contentKey must be different"
+        }
         require(
             effectivePrefix == null ||
-                (!textKey.startsWith(effectivePrefix) && !itemsKey.startsWith(effectivePrefix)),
-        ) { "textKey and itemsKey must not start with attributePrefix" }
+                (
+                    !textKey.startsWith(effectivePrefix) &&
+                        !itemsKey.startsWith(effectivePrefix) &&
+                        !contentKey.startsWith(effectivePrefix)
+                    ),
+        ) { "textKey, itemsKey and contentKey must not start with attributePrefix" }
         return XmlConfig(
             base.build(),
             rootName,
@@ -192,6 +276,7 @@ public class XmlConfigBuilder {
             namespaceMode,
             textKey,
             itemsKey,
+            contentKey,
             mixedContentPolicy,
         )
     }

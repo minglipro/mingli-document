@@ -1,11 +1,11 @@
 package com.mingliqiye.document.format.xml
 
 import com.mingliqiye.document.annotation.DocumentRootName
+import com.mingliqiye.document.serialization.DocumentBaseDeserializer
+import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
-import com.mingliqiye.document.serialization.JsonDeserializer
-import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
@@ -25,11 +25,13 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  *   `xmlns` 声明通过 `@xmlns:ns` 属性字段保留；
  * - Clark 模式（[XmlNamespaceMode.CLARK]）：字段名使用 `{uri}local`，写出时自动分配
  *   前缀并生成 `xmlns` 声明；
- * - 混合内容按 [XmlMixedContentPolicy] 保留到 `#text` 字段或拒绝。
+ * - 混合内容按 [XmlMixedContentPolicy] 处理：默认 `PRESERVE` 保留到 `#text`；
+ *   `PRESERVE_ORDERED` 额外输出 `#content` 有序数组（文本项 `StringNode`、
+ *   子元素项单字段 `ObjectNode`），写出时按该数组顺序交错输出文本与子元素；`REJECT` 抛异常。
  */
 public open class XmlMapper internal constructor(
-    serializers: Map<Class<*>, JsonSerializer<*>>,
-    deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
     propertyMetadataResolver: PropertyMetadataResolver?,
     config: DocumentMapperConfig,

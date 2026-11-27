@@ -8,17 +8,17 @@ public interface ModuleSetupContext {
     /**
      * 注册序列化器。
      */
-    public fun addSerializer(serializer: JsonSerializer<*>)
+    public fun addSerializer(serializer: DocumentBaseSerializer<*>)
 
     /**
      * 注册反序列化器。
      */
-    public fun addDeserializer(deserializer: JsonDeserializer<*>)
+    public fun addDeserializer(deserializer: DocumentBaseDeserializer<*>)
 
     /**
      * 注册双向转换器。
      */
-    public fun addConverter(converter: JsonConverter<*>)
+    public fun addConverter(converter: DocumentBaseConverter<*>)
 
     /**
      * 设置对象实例化策略。

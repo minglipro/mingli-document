@@ -48,8 +48,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode as JacksonObjectNode
  *
  * @param source CBOR 二进制内容
  */
-public class CborReader(
+public class CborReader @JvmOverloads constructor(
     private val source: ByteArray,
+    private val maxDepth: Int = 0,
 ) {
 
     /**
@@ -80,9 +81,9 @@ public class CborReader(
         }
     }
 
-    private fun toNode(node: JsonNode): Node = when {
-        node.isObject -> readObject(node as JacksonObjectNode)
-        node.isArray -> readArray(node as JacksonArrayNode)
+    private fun toNode(node: JsonNode, depth: Int = 1): Node = when {
+        node.isObject -> readObject(node as JacksonObjectNode, depth)
+        node.isArray -> readArray(node as JacksonArrayNode, depth)
         node.isTextual -> StringNode.of(node.textValue())
         node.isNumber -> readNumber(node as NumericNode)
         node.isBoolean -> BooleanNode.of(node.booleanValue())
@@ -91,22 +92,30 @@ public class CborReader(
         else -> throw CborParseException("Unsupported CBOR value: ${node.nodeType}")
     }
 
-    private fun readObject(node: JacksonObjectNode): ObjectNode {
+    private fun readObject(node: JacksonObjectNode, depth: Int): ObjectNode {
+        checkDepth(depth)
         val fields = LinkedHashMap<String, Node>()
         val iterator = node.fields()
         while (iterator.hasNext()) {
             val entry = iterator.next()
-            fields[entry.key] = toNode(entry.value)
+            fields[entry.key] = toNode(entry.value, depth + 1)
         }
         return ObjectNode.from(fields)
     }
 
-    private fun readArray(node: JacksonArrayNode): ArrayNode {
+    private fun readArray(node: JacksonArrayNode, depth: Int): ArrayNode {
+        checkDepth(depth)
         val elements = ArrayList<Node>(node.size())
         for (element in node) {
-            elements.add(toNode(element))
+            elements.add(toNode(element, depth + 1))
         }
         return ArrayNode.from(elements)
+    }
+
+    private fun checkDepth(depth: Int) {
+        if (maxDepth > 0 && depth > maxDepth) {
+            throw CborParseException("CBOR nesting depth $depth exceeds maxDepth $maxDepth")
+        }
     }
 
     private fun readNumber(node: NumericNode): NumberNode {

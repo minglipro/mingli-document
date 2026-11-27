@@ -10,7 +10,7 @@ import com.mingliqiye.document.core.Node
  *
  * @param T 需要序列化的类型
  */
-public interface JsonSerializer<T> {
+public interface DocumentBaseSerializer<T> : com.mingliqiye.document.annotation.DocumentBaseSerializer<T> {
 
     /**
      * 获取序列化器负责的类型。

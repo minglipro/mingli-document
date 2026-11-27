@@ -50,10 +50,10 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:1.0.0")
+    implementation("com.mingliqiye.document.format:json:1.1.0")
 
     // 需要 Kotlin data class 时
-    implementation("com.mingliqiye.document:serialization-kotlin:1.0.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:1.1.0")
 }
 ```
 
@@ -79,7 +79,7 @@ protobuf
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:1.0.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:1.1.0"))
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")
@@ -96,7 +96,7 @@ Maven：
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>1.0.0</version>
+            <version>1.1.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -242,8 +242,54 @@ NullNode
 | `parse(bytes, Class)` / `parse(bytes, DocumentTypeReference)` | 二进制 -> 实体 |
 | `format(value)` / `formatPretty(value)` | 实体 -> 文本 |
 | `formatBytes(value)` | 实体 -> 二进制 |
+| `parse(file, Class)` / `parse(path, Class)` | 文件/路径 -> 实体 |
+| `parse(inputStream, Class)` / `parse(reader, Class)` | 流 -> 实体 |
+| `format(value, file)` / `format(value, outputStream)` | 实体 -> 文件/流 |
 | `fromTokens(reader, Class)` / `fromTokens(reader, DocumentTypeReference)` | Token -> 实体 |
 | `convert(source, Class)` | 实体/Node -> 实体 |
+
+## 文件与流
+
+```kotlin
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+
+val mapper = JsonMapper()
+val user = User().apply {
+    name = "小于"
+    age = 18
+}
+
+// 文件
+mapper.format(user, File("user.json"))
+val fromFile = mapper.parse(File("user.json"), User::class.java)
+
+// 路径
+mapper.format(user, Paths.get("user.json"))
+val fromPath = mapper.parse(Paths.get("user.json"), User::class.java)
+
+// 字节流：文本格式使用 UTF-8
+val output = ByteArrayOutputStream()
+mapper.format(user, output)
+val fromStream = mapper.parse(ByteArrayInputStream(output.toByteArray()), User::class.java)
+
+// 字符流
+val writer = StringWriter()
+mapper.format(user, writer)
+val fromReader = mapper.parse(StringReader(writer.toString()), User::class.java)
+```
+
+二进制格式使用同样的 `File` / `Path` / `InputStream` / `OutputStream` 方法，内部自动走 `formatBytes` / `parse(ByteArray)`。
+
+说明：
+
+- 文本格式文件/流默认使用 UTF-8，可通过 `DocumentMapperConfig.fileCharset(...)` 修改
+- 文件 API 会自己打开和关闭文件
+- 调用方传入的 `InputStream` / `OutputStream` / `Reader` / `Writer` 不会被关闭
+- 二进制格式不支持 `Reader` / `Writer`，会抛 `DocumentSerializationException`
+- `atomicFileWrite(true)` 使用临时文件 + 原子替换
+- `createParentDirectories(true)` 自动创建父目录
+- `maxInputSize(n)` 限制单次输入最大字节数
 
 ## 注解
 
@@ -253,7 +299,14 @@ NullNode
 |---|---|
 | `@DocumentName("name")` | 指定文档字段名 |
 | `@DocumentIgnore` | 忽略字段 |
-| `@DocumentConverter(XxxConverter::class)` | 字段专用转换器 |
+| `@DocumentConverter(XxxConverter::class)` | 字段专用双向转换器 |
+| `@DocumentSerializer(XxxSerializer::class)` | 字段专用序列化器 |
+| `@DocumentDeserializer(XxxDeserializer::class)` | 字段专用反序列化器 |
+| `@DocumentTypeInfo(property)` | 多态基类类型属性 |
+| `@DocumentTypeName("name")` | 多态子类型名 |
+| `@DocumentCreator` | 反序列化构造器 |
+| `@DocumentBuilder` | Builder 静态工厂 |
+| `@DocumentBuild` | Builder build 方法 |
 | `@DocumentDateTimeFormat("yyyy-MM-dd")` | 日期/时间格式 |
 | `@DocumentNumberFormat("#,##0.00")` | 数字格式 |
 | `@DocumentRootName("user")` | XML 根元素名 |
@@ -336,7 +389,7 @@ val mapper = CsvMapper(schema)
 
 ### 自定义转换器
 
-实现 `JsonSerializer` / `JsonDeserializer`，通过 Builder 注册或字段注解使用。
+实现 `DocumentBaseSerializer` / `DocumentBaseDeserializer`，通过 Builder 注册或字段注解使用。
 
 ### Token 直读
 
@@ -388,6 +441,29 @@ gradle :benchmarks:jmh
 | `benchmarks` | JMH 性能基准（不发布） |
 | `fuzz` | 解析器模糊测试（不发布） |
 
+各模块的坐标、API 与示例见模块 README：
+
+[annotation](annotation/README.md) ·
+[exception](exception/README.md) ·
+[core](core/README.md) ·
+[schema](schema/README.md) ·
+[serialization](serialization/README.md) ·
+[serialization-kotlin](serialization-kotlin/README.md) ·
+[json](format-json/README.md) ·
+[yaml](format-yaml/README.md) ·
+[xml](format-xml/README.md) ·
+[properties](format-properties/README.md) ·
+[toml](format-toml/README.md) ·
+[csv](format-csv/README.md) ·
+[ion](format-ion/README.md) ·
+[cbor](format-cbor/README.md) ·
+[smile](format-smile/README.md) ·
+[avro](format-avro/README.md) ·
+[protobuf](format-protobuf/README.md) ·
+[bom](bom/README.md) ·
+[benchmarks](benchmarks/README.md) ·
+[fuzz](fuzz/README.md)
+
 ## 构建与测试
 
 ```bash
@@ -438,6 +514,10 @@ gradle publish
 Apache License, Version 2.0。
 
 第三方依赖与许可证见 [NOTICE](NOTICE)，项目许可见 [LICENSE](LICENSE)。
+
+## 变更记录
+
+见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 贡献
 

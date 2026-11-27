@@ -1,8 +1,14 @@
 package com.mingliqiye.document.serialization
 
+import com.mingliqiye.document.annotation.DocumentBuild
+import com.mingliqiye.document.annotation.DocumentBuilder
 import com.mingliqiye.document.annotation.DocumentConverter
+import com.mingliqiye.document.annotation.DocumentCreator
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
+import com.mingliqiye.document.annotation.DocumentDeserializer
+import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.annotation.DocumentNumberFormat
+import com.mingliqiye.document.annotation.DocumentSerializer
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
@@ -16,17 +22,29 @@ import com.mingliqiye.document.serialization.exception.DocumentSerializationExce
 import java.beans.IntrospectionException
 import java.beans.Introspector
 import java.beans.PropertyDescriptor
+import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.Reader
+import java.io.Writer
+import java.lang.reflect.AnnotatedElement
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.GenericArrayType
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.lang.reflect.Parameter
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.Base64
 import java.util.IdentityHashMap
 import java.util.LinkedHashMap
@@ -47,22 +65,36 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  * - 基本类型及包装类型、String、枚举、BigDecimal、BigInteger
  * - 数组、Collection、Map
  * - 标准 Java Bean（public getter/setter、public 字段，或无参构造器）
+ * - 通过 [com.mingliqiye.document.annotation.DocumentCreator] 标注构造器的不可变 Bean：
+ *   按构造参数名（[DocumentName] 或 `-parameters` 保留的参数名）从文档取值，
+ *   支持泛型、嵌套 Bean、集合、Map、可空与基本类型；构造参数与属性同名时，
+ *   参数的 [DocumentName] 同时用于写出，保证读写字段名对称。
+ * - 通过 [com.mingliqiye.document.annotation.DocumentBuilder] 静态工厂 + Builder 模式
+ *   创建的不可变 Bean：没有 [com.mingliqiye.document.annotation.DocumentCreator] 构造器且
+ *   没有无参构造器时，先调用静态工厂方法创建 Builder，按普通 Bean 规则填充 Builder，
+ *   再调用 [com.mingliqiye.document.annotation.DocumentBuild] 标注的构建方法
+ *   （未标注时回退到无参 `build()`）得到目标对象。
+ * - 通过配置显式注册的多态基类/接口（字段声明为基类时写入/读取子类型信息）
  *
- * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
+ * 优先使用 [com.mingliqiye.document.annotation.DocumentCreator] 构造器；没有标注的实体
+ * 仍使用无参构造器 + setter；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
 public abstract class DocumentMapper protected constructor(
     /** 格式名称，例如 json、yaml。 */
     public val formatName: String,
     private val parseText: (String) -> Node,
     private val writeText: (Node, Boolean) -> String,
-    private val serializers: Map<Class<*>, JsonSerializer<*>>,
-    private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
+    private val serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
+    private val deserializers: Map<Class<*>, DocumentBaseDeserializer<*>>,
     private val objectInstantiator: ObjectInstantiator?,
     private val propertyMetadataResolver: PropertyMetadataResolver?,
     private val config: DocumentMapperConfig,
     private val parseBytes: ((ByteArray) -> Node)? = null,
     private val writeBytes: ((Node, Boolean) -> ByteArray)? = null,
 ) : DocumentMapperApi {
+
+    /** 该 Mapper 是否使用文本文件/流的 UTF-8 语义；二进制 Mapper 覆盖为 false。 */
+    protected open val usesTextFormat: Boolean = true
 
     /**
      * 创建不带文本编解码能力的映射器基类构造器。
@@ -79,6 +111,11 @@ public abstract class DocumentMapper protected constructor(
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val constructorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
+    private val beanCreatorCache = ConcurrentHashMap<Class<*>, Any>()
+    private val noBeanCreator = Any()
+    private val beanBuilderCache = ConcurrentHashMap<Class<*>, Any>()
+    private val noBeanBuilder = Any()
+    private val noArgConstructorCache = ConcurrentHashMap<Class<*>, Boolean>()
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
     private val hasSerializers = serializers.isNotEmpty()
@@ -90,11 +127,21 @@ public abstract class DocumentMapper protected constructor(
     /**
      * 将 Java 对象序列化为文档树。
      *
+     * [DocumentMapperConfig.writeReferences] 开启时按对象身份写出本地 `$ref`：
+     * 同一对象只在首次出现处展开，再次出现时写出 `{"$ref":"#/首次路径"}`，循环引用
+     * 也会以引用代替环形展开。关闭时保持原有循环检测行为。该能力只作用于
+     * Node/[toNode] 路径，流式 [writeTo] 路径不参与引用写出。
+     *
      * @param value Java 对象
      * @return 文档树
      * @throws DocumentSerializationException 序列化失败或存在循环引用时抛出
      */
-    override fun toNode(value: Any?): Node = serializeValue(value, IdentityHashMap(), 0, null, "$")
+    override fun toNode(value: Any?): Node {
+        val references = if (config.writeReferences) IdentityReferenceTracker() else null
+        val node = serializeValue(value, IdentityHashMap(), 0, null, "$", references = references)
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        return node
+    }
 
     /**
      * 将文档树反序列化为指定 Java 类型。
@@ -105,8 +152,10 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: Class<T>): T {
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        val source = if (config.resolveReferences) ReferenceResolver.resolve(node) else node
         @Suppress("UNCHECKED_CAST")
-        return deserializeValue(node, targetType, "$") as T
+        return deserializeValue(source, targetType, "$") as T
     }
 
     /**
@@ -128,8 +177,10 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T {
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        val source = if (config.resolveReferences) ReferenceResolver.resolve(node) else node
         @Suppress("UNCHECKED_CAST")
-        return deserializeValue(node, targetType.type, "$") as T
+        return deserializeValue(source, targetType.type, "$") as T
     }
 
     /**
@@ -141,6 +192,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> parse(source: String, targetType: Class<T>): T {
+        checkInputSize(source.length.toLong())
         createTextTokenReader(source)?.let { return fromTokens(it, targetType) }
         return fromNode(parseText(source), targetType)
     }
@@ -154,6 +206,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(source.length.toLong())
         createTextTokenReader(source)?.let { return fromTokens(it, targetType) }
         return fromNode(parseText(source), targetType)
     }
@@ -186,6 +239,7 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      */
     override fun <T> parse(source: ByteArray, targetType: Class<T>): T {
+        checkInputSize(source.size.toLong())
         createTokenReader(source)?.let { return fromTokens(it, targetType) }
         val parser = parseBytes
             ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
@@ -200,6 +254,7 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      */
     override fun <T> parse(source: ByteArray, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(source.size.toLong())
         createTokenReader(source)?.let { return fromTokens(it, targetType) }
         val parser = parseBytes
             ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
@@ -236,6 +291,103 @@ public abstract class DocumentMapper protected constructor(
      */
     override fun formatPretty(value: Any?): String = writeText(toNode(value), true)
 
+    override fun <T> parse(file: File, targetType: Class<T>): T = parse(file.toPath(), targetType)
+
+    override fun <T> parse(file: File, targetType: DocumentTypeReference<T>): T = parse(file.toPath(), targetType)
+
+    override fun <T> parse(path: Path, targetType: Class<T>): T = parse(path, DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(path: Path, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(Files.size(path))
+        return parseBytesOrText(Files.readAllBytes(path), targetType)
+    }
+
+    override fun <T> parse(input: InputStream, targetType: Class<T>): T = parse(input, DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(input: InputStream, targetType: DocumentTypeReference<T>): T {
+        val bytes = input.readBytes()
+        checkInputSize(bytes.size.toLong())
+        return parseBytesOrText(bytes, targetType)
+    }
+
+    override fun <T> parse(reader: Reader, targetType: Class<T>): T = parse(reader, DocumentTypeReference.of(targetType))
+
+    override fun <T> parse(reader: Reader, targetType: DocumentTypeReference<T>): T {
+        if (!usesTextFormat) {
+            throw DocumentSerializationException("$formatName mapper does not support character streams")
+        }
+        val source = reader.readText()
+        checkInputSize(source.length.toLong())
+        return parse(source, targetType)
+    }
+
+    override fun format(value: Any?, file: File) {
+        format(value, file.toPath())
+    }
+
+    override fun format(value: Any?, path: Path) {
+        writeFile(path, outputBytes(value))
+    }
+
+    override fun format(value: Any?, output: OutputStream) {
+        output.write(outputBytes(value))
+        output.flush()
+    }
+
+    override fun format(value: Any?, writer: Writer) {
+        if (!usesTextFormat) {
+            throw DocumentSerializationException("$formatName mapper does not support character streams")
+        }
+        writer.write(format(value))
+        writer.flush()
+    }
+
+    private fun <T> parseBytesOrText(bytes: ByteArray, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(bytes.size.toLong())
+        return if (usesTextFormat) {
+            parse(String(bytes, config.fileCharset), targetType)
+        } else {
+            parse(bytes, targetType)
+        }
+    }
+
+    private fun outputBytes(value: Any?): ByteArray = if (usesTextFormat) {
+        format(value).toByteArray(config.fileCharset)
+    } else {
+        formatBytes(value)
+    }
+
+    protected fun checkInputSize(size: Long) {
+        val limit = config.maxInputSize
+        if (limit > 0 && size > limit) {
+            throw DocumentSerializationException("Input size $size exceeds maxInputSize $limit")
+        }
+    }
+
+    private fun writeFile(path: Path, bytes: ByteArray) {
+        val absolute = path.toAbsolutePath()
+        val parent = absolute.parent
+        if (config.createParentDirectories && parent != null) {
+            Files.createDirectories(parent)
+        }
+        if (!config.atomicFileWrite) {
+            Files.write(path, bytes)
+            return
+        }
+        val directory = parent ?: throw DocumentSerializationException("Cannot resolve parent directory for $path")
+        val temporary = Files.createTempFile(directory, ".${absolute.fileName}.", ".tmp")
+        try {
+            Files.write(temporary, bytes)
+            try {
+                Files.move(temporary, absolute, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temporary, absolute, StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            Files.deleteIfExists(temporary)
+        }
+    }
+
     /**
      * 将任意对象转换为指定 Java 类型。
      *
@@ -255,39 +407,39 @@ public abstract class DocumentMapper protected constructor(
     override fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D = fromNode(toNode(source), destinationType)
 
     private fun serializeWithSerializer(
-        serializer: JsonSerializer<*>,
+        serializer: DocumentBaseSerializer<*>,
         value: Any,
         property: DocumentProperty?,
         path: String,
     ): Node {
         @Suppress("UNCHECKED_CAST")
-        return (serializer as JsonSerializer<Any>).serialize(
+        return (serializer as DocumentBaseSerializer<Any>).serialize(
             value,
             DefaultSerializationContext(this, property, path),
         )
     }
 
     private fun deserializeWithDeserializer(
-        deserializer: JsonDeserializer<*>,
+        deserializer: DocumentBaseDeserializer<*>,
         node: Node,
         property: DocumentProperty?,
         path: String,
     ): Any? {
         @Suppress("UNCHECKED_CAST")
-        return (deserializer as JsonDeserializer<Any>).deserialize(
+        return (deserializer as DocumentBaseDeserializer<Any>).deserialize(
             node,
             DefaultDeserializationContext(this, property, path),
         )
     }
 
-    private fun findSerializer(type: Class<*>): JsonSerializer<*>? {
+    private fun findSerializer(type: Class<*>): DocumentBaseSerializer<*>? {
         val boxed = boxedType(type)
         return serializers[type]
             ?: serializers[boxed]
             ?: serializers.entries.firstOrNull { it.key.isAssignableFrom(boxed) }?.value
     }
 
-    private fun findDeserializer(type: Class<*>): JsonDeserializer<*>? {
+    private fun findDeserializer(type: Class<*>): DocumentBaseDeserializer<*>? {
         val boxed = boxedType(type)
         return deserializers[type]
             ?: deserializers[boxed]
@@ -361,22 +513,50 @@ public abstract class DocumentMapper protected constructor(
         return converter
     }
 
-    private fun propertySerializer(property: DocumentProperty?): JsonSerializer<*>? {
+    private fun propertySerializer(property: DocumentProperty?): DocumentBaseSerializer<*>? {
+        if (property != null) {
+            val annotation = property.getAnnotation(DocumentSerializer::class.java)
+            if (annotation != null) {
+                val instance = annotationConverter(property, annotation.value.java)
+                return instance as? DocumentBaseSerializer<*>
+                    ?: throw DocumentSerializationException(
+                        "Serializer ${annotation.value.java.name} for " +
+                            "${property.declaringClass.name}.${property.name} " +
+                            "must implement DocumentBaseSerializer",
+                    )
+            }
+        }
         val converter = propertyConverter(property) ?: return null
-        return converter as? JsonSerializer<*>
+        return converter as? DocumentBaseSerializer<*>
     }
 
-    private fun propertyDeserializer(property: DocumentProperty?): JsonDeserializer<*>? {
+    private fun propertyDeserializer(property: DocumentProperty?): DocumentBaseDeserializer<*>? {
+        if (property != null) {
+            val annotation = property.getAnnotation(DocumentDeserializer::class.java)
+            if (annotation != null) {
+                val instance = annotationConverter(property, annotation.value.java)
+                return instance as? DocumentBaseDeserializer<*>
+                    ?: throw DocumentSerializationException(
+                        "Deserializer ${annotation.value.java.name} for " +
+                            "${property.declaringClass.name}.${property.name} " +
+                            "must implement DocumentBaseDeserializer",
+                    )
+            }
+        }
         val converter = propertyConverter(property) ?: return null
-        return converter as? JsonDeserializer<*>
+        return converter as? DocumentBaseDeserializer<*>
+    }
+
+    private fun annotationConverter(property: DocumentProperty, converterType: Class<*>): Any = converterCache.computeIfAbsent(converterType) {
+        instantiateConverter(property, converterType)
     }
 
     private fun instantiateConverter(property: DocumentProperty, converterType: Class<*>): Any {
         val instance = objectInstance(converterType) ?: constructorInstance(property, converterType)
-        if (instance !is JsonSerializer<*> && instance !is JsonDeserializer<*>) {
+        if (instance !is DocumentBaseSerializer<*> && instance !is DocumentBaseDeserializer<*>) {
             throw DocumentSerializationException(
                 "Converter ${converterType.name} for " +
-                    "${property.declaringClass.name}.${property.name} must implement JsonSerializer or JsonDeserializer",
+                    "${property.declaringClass.name}.${property.name} must implement DocumentBaseSerializer or DocumentBaseDeserializer",
             )
         }
         return instance
@@ -452,8 +632,19 @@ public abstract class DocumentMapper protected constructor(
             propertyDeserializer(property)?.let { deserializer ->
                 return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
             }
+            if (config.hasSubtypes) {
+                config.subtypeRegistry(rawType)?.let { registry ->
+                    return deserializePolymorphic(reader.readNode(), registry, path, property)
+                }
+            }
             findDeserializer(rawType)?.let { deserializer ->
                 return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
+            }
+            if (beanCreator(rawType) != null) {
+                return readBean(reader, rawType, path)
+            }
+            if (beanBuilderFor(rawType) != null) {
+                return readBean(reader, rawType, path)
             }
             if (objectInstantiator?.canInstantiate(rawType) == true) {
                 val streamed = objectInstantiator.instantiate(
@@ -559,10 +750,27 @@ public abstract class DocumentMapper protected constructor(
             else -> null
         }
         if (rawType != null) {
-            if (propertyDeserializer(property) != null ||
-                (hasDeserializers && findDeserializer(rawType) != null)
-            ) {
+            if (propertyDeserializer(property) != null) {
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
+            }
+            if (config.hasSubtypes) {
+                config.subtypeRegistry(rawType)?.let { registry ->
+                    return deserializePolymorphic(
+                        TokenTreeReader.readNode(reader),
+                        registry,
+                        path.toString(),
+                        property,
+                    )
+                }
+            }
+            if (hasDeserializers && findDeserializer(rawType) != null) {
+                return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
+            }
+            if (beanCreator(rawType) != null) {
+                return readTokenBean(reader, rawType, path)
+            }
+            if (beanBuilderFor(rawType) != null) {
+                return readTokenBean(reader, rawType, path)
             }
             val instantiator = objectInstantiator
             if (token == DocumentTokenType.START_OBJECT &&
@@ -737,7 +945,30 @@ public abstract class DocumentMapper protected constructor(
         if (reader.currentToken != DocumentTokenType.START_OBJECT) {
             throw DocumentSerializationException("Expected object at $path but was ${reader.currentToken}")
         }
+        val creator = beanCreator(type)
+        if (creator != null) {
+            return readTokenBeanWithCreator(reader, type, creator, path)
+        }
+        val builder = beanBuilderFor(type)
+        if (builder != null) {
+            return readTokenBeanWithBuilder(reader, type, builder, path)
+        }
         val instance = instantiate(type)
+        readTokenBeanFields(reader, instance, type, path)
+        return instance
+    }
+
+    /**
+     * 从 Token 流读取对象字段并写入已创建的实例。
+     *
+     * 供无参构造 Bean 与 Builder 填充共用：Builder 也用同一套 setter/字段逻辑填充。
+     */
+    private fun readTokenBeanFields(
+        reader: DocumentTokenReader,
+        instance: Any,
+        type: Class<*>,
+        path: DecodePath,
+    ) {
         val metadata = beanMetadata(type)
         val trackSeen = config.missingFieldPolicy != MissingFieldPolicy.KEEP_DEFAULT
         val seen: MutableSet<String>? = if (trackSeen) HashSet() else null
@@ -773,7 +1004,63 @@ public abstract class DocumentMapper protected constructor(
         if (trackSeen) {
             applyMissingFields(instance, metadata, seen ?: emptySet(), path.toString())
         }
-        return instance
+    }
+
+    /**
+     * 使用 [com.mingliqiye.document.annotation.DocumentBuilder] 从 Token 流创建实例。
+     */
+    private fun readTokenBeanWithBuilder(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        builder: BeanBuilderMetadata,
+        path: DecodePath,
+    ): Any {
+        val builderInstance = newBuilderInstance(builder, path.toString())
+        readTokenBeanFields(reader, builderInstance, builder.builderType, path)
+        return buildBean(builder, builderInstance, path.toString())
+    }
+
+    /**
+     * 使用 [DocumentCreator] 构造器从 Token 流创建实例。
+     */
+    private fun readTokenBeanWithCreator(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        creator: BeanCreatorMetadata,
+        path: DecodePath,
+    ): Any {
+        val arguments = creator.newArguments()
+        val present = BooleanArray(creator.argumentCount)
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of object at $path")
+                DocumentTokenType.END_OBJECT -> break
+                DocumentTokenType.FIELD_NAME -> {
+                    val fieldName = reader.textValue
+                        ?: throw DocumentSerializationException("Missing field name at $path")
+                    val parameter = creator.parameter(fieldName)
+                    reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
+                    if (parameter != null) {
+                        val mark = path.mark()
+                        path.field(fieldName)
+                        arguments[parameter.index] = readTokenValue(reader, parameter.type, null, path)
+                        path.truncate(mark)
+                        present[parameter.index] = true
+                    } else {
+                        if (config.failOnUnknownFields) {
+                            throw DocumentSerializationException(
+                                "Unknown field '$fieldName' for ${type.name} at $path",
+                            )
+                        }
+                        TokenTreeReader.skipValue(reader)
+                    }
+                }
+
+                else -> throw DocumentSerializationException("Expected field name or end of object at $path")
+            }
+        }
+        fillMissingCreatorArguments(creator, arguments, present, path.toString())
+        return invokeCreator(creator, arguments, path.toString())
     }
 
     private fun readTokenCollection(
@@ -1027,7 +1314,30 @@ public abstract class DocumentMapper protected constructor(
         type: Class<*>,
         path: String,
     ): Any {
+        val creator = beanCreator(type)
+        if (creator != null) {
+            return readBeanWithCreator(reader, type, creator, path)
+        }
+        val builder = beanBuilderFor(type)
+        if (builder != null) {
+            return readBeanWithBuilder(reader, type, builder, path)
+        }
         val instance = instantiate(type)
+        readBeanFields(reader, instance, type, path)
+        return instance
+    }
+
+    /**
+     * 从流式读取器读取对象字段并写入已创建的实例。
+     *
+     * 供无参构造 Bean 与 Builder 填充共用：Builder 也用同一套 setter/字段逻辑填充。
+     */
+    private fun readBeanFields(
+        reader: DocumentValueReader,
+        instance: Any,
+        type: Class<*>,
+        path: String,
+    ) {
         val metadata = beanMetadata(type)
         val seen = HashSet<String>()
         reader.beginObject()
@@ -1049,7 +1359,52 @@ public abstract class DocumentMapper protected constructor(
         }
         reader.endObject()
         applyMissingFields(instance, metadata, seen, path)
-        return instance
+    }
+
+    /**
+     * 使用 [com.mingliqiye.document.annotation.DocumentBuilder] 从流式读取器创建实例。
+     */
+    private fun readBeanWithBuilder(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        builder: BeanBuilderMetadata,
+        path: String,
+    ): Any {
+        val builderInstance = newBuilderInstance(builder, path)
+        readBeanFields(reader, builderInstance, builder.builderType, path)
+        return buildBean(builder, builderInstance, path)
+    }
+
+    /**
+     * 使用 [DocumentCreator] 构造器从流式读取器创建实例。
+     */
+    private fun readBeanWithCreator(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        creator: BeanCreatorMetadata,
+        path: String,
+    ): Any {
+        val arguments = creator.newArguments()
+        val present = BooleanArray(creator.argumentCount)
+        reader.beginObject()
+        while (reader.hasNextField()) {
+            val fieldName = reader.readFieldName()
+            val parameter = creator.parameter(fieldName)
+            if (parameter != null) {
+                arguments[parameter.index] = readValue(reader, parameter.type, null, "$path.$fieldName")
+                present[parameter.index] = true
+            } else {
+                if (config.failOnUnknownFields) {
+                    throw DocumentSerializationException(
+                        "Unknown field '$fieldName' for ${type.name} at $path",
+                    )
+                }
+                reader.skipValue()
+            }
+        }
+        reader.endObject()
+        fillMissingCreatorArguments(creator, arguments, present, path)
+        return invokeCreator(creator, arguments, path)
     }
 
     private fun applyMissingFields(
@@ -1100,19 +1455,107 @@ public abstract class DocumentMapper protected constructor(
         else -> null
     }
 
+    /**
+     * 为构造器注入中没有出现在文档里的参数填充默认值。
+     *
+     * 构造器没有 Java 字段的"原始默认值"概念：引用类型参数在
+     * [MissingFieldPolicy.KEEP_DEFAULT] / [MissingFieldPolicy.SET_NULL] 下传 `null`，
+     * 基本类型参数传 Java 默认值；[MissingFieldPolicy.SET_EMPTY] 额外对
+     * String/集合/Map/数组传空值；[MissingFieldPolicy.FAIL] 抛异常。
+     */
+    private fun fillMissingCreatorArguments(
+        creator: BeanCreatorMetadata,
+        arguments: Array<Any?>,
+        present: BooleanArray,
+        path: String,
+    ) {
+        for (parameter in creator.parameters) {
+            if (present[parameter.index]) {
+                continue
+            }
+            arguments[parameter.index] = missingCreatorValue(parameter, path)
+        }
+    }
+
+    private fun missingCreatorValue(parameter: BeanCreatorParameter, path: String): Any? {
+        val policy = config.missingFieldPolicy
+        if (policy == MissingFieldPolicy.FAIL) {
+            throw DocumentSerializationException("Missing field '${parameter.documentName}' at $path")
+        }
+        val rawType = rawClassOrNull(parameter.type)
+        val value = if (policy == MissingFieldPolicy.SET_EMPTY) missingValue(policy, rawType) else null
+        if (value == null && rawType?.isPrimitive == true) {
+            return primitiveDefault(rawType)
+        }
+        return value
+    }
+
+    private fun primitiveDefault(type: Class<*>): Any = when (type) {
+        java.lang.Boolean.TYPE -> false
+        java.lang.Character.TYPE -> '\u0000'
+        java.lang.Byte.TYPE -> 0.toByte()
+        java.lang.Short.TYPE -> 0.toShort()
+        java.lang.Integer.TYPE -> 0
+        java.lang.Long.TYPE -> 0L
+        java.lang.Float.TYPE -> 0.0f
+        java.lang.Double.TYPE -> 0.0
+        else -> throw DocumentSerializationException("Unsupported primitive constructor parameter type ${type.name}")
+    }
+
+    /**
+     * 通过 [DocumentCreator] 构造器创建实例。
+     */
+    private fun invokeCreator(creator: BeanCreatorMetadata, arguments: Array<Any?>, path: String): Any = try {
+        creator.constructor.newInstance(*arguments)
+    } catch (e: InvocationTargetException) {
+        throw DocumentSerializationException(
+            "Constructor of ${creator.ownerType.name} threw an exception at $path",
+            e.targetException,
+        )
+    } catch (e: ReflectiveOperationException) {
+        throw DocumentSerializationException(
+            "Cannot invoke @DocumentCreator constructor of ${creator.ownerType.name} at $path",
+            e,
+        )
+    }
+
     private fun serializeValue(
         value: Any?,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
         property: DocumentProperty? = null,
         path: String = "$",
+        declaredType: Type? = property?.type,
+        polymorphic: Boolean = true,
+        pointer: String = "",
+        references: IdentityReferenceTracker? = null,
     ): Node {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
         }
+        if (references != null && value != null && value !is Node) {
+            references.pointerOf(value)?.let { firstPointer ->
+                return JsonReference.referenceNode(firstPointer)
+            }
+        }
         if (value != null && value !is Node) {
             propertySerializer(property)?.let { serializer ->
                 return serializeWithSerializer(serializer, value, property, path)
+            }
+            if (polymorphic && config.hasSubtypes) {
+                polymorphicRegistry(declaredType, value.javaClass)?.let { registry ->
+                    return serializePolymorphic(
+                        value,
+                        registry,
+                        declaredType,
+                        seen,
+                        depth,
+                        property,
+                        path,
+                        pointer,
+                        references,
+                    )
+                }
             }
             val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
                 ?: findSerializer(value.javaClass)
@@ -1129,18 +1572,128 @@ public abstract class DocumentMapper protected constructor(
             is Boolean -> BooleanNode.of(value)
             is Number -> serializeNumber(value)
             is Enum<*> -> StringNode.of(value.name)
-            is Map<*, *> -> serializeMap(value, seen, depth)
-            is Iterable<*> -> serializeIterable(value, seen, depth)
-            is Array<*> -> serializeArray(value, seen, depth)
+            is Map<*, *> -> serializeMap(value, seen, depth, declaredType, path, pointer, references)
+            is Iterable<*> -> serializeIterable(value, seen, depth, declaredType, path, pointer, references)
+            is Array<*> -> serializeArray(value, seen, depth, declaredType, path, pointer, references)
             else -> {
                 val type = value.javaClass
                 if (type.isArray) {
-                    serializeReflectArray(value, seen, depth)
+                    serializeReflectArray(value, seen, depth, declaredType, path, pointer, references)
                 } else {
-                    serializeBean(value, seen, depth, path)
+                    serializeBean(value, seen, depth, path, pointer, references)
                 }
             }
         }
+    }
+
+    private fun rawClassOrNull(type: Type?): Class<*>? = when (type) {
+        null -> null
+        is Class<*> -> type
+        is ParameterizedType -> type.rawType as? Class<*>
+        is GenericArrayType -> rawClassOrNull(type.genericComponentType)
+            ?.let { ReflectArray.newInstance(it, 0).javaClass }
+
+        is WildcardType -> rawClassOrNull(type.upperBounds.firstOrNull())
+        is TypeVariable<*> -> rawClassOrNull(type.bounds.firstOrNull())
+        else -> null
+    }
+
+    /**
+     * 解析声明类型对应的多态注册表。
+     *
+     * 有声明类型时只匹配该类型本身（声明为具体子类不会回退到父类注册）；
+     * 没有声明类型（顶层对象、原始集合元素）时按实际类型从注册表中反查。
+     */
+    private fun polymorphicRegistry(declaredType: Type?, actualClass: Class<*>): SubtypeRegistry? {
+        val declaredRawType = rawClassOrNull(declaredType)
+        if (declaredRawType != null) {
+            return config.subtypeRegistry(declaredRawType)
+        }
+        return registryForValue(actualClass)
+    }
+
+    private fun registryForValue(actualClass: Class<*>): SubtypeRegistry? {
+        val candidates = config.subtypeRegistries().filter {
+            it.baseClass.isAssignableFrom(actualClass) && it.typeName(actualClass) != null
+        }
+        if (candidates.isEmpty()) {
+            return null
+        }
+        if (candidates.size == 1) {
+            return candidates.first()
+        }
+        val mostSpecific = candidates.firstOrNull { candidate ->
+            candidates.all { other ->
+                other === candidate || other.baseClass.isAssignableFrom(candidate.baseClass)
+            }
+        }
+        return mostSpecific ?: throw DocumentSerializationException(
+            "Ambiguous polymorphic bases for ${actualClass.name}: " +
+                candidates.joinToString { it.baseClass.name },
+        )
+    }
+
+    private fun serializePolymorphic(
+        value: Any,
+        registry: SubtypeRegistry,
+        declaredType: Type?,
+        seen: IdentityHashMap<Any, Boolean>,
+        depth: Int,
+        property: DocumentProperty?,
+        path: String,
+        pointer: String = "",
+        references: IdentityReferenceTracker? = null,
+    ): Node {
+        val typeName = registry.typeName(value.javaClass)
+            ?: throw DocumentSerializationException(
+                "No subtype registered for ${value.javaClass.name} under polymorphic base " +
+                    "${registry.baseClass.name} at $path",
+            )
+        val payload = serializeValue(
+            value,
+            seen,
+            depth,
+            property,
+            path,
+            declaredType = value.javaClass,
+            polymorphic = false,
+            pointer = pointer,
+            references = references,
+        )
+        if (payload !is ObjectNode) {
+            throw DocumentSerializationException(
+                "Polymorphic subtype ${value.javaClass.name} must serialize to an object at $path " +
+                    "but was ${payload.type}",
+            )
+        }
+        if (payload.containsKey(registry.typeProperty)) {
+            throw DocumentSerializationException(
+                "Field '${registry.typeProperty}' of ${value.javaClass.name} conflicts with " +
+                    "the polymorphic type property at $path",
+            )
+        }
+        val fields = LinkedHashMap<String, Node>(payload.size + 1)
+        fields[registry.typeProperty] = StringNode.of(typeName)
+        for ((key, node) in payload.asMap()) {
+            fields[key] = node
+        }
+        return ObjectNode.from(fields)
+    }
+
+    private fun elementType(declaredType: Type?): Type? = when (declaredType) {
+        is ParameterizedType -> declaredType.actualTypeArguments.firstOrNull()
+        is GenericArrayType -> declaredType.genericComponentType
+        is Class<*> -> if (declaredType.isArray) declaredType.componentType else null
+        is WildcardType -> elementType(declaredType.upperBounds.firstOrNull())
+        is TypeVariable<*> -> elementType(declaredType.bounds.firstOrNull())
+        else -> null
+    }
+
+    private fun mapValueType(declaredType: Type?): Type? = when (declaredType) {
+        is ParameterizedType -> declaredType.actualTypeArguments.getOrNull(1)
+        is WildcardType -> mapValueType(declaredType.upperBounds.firstOrNull())
+        is TypeVariable<*> -> mapValueType(declaredType.bounds.firstOrNull())
+        else -> null
     }
 
     private fun serializeNumber(value: Number): Node = when (value) {
@@ -1178,6 +1731,11 @@ public abstract class DocumentMapper protected constructor(
     /**
      * 直接写出实体，不构建完整文档树。
      *
+     * 流式路径不支持对象身份引用：即使配置了
+     * [DocumentMapperConfig.writeReferences]，本方法仍按原有行为直接展开每个对象，
+     * 循环引用继续抛出 [DocumentSerializationException]。需要 `$ref` 写出时使用
+     * [toNode] 路径。
+     *
      * @param value 任意实体、集合、Map 或 [Node]
      * @param writer 格式写出器
      */
@@ -1192,6 +1750,8 @@ public abstract class DocumentMapper protected constructor(
         property: DocumentProperty?,
         path: DecodePath,
         writer: DocumentValueWriter,
+        declaredType: Type? = property?.type,
+        polymorphic: Boolean = true,
     ) {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
@@ -1200,6 +1760,14 @@ public abstract class DocumentMapper protected constructor(
             propertySerializer(property)?.let { serializer ->
                 writer.writeNode(serializeWithSerializer(serializer, value, property, path.toString()))
                 return
+            }
+            if (polymorphic && config.hasSubtypes) {
+                polymorphicRegistry(declaredType, value.javaClass)?.let { registry ->
+                    writer.writeNode(
+                        serializePolymorphic(value, registry, declaredType, seen, depth, property, path.toString()),
+                    )
+                    return
+                }
             }
             val serializer = if (hasSerializers) {
                 findSerializer(property?.getRawType() ?: value.javaClass)
@@ -1222,34 +1790,38 @@ public abstract class DocumentMapper protected constructor(
             is Number -> writeNumberValue(value, writer)
             is Enum<*> -> writer.writeString(value.name)
             is Map<*, *> -> {
+                val valueType = mapValueType(declaredType)
                 writer.startObject()
                 for ((key, child) in value) {
-                    writer.fieldName(key?.toString() ?: "null")
+                    val fieldName = key?.toString() ?: "null"
+                    writer.fieldName(fieldName)
                     val mark = path.mark()
-                    path.field(key?.toString() ?: "null")
-                    writeValue(child, seen, depth + 1, null, path, writer)
+                    path.field(fieldName)
+                    writeValue(child, seen, depth + 1, null, path, writer, valueType)
                     path.truncate(mark)
                 }
                 writer.endObject()
             }
 
             is Iterable<*> -> {
+                val elementType = elementType(declaredType)
                 writer.startArray()
                 for (element in value) {
                     val mark = path.mark()
                     path.literal("[]")
-                    writeValue(element, seen, depth + 1, null, path, writer)
+                    writeValue(element, seen, depth + 1, null, path, writer, elementType)
                     path.truncate(mark)
                 }
                 writer.endArray()
             }
 
             is Array<*> -> {
+                val componentType = elementType(declaredType) ?: value.javaClass.componentType
                 writer.startArray()
                 for (element in value) {
                     val mark = path.mark()
                     path.literal("[]")
-                    writeValue(element, seen, depth + 1, null, path, writer)
+                    writeValue(element, seen, depth + 1, null, path, writer, componentType)
                     path.truncate(mark)
                 }
                 writer.endArray()
@@ -1258,7 +1830,7 @@ public abstract class DocumentMapper protected constructor(
             else -> {
                 val type = value.javaClass
                 if (type.isArray) {
-                    writeReflectArray(value, seen, depth, path, writer)
+                    writeReflectArray(value, seen, depth, path, writer, declaredType)
                 } else {
                     writeBean(value, seen, depth, path, writer)
                 }
@@ -1272,13 +1844,15 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         path: DecodePath,
         writer: DocumentValueWriter,
+        declaredType: Type?,
     ) {
         val length = ReflectArray.getLength(value)
+        val componentType = elementType(declaredType) ?: value.javaClass.componentType
         writer.startArray()
         for (index in 0 until length) {
             val mark = path.mark()
             path.index(index)
-            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, path, writer)
+            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, path, writer, componentType)
             path.truncate(mark)
         }
         writer.endArray()
@@ -1293,13 +1867,14 @@ public abstract class DocumentMapper protected constructor(
     ) {
         withCycleCheck(bean, seen) {
             writer.startObject()
+            val creator = beanCreator(bean.javaClass)
             for (accessor in beanMetadata(bean.javaClass).readableProperties) {
                 val metadata = accessor.metadata
                 val value = accessor.read(bean)
                 if (!config.writeNulls && value == null) {
                     continue
                 }
-                writer.fieldName(metadata.documentName)
+                writer.fieldName(serializedDocumentName(creator, metadata))
                 val mark = path.mark()
                 path.field(metadata.name)
                 writeValue(
@@ -1309,6 +1884,7 @@ public abstract class DocumentMapper protected constructor(
                     metadata,
                     path,
                     writer,
+                    metadata.type,
                 )
                 path.truncate(mark)
             }
@@ -1320,44 +1896,110 @@ public abstract class DocumentMapper protected constructor(
         map: Map<*, *>,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
-    ): Node = withCycleCheck(map, seen) {
-        val fields = LinkedHashMap<String, Node>(map.size)
-        for ((key, value) in map) {
-            fields[key?.toString() ?: "null"] = serializeValue(value, seen, depth + 1)
+        declaredType: Type?,
+        path: String,
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(map, pointer)
+        return withCycleCheck(map, seen) {
+            val valueType = mapValueType(declaredType)
+            val fields = LinkedHashMap<String, Node>(map.size)
+            for ((key, value) in map) {
+                val fieldName = key?.toString() ?: "null"
+                fields[fieldName] = serializeValue(
+                    value,
+                    seen,
+                    depth + 1,
+                    null,
+                    "$path.$fieldName",
+                    valueType,
+                    pointer = JsonReference.fieldPointer(pointer, fieldName),
+                    references = references,
+                )
+            }
+            ObjectNode.from(fields)
         }
-        ObjectNode.from(fields)
     }
 
     private fun serializeIterable(
         iterable: Iterable<*>,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
-    ): Node = withCycleCheck(iterable, seen) {
-        val elements = ArrayList<Node>()
-        for (element in iterable) {
-            elements.add(serializeValue(element, seen, depth + 1))
+        declaredType: Type?,
+        path: String,
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(iterable, pointer)
+        return withCycleCheck(iterable, seen) {
+            val elementType = elementType(declaredType)
+            val elements = ArrayList<Node>()
+            var index = 0
+            for (element in iterable) {
+                elements.add(
+                    serializeValue(
+                        element,
+                        seen,
+                        depth + 1,
+                        null,
+                        "$path[$index]",
+                        elementType,
+                        pointer = JsonReference.indexPointer(pointer, index),
+                        references = references,
+                    ),
+                )
+                index++
+            }
+            ArrayNode.from(elements)
         }
-        ArrayNode.from(elements)
     }
 
     private fun serializeArray(
         array: Array<*>,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
-    ): Node = withCycleCheck(array, seen) {
-        val elements = ArrayList<Node>(array.size)
-        for (element in array) {
-            elements.add(serializeValue(element, seen, depth + 1))
+        declaredType: Type?,
+        path: String,
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(array, pointer)
+        return withCycleCheck(array, seen) {
+            val componentType = elementType(declaredType) ?: array.javaClass.componentType
+            val elements = ArrayList<Node>(array.size)
+            var index = 0
+            for (element in array) {
+                elements.add(
+                    serializeValue(
+                        element,
+                        seen,
+                        depth + 1,
+                        null,
+                        "$path[$index]",
+                        componentType,
+                        pointer = JsonReference.indexPointer(pointer, index),
+                        references = references,
+                    ),
+                )
+                index++
+            }
+            ArrayNode.from(elements)
         }
-        ArrayNode.from(elements)
     }
 
     private fun serializeReflectArray(
         array: Any,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        declaredType: Type?,
+        path: String,
+        pointer: String,
+        references: IdentityReferenceTracker?,
     ): Node {
+        references?.register(array, pointer)
         val size = ReflectArray.getLength(array)
+        val componentType = elementType(declaredType) ?: array.javaClass.componentType
         val elements = ArrayList<Node>(size)
         return withCycleCheck(array, seen) {
             for (index in 0 until size) {
@@ -1366,6 +2008,11 @@ public abstract class DocumentMapper protected constructor(
                         ReflectArray.get(array, index),
                         seen,
                         depth + 1,
+                        null,
+                        "$path[$index]",
+                        componentType,
+                        pointer = JsonReference.indexPointer(pointer, index),
+                        references = references,
                     ),
                 )
             }
@@ -1378,23 +2025,33 @@ public abstract class DocumentMapper protected constructor(
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
         path: String,
-    ): Node = withCycleCheck(bean, seen) {
-        val fields = LinkedHashMap<String, Node>()
-        for (accessor in beanMetadata(bean.javaClass).readableProperties) {
-            val metadata = accessor.metadata
-            val value = accessor.read(bean)
-            if (!config.writeNulls && value == null) {
-                continue
+        pointer: String,
+        references: IdentityReferenceTracker?,
+    ): Node {
+        references?.register(bean, pointer)
+        return withCycleCheck(bean, seen) {
+            val fields = LinkedHashMap<String, Node>()
+            val creator = beanCreator(bean.javaClass)
+            for (accessor in beanMetadata(bean.javaClass).readableProperties) {
+                val metadata = accessor.metadata
+                val value = accessor.read(bean)
+                if (!config.writeNulls && value == null) {
+                    continue
+                }
+                val documentName = serializedDocumentName(creator, metadata)
+                fields[documentName] = serializeValue(
+                    value,
+                    seen,
+                    depth + 1,
+                    metadata,
+                    "$path.${metadata.name}",
+                    metadata.type,
+                    pointer = JsonReference.fieldPointer(pointer, documentName),
+                    references = references,
+                )
             }
-            fields[metadata.documentName] = serializeValue(
-                value,
-                seen,
-                depth + 1,
-                metadata,
-                "$path.${metadata.name}",
-            )
+            ObjectNode.from(fields)
         }
-        ObjectNode.from(fields)
     }
 
     private fun deserializeValue(
@@ -1402,6 +2059,7 @@ public abstract class DocumentMapper protected constructor(
         type: Type,
         path: String,
         property: DocumentProperty? = null,
+        polymorphic: Boolean = true,
     ): Any? {
         if (node is NullNode) {
             if (type is Class<*> && type.isPrimitive) {
@@ -1419,6 +2077,11 @@ public abstract class DocumentMapper protected constructor(
             else -> null
         }
         if (rawType != null) {
+            if (polymorphic && config.hasSubtypes) {
+                config.subtypeRegistry(rawType)?.let { registry ->
+                    return deserializePolymorphic(node, registry, path, property)
+                }
+            }
             val deserializer = findDeserializer(rawType)
             if (deserializer != null) {
                 return deserializeWithDeserializer(deserializer, node, property, path)
@@ -1440,6 +2103,58 @@ public abstract class DocumentMapper protected constructor(
 
             else -> throw DocumentSerializationException("Unsupported type at $path: $type")
         }
+    }
+
+    /**
+     * 按类型属性解析具体子类，并以子类为目标类型重新反序列化。
+     *
+     * 子类路径屏蔽多态解析，避免注册表出现继承关系时无限递归；字段级反序列化器
+     * 已在调用前处理，全局子类反序列化器仍然生效。
+     */
+    private fun deserializePolymorphic(
+        node: Node,
+        registry: SubtypeRegistry,
+        path: String,
+        property: DocumentProperty?,
+    ): Any? {
+        if (!node.isObject) {
+            throw DocumentSerializationException(
+                "Expected object node for polymorphic base ${registry.baseClass.name} at $path " +
+                    "but was ${node.type}",
+            )
+        }
+        val objectNode = node.asObject()
+        val typeNode = objectNode[registry.typeProperty]
+            ?: throw DocumentSerializationException(
+                "Missing polymorphic type property '${registry.typeProperty}' for base " +
+                    "${registry.baseClass.name} at $path",
+            )
+        if (!typeNode.isString) {
+            throw DocumentSerializationException(
+                "Polymorphic type property '${registry.typeProperty}' for base " +
+                    "${registry.baseClass.name} must be a string at $path but was ${typeNode.type}",
+            )
+        }
+        val typeName = typeNode.asString()
+        val subtypeClass = registry.subtypeClass(typeName)
+            ?: throw DocumentSerializationException(
+                "Unknown polymorphic type name '$typeName' for type property " +
+                    "'${registry.typeProperty}' of base ${registry.baseClass.name} at $path; " +
+                    "registered names: ${registry.typeNames.joinToString()}",
+            )
+        val fields = LinkedHashMap<String, Node>(objectNode.size)
+        for ((key, value) in objectNode.asMap()) {
+            if (key != registry.typeProperty) {
+                fields[key] = value
+            }
+        }
+        return deserializeValue(
+            ObjectNode.from(fields),
+            subtypeClass,
+            path,
+            property,
+            polymorphic = false,
+        )
     }
 
     private fun deserializeClass(node: Node, type: Class<*>, path: String): Any? {
@@ -1529,7 +2244,7 @@ public abstract class DocumentMapper protected constructor(
                 map
             }
 
-            else -> deserializeClass(node, rawType, path)
+            else -> deserializeValue(node, rawType, path)
         }
     }
 
@@ -1572,6 +2287,14 @@ public abstract class DocumentMapper protected constructor(
             throw DocumentSerializationException("Expected object node at $path")
         }
         val objectNode = node.asObject()
+        val creator = beanCreator(type)
+        if (creator != null) {
+            return deserializeBeanWithCreator(objectNode, type, creator, path)
+        }
+        val builder = beanBuilderFor(type)
+        if (builder != null) {
+            return deserializeBeanWithBuilder(objectNode, type, builder, path)
+        }
         val customInstance = objectInstantiator?.instantiate(
             type,
             objectNode,
@@ -1586,6 +2309,21 @@ public abstract class DocumentMapper protected constructor(
             return customInstance
         }
         val instance = instantiate(type)
+        fillBeanInstance(instance, type, objectNode, path)
+        return instance
+    }
+
+    /**
+     * 用对象节点填充已创建的实例。
+     *
+     * 供无参构造 Bean 与 Builder 填充共用：Builder 也用同一套 setter/字段逻辑填充。
+     */
+    private fun fillBeanInstance(
+        instance: Any,
+        type: Class<*>,
+        objectNode: ObjectNode,
+        path: String,
+    ) {
         val metadata = beanMetadata(type)
         if (config.failOnUnknownFields) {
             for (key in objectNode.keys) {
@@ -1616,7 +2354,53 @@ public abstract class DocumentMapper protected constructor(
             )
         }
         applyMissingFields(instance, metadata, seen, path)
-        return instance
+    }
+
+    /**
+     * 使用 [com.mingliqiye.document.annotation.DocumentBuilder] 从对象节点创建实例。
+     */
+    private fun deserializeBeanWithBuilder(
+        objectNode: ObjectNode,
+        type: Class<*>,
+        builder: BeanBuilderMetadata,
+        path: String,
+    ): Any {
+        val builderInstance = newBuilderInstance(builder, path)
+        fillBeanInstance(builderInstance, builder.builderType, objectNode, path)
+        return buildBean(builder, builderInstance, path)
+    }
+
+    /**
+     * 使用 [DocumentCreator] 构造器从对象节点创建实例。
+     */
+    private fun deserializeBeanWithCreator(
+        objectNode: ObjectNode,
+        type: Class<*>,
+        creator: BeanCreatorMetadata,
+        path: String,
+    ): Any {
+        if (config.failOnUnknownFields) {
+            val knownFields = creator.documentNames
+            for (key in objectNode.keys) {
+                if (key !in knownFields) {
+                    throw DocumentSerializationException("Unknown field '$key' for ${type.name} at $path")
+                }
+            }
+        }
+        val arguments = creator.newArguments()
+        val present = BooleanArray(creator.argumentCount)
+        for (parameter in creator.parameters) {
+            val valueNode = objectNode[parameter.documentName] ?: continue
+            arguments[parameter.index] = deserializeValue(
+                valueNode,
+                parameter.type,
+                "$path.${parameter.documentName}",
+                null,
+            )
+            present[parameter.index] = true
+        }
+        fillMissingCreatorArguments(creator, arguments, present, path)
+        return invokeCreator(creator, arguments, path)
     }
 
     private fun requireNumber(node: Node, path: String): NumberNode = node.asNumberOrNull()
@@ -1656,10 +2440,25 @@ public abstract class DocumentMapper protected constructor(
         return LinkedHashMap()
     }
 
-    private fun instantiate(type: Class<*>): Any = try {
-        newInstance(type)
-    } catch (e: Exception) {
-        throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
+    private fun instantiate(type: Class<*>): Any {
+        val constructor = try {
+            constructorCache.computeIfAbsent(type) {
+                type.getDeclaredConstructor().apply { isAccessible = true }
+            }
+        } catch (e: NoSuchMethodException) {
+            throw DocumentSerializationException(
+                "Cannot instantiate ${type.name}: no @DocumentCreator constructor, " +
+                    "no @DocumentBuilder static factory method and no no-arg constructor",
+                e,
+            )
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
+        }
+        return try {
+            constructor.newInstance()
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
+        }
     }
 
     /**
@@ -1706,20 +2505,42 @@ public abstract class DocumentMapper protected constructor(
     private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
         .computeIfAbsent(field.name) { createDocumentProperty(type, field) }
 
+    private fun documentProperty(
+        type: Class<*>,
+        name: String,
+        elements: List<AnnotatedElement>,
+        propertyType: Type,
+    ): DocumentProperty = documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
+        .computeIfAbsent(name) { createDocumentProperty(type, name, elements, propertyType) }
+
     private fun createDocumentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty {
         val field = findField(type, property.name)
         val elements = listOfNotNull(property.readMethod, property.writeMethod, field)
         val propertyType = property.readMethod?.genericReturnType
             ?: property.writeMethod?.genericParameterTypes?.firstOrNull()
             ?: property.propertyType
-        return DefaultDocumentProperty(
-            type,
-            property.name,
-            propertyType,
-            elements,
-            propertyMetadataResolver?.resolve(type, property.name).orEmpty(),
-        )
+        return createDocumentProperty(type, property.name, elements, propertyType)
     }
+
+    /**
+     * 构造由任意注解元素（方法/字段）描述的属性元数据。
+     *
+     * 用于 JavaBeans Introspector 不识别、但符合 Builder 流式 setter 约定的属性：
+     * `setXxx(value)` 返回 Builder 自身而不是 `void`。
+     */
+    private fun createDocumentProperty(
+        type: Class<*>,
+        name: String,
+        elements: List<AnnotatedElement>,
+        propertyType: Type,
+    ): DocumentProperty = DefaultDocumentProperty(
+        type,
+        name,
+        propertyType,
+        elements,
+        propertyMetadataResolver?.resolve(type, name).orEmpty(),
+        config.namingStrategy,
+    )
 
     private fun createDocumentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(
         type,
@@ -1727,7 +2548,267 @@ public abstract class DocumentMapper protected constructor(
         field.genericType,
         listOf(field),
         propertyMetadataResolver?.resolve(type, field.name).orEmpty(),
+        config.namingStrategy,
     )
+
+    /**
+     * 获取类型上 [DocumentCreator] 标注的构造器元数据；没有标注时返回 `null`。
+     *
+     * 结果按类型缓存，同一类型只解析一次反射信息。
+     */
+    private fun beanCreator(type: Class<*>): BeanCreatorMetadata? {
+        val cached = beanCreatorCache.computeIfAbsent(type) { createBeanCreator(type) ?: noBeanCreator }
+        return if (cached === noBeanCreator) null else cached as BeanCreatorMetadata
+    }
+
+    private fun createBeanCreator(type: Class<*>): BeanCreatorMetadata? {
+        var selected: Constructor<*>? = null
+        for (constructor in type.declaredConstructors) {
+            if (!constructor.isAnnotationPresent(DocumentCreator::class.java)) {
+                continue
+            }
+            if (selected != null) {
+                throw DocumentSerializationException("Multiple @DocumentCreator constructors on ${type.name}")
+            }
+            selected = constructor
+        }
+        val constructor = selected ?: return null
+        try {
+            constructor.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot access @DocumentCreator constructor of ${type.name}", e)
+        }
+        val parameters = constructor.parameters.mapIndexed { index, parameter ->
+            createBeanCreatorParameter(type, index, parameter)
+        }
+        val duplicates = parameters.groupBy { it.documentName }.filterValues { it.size > 1 }.keys
+        if (duplicates.isNotEmpty()) {
+            throw DocumentSerializationException(
+                "Duplicate @DocumentCreator parameter document names $duplicates on ${type.name}",
+            )
+        }
+        return BeanCreatorMetadata(type, constructor, parameters)
+    }
+
+    private fun createBeanCreatorParameter(type: Class<*>, index: Int, parameter: Parameter): BeanCreatorParameter {
+        val annotation = parameter.getAnnotation(DocumentName::class.java)
+        val javaName = parameter.name.takeIf { parameter.isNamePresent }
+        val documentName = annotation?.value
+            ?: javaName?.let { config.namingStrategy.translate(it) }
+            ?: throw DocumentSerializationException(
+                "Constructor parameter $index of ${type.name} has no @DocumentName annotation and its name " +
+                    "is not available at runtime; annotate the parameter with @DocumentName or compile with -parameters",
+            )
+        return BeanCreatorParameter(
+            index,
+            javaName,
+            documentName,
+            annotation?.value,
+            parameter.parameterizedType,
+        )
+    }
+
+    /**
+     * 获取类型上 [com.mingliqiye.document.annotation.DocumentBuilder] 标注的静态工厂
+     * 元数据；没有标注时返回 `null`。
+     *
+     * 结果按类型缓存，同一类型只解析一次反射信息。
+     */
+    private fun beanBuilder(type: Class<*>): BeanBuilderMetadata? {
+        val cached = beanBuilderCache.computeIfAbsent(type) { createBeanBuilder(type) ?: noBeanBuilder }
+        return if (cached === noBeanBuilder) null else cached as BeanBuilderMetadata
+    }
+
+    /**
+     * 判断类型是否适用 Builder 模式反序列化。
+     *
+     * 只有没有 [DocumentCreator] 构造器且没有无参构造器的类型，才回退到
+     * [com.mingliqiye.document.annotation.DocumentBuilder] 静态工厂。
+     */
+    private fun beanBuilderFor(type: Class<*>): BeanBuilderMetadata? {
+        if (beanCreator(type) != null || hasNoArgConstructor(type)) {
+            return null
+        }
+        return beanBuilder(type)
+    }
+
+    private fun hasNoArgConstructor(type: Class<*>): Boolean = noArgConstructorCache.computeIfAbsent(type) {
+        try {
+            type.getDeclaredConstructor()
+            true
+        } catch (_: NoSuchMethodException) {
+            false
+        }
+    }
+
+    private fun createBeanBuilder(type: Class<*>): BeanBuilderMetadata? {
+        var selected: Method? = null
+        for (method in type.declaredMethods) {
+            if (!method.isAnnotationPresent(DocumentBuilder::class.java)) {
+                continue
+            }
+            if (selected != null) {
+                throw DocumentSerializationException(
+                    "Multiple @DocumentBuilder static factory methods on ${type.name}",
+                )
+            }
+            selected = method
+        }
+        val factory = selected ?: return null
+        if (!Modifier.isStatic(factory.modifiers)) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder method ${factory.name} on ${type.name} must be static",
+            )
+        }
+        if (factory.parameterCount != 0) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder method ${factory.name} on ${type.name} must have no parameters",
+            )
+        }
+        val builderType = factory.returnType
+        if (builderType.isPrimitive || builderType.isArray || builderType == Void::class.java) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder method ${factory.name} on ${type.name} must return a builder type",
+            )
+        }
+        try {
+            factory.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException(
+                "Cannot access @DocumentBuilder method ${factory.name} on ${type.name}",
+                e,
+            )
+        }
+        val buildMethod = findBuildMethod(type, builderType)
+        return BeanBuilderMetadata(type, builderType, factory, buildMethod)
+    }
+
+    /**
+     * 查找 Builder 上把 Builder 转换为目标对象的方法。
+     *
+     * 优先使用 [com.mingliqiye.document.annotation.DocumentBuild] 标注的方法；
+     * 没有标注时回退到无参 `build()`。
+     */
+    private fun findBuildMethod(ownerType: Class<*>, builderType: Class<*>): Method {
+        val annotated = builderType.declaredMethods.filter {
+            it.isAnnotationPresent(DocumentBuild::class.java)
+        }
+        if (annotated.size > 1) {
+            throw DocumentSerializationException(
+                "Multiple @DocumentBuild methods on builder ${builderType.name} for ${ownerType.name}",
+            )
+        }
+        val method = annotated.firstOrNull() ?: defaultBuildMethod(builderType)
+            ?: throw DocumentSerializationException(
+                "No build method on builder ${builderType.name} for ${ownerType.name}; " +
+                    "annotate a no-arg method returning ${ownerType.name} with @DocumentBuild " +
+                    "or add a no-arg build() method",
+            )
+        if (Modifier.isStatic(method.modifiers)) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method ${method.name} on builder ${builderType.name} " +
+                    "for ${ownerType.name} must not be static",
+            )
+        }
+        if (method.parameterCount != 0) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method ${method.name} on builder ${builderType.name} " +
+                    "for ${ownerType.name} must have no parameters",
+            )
+        }
+        if (!ownerType.isAssignableFrom(method.returnType)) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method ${method.name} on builder ${builderType.name} " +
+                    "for ${ownerType.name} must return ${ownerType.name} but returns " +
+                    method.returnType.name,
+            )
+        }
+        try {
+            method.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException(
+                "Cannot access @DocumentBuild method ${method.name} on builder ${builderType.name}",
+                e,
+            )
+        }
+        return method
+    }
+
+    private fun defaultBuildMethod(builderType: Class<*>): Method? {
+        var current: Class<*>? = builderType
+        while (current != null && current != Any::class.java) {
+            for (method in current.declaredMethods) {
+                if (method.name != "build" ||
+                    method.isSynthetic ||
+                    method.isBridge ||
+                    Modifier.isStatic(method.modifiers) ||
+                    method.parameterCount != 0
+                ) {
+                    continue
+                }
+                return method
+            }
+            current = current.superclass
+        }
+        return null
+    }
+
+    /**
+     * 调用 [com.mingliqiye.document.annotation.DocumentBuilder] 静态工厂方法创建 Builder 实例。
+     */
+    private fun newBuilderInstance(builder: BeanBuilderMetadata, path: String): Any {
+        val instance = try {
+            builder.factory.invoke(null)
+        } catch (e: InvocationTargetException) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder factory method of ${builder.ownerType.name} threw an exception at $path",
+                e.targetException,
+            )
+        } catch (e: ReflectiveOperationException) {
+            throw DocumentSerializationException(
+                "Cannot invoke @DocumentBuilder factory method of ${builder.ownerType.name} at $path",
+                e,
+            )
+        }
+        return instance ?: throw DocumentSerializationException(
+            "@DocumentBuilder factory method of ${builder.ownerType.name} returned null at $path",
+        )
+    }
+
+    /**
+     * 调用 [com.mingliqiye.document.annotation.DocumentBuild] 方法把 Builder 转换为目标对象。
+     */
+    private fun buildBean(builder: BeanBuilderMetadata, builderInstance: Any, path: String): Any {
+        val result = try {
+            builder.buildMethod.invoke(builderInstance)
+        } catch (e: InvocationTargetException) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method of ${builder.ownerType.name} threw an exception at $path",
+                e.targetException,
+            )
+        } catch (e: ReflectiveOperationException) {
+            throw DocumentSerializationException(
+                "Cannot invoke @DocumentBuild method of ${builder.ownerType.name} at $path",
+                e,
+            )
+        }
+        if (!builder.ownerType.isInstance(result)) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method of ${builder.ownerType.name} returned " +
+                    "${result?.javaClass?.name ?: "null"} at $path",
+            )
+        }
+        return result
+    }
+
+    /**
+     * 计算序列化时使用的文档字段名。
+     *
+     * 类型存在 [DocumentCreator] 构造器、构造参数可反射出 Java 参数名且与属性同名时，
+     * 参数上显式的 [DocumentName] 同时用于写出，保证不可变 Bean 的读写字段名对称；
+     * 否则沿用属性自身的文档字段名。
+     */
+    private fun serializedDocumentName(creator: BeanCreatorMetadata?, metadata: DocumentProperty): String = creator?.parameterByJavaName(metadata.name)?.explicitDocumentName ?: metadata.documentName
 
     private fun beanMetadata(type: Class<*>): BeanMetadata = beanMetadataCache.computeIfAbsent(type, ::createBeanMetadata)
 
@@ -1810,6 +2891,46 @@ public abstract class DocumentMapper protected constructor(
                 setter,
                 field.genericType,
             )
+        }
+
+        // Builder 模式常用 `setXxx` 返回 Builder 自身（流式 setter），JavaBeans
+        // Introspector 只识别返回 void 的 setter，这里补充这类属性的写访问器。
+        for (method in type.methods) {
+            if (Modifier.isStatic(method.modifiers) ||
+                method.isSynthetic ||
+                method.isBridge ||
+                method.parameterCount != 1 ||
+                method.returnType == java.lang.Void.TYPE
+            ) {
+                continue
+            }
+            val name = method.name
+            if (name.length <= 3 || !name.startsWith("set") || !name[3].isUpperCase()) {
+                continue
+            }
+            val propertyName = Introspector.decapitalize(name.substring(3))
+            if (propertyName in handled) {
+                continue
+            }
+            handled.add(propertyName)
+            val field = findField(type, propertyName)
+            val valueType = method.genericParameterTypes[0]
+            val metadata = documentProperty(
+                type,
+                propertyName,
+                listOfNotNull(method, field),
+                valueType,
+            )
+            knownFields.add(metadata.documentName)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            method.isAccessible = true
+            val setter: java.util.function.BiConsumer<Any, Any?> = BeanAccessorFactory.setter(method)
+                ?: java.util.function.BiConsumer<Any, Any?> { bean, value ->
+                    invoke(method, bean, value)
+                }
+            accessors[propertyName] = BeanPropertyAccessor(metadata, null, setter, valueType)
         }
 
         return BeanMetadata(accessors.values.toList(), knownFields)

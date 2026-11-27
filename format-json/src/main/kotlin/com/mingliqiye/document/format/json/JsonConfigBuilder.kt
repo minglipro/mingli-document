@@ -1,7 +1,7 @@
 package com.mingliqiye.document.format.json
 
+import com.mingliqiye.document.serialization.DocumentBaseConverter
 import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 
 /**
@@ -26,7 +26,7 @@ public class JsonConfigBuilder {
     public fun field(
         declaringClass: Class<*>,
         name: String,
-        converter: JsonConverter<*>,
+        converter: DocumentBaseConverter<*>,
     ): JsonConfigBuilder {
         base.field(declaringClass, name, converter)
         return this
@@ -93,6 +93,67 @@ public class JsonConfigBuilder {
     public fun maxDepth(maxDepth: Int): JsonConfigBuilder {
         require(maxDepth > 0) { "maxDepth must be positive, but was $maxDepth" }
         this.maxDepth = maxDepth
+        return this
+    }
+
+    /**
+     * 注册多态子类型。
+     *
+     * @param baseClass 基类/接口
+     * @param typeName 类型名
+     * @param subtypeClass 子类型
+     * @return 当前构建器
+     */
+    public fun subtype(baseClass: Class<*>, typeName: String, subtypeClass: Class<*>): JsonConfigBuilder {
+        base.subtype(baseClass, typeName, subtypeClass)
+        return this
+    }
+
+    /**
+     * 注册多态子类型并覆盖类型属性名。
+     *
+     * @param baseClass 基类/接口
+     * @param typeName 类型名
+     * @param subtypeClass 子类型
+     * @param typeProperty 类型属性名
+     * @return 当前构建器
+     */
+    public fun subtype(baseClass: Class<*>, typeName: String, subtypeClass: Class<*>, typeProperty: String): JsonConfigBuilder {
+        base.subtype(baseClass, typeName, subtypeClass, typeProperty)
+        return this
+    }
+
+    /**
+     * 覆盖指定多态基类的类型属性名。
+     *
+     * @param baseClass 基类/接口
+     * @param typeProperty 类型属性名
+     * @return 当前构建器
+     */
+    public fun typeProperty(baseClass: Class<*>, typeProperty: String): JsonConfigBuilder {
+        base.typeProperty(baseClass, typeProperty)
+        return this
+    }
+
+    /**
+     * 设置反序列化前是否解析本地 $ref。
+     *
+     * @param resolve 是否解析引用
+     * @return 当前构建器
+     */
+    public fun resolveReferences(resolve: Boolean): JsonConfigBuilder {
+        base.resolveReferences(resolve)
+        return this
+    }
+
+    /**
+     * 设置序列化时是否输出对象身份 $ref。
+     *
+     * @param write 是否输出引用
+     * @return 当前构建器
+     */
+    public fun writeReferences(write: Boolean): JsonConfigBuilder {
+        base.writeReferences(write)
         return this
     }
 

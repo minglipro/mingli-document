@@ -246,19 +246,19 @@ private enum class ContractStatus {
  */
 private class Token(val value: String)
 
-private class TokenSerializer : JsonSerializer<Token> {
+private class TokenSerializer : DocumentBaseSerializer<Token> {
     override fun getType(): DocumentTypeReference<Token> = DocumentTypeReference.of()
 
     override fun serialize(value: Token, context: SerializationContext): Node = StringNode.of("#${value.value}")
 }
 
-private class TokenDeserializer : JsonDeserializer<Token> {
+private class TokenDeserializer : DocumentBaseDeserializer<Token> {
     override fun getType(): DocumentTypeReference<Token> = DocumentTypeReference.of()
 
     override fun deserialize(node: Node, context: DeserializationContext): Token = Token(node.asString().removePrefix("#"))
 }
 
-private class TokenConverter : JsonConverter<Token> {
+private class TokenConverter : DocumentBaseConverter<Token> {
     override fun getType(): DocumentTypeReference<Token> = DocumentTypeReference.of()
 
     override fun serialize(value: Token, context: SerializationContext): Node = StringNode.of("#${value.value}")
