@@ -38,3 +38,25 @@ tasks.register<JavaExec>("fuzzContinuous") {
     args(seconds)
     systemProperty("fuzz.seconds", seconds)
 }
+
+val jazzer by configurations.creating
+
+dependencies {
+    jazzer("com.code-intelligence:jazzer:0.22.1")
+}
+
+tasks.register<JavaExec>("fuzzJazzer") {
+    group = "verification"
+    description = "Run one Jazzer target for fuzzSeconds (default 10)."
+    dependsOn("classes")
+    classpath = files(jazzer) + sourceSets["main"].runtimeClasspath
+    mainClass.set("com.code_intelligence.jazzer.Jazzer")
+    val seconds = providers.gradleProperty("fuzzSeconds").orElse("10").get()
+    val target = providers.gradleProperty("jazzerTarget")
+        .orElse("com.mingliqiye.document.fuzz.JsonJazzerTarget")
+        .get()
+    args(
+        "--target_class=$target",
+        "-max_total_time=$seconds",
+    )
+}
