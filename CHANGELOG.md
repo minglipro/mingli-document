@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.3.0
+
+### 新增
+
+- Ion 可选类型保真：`IonConfig.preserveTypes`（timestamp / symbol / clob / blob）
+- CBOR 可选 tag 保真：`CborConfig.preserveTags`
+- Properties / TOML / CSV Token 路径深度校验
+- CSV 原生 Token Reader
+- `maxStringLength` Node 字符串长度限制
+- YAML alias 扩张限制
+- CBOR tag / Ion 类型保真畸形输入 fuzz 覆盖
+
+### 说明
+
+- 1.3.0 与 1.2.0 API 兼容
+- 保真能力默认关闭
+- 本地 dev 提交统一发布为 1.3.0
+
 ## 1.2.0
 
 ### 新增
