@@ -13,5 +13,6 @@ internal object DefaultKotlinModule : DocumentModule {
 
     override fun setupModule(context: ModuleSetupContext) {
         context.setObjectInstantiator(KotlinDataClassInstantiator)
+        context.setPropertyMetadataResolver(KotlinPropertyMetadataResolver)
     }
 }

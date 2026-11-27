@@ -118,17 +118,21 @@ fun main() {
 Java Bean 需要无参构造器；Kotlin data class 可以通过 `serialization-kotlin` 使用主构造器反序列化。
 
 ```kotlin
+import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.format.json.JsonMapper
 import com.mingliqiye.document.serialization.kotlin.kotlinModule
 
-data class User(val name: String, val age: Int)
+data class User(
+    @DocumentName("display_name") val name: String,
+    val age: Int,
+)
 
 fun main() {
     val mapper = JsonMapper.builder()
         .addModule(kotlinModule())
         .build()
 
-    val user = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
+    val user = mapper.parse("""{"display_name":"小于","age":18}""", User::class.java)
     println(mapper.formatPretty(user))
 }
 ```
@@ -334,7 +338,7 @@ val label = property?.getAnnotation(MoneyLabel::class.java)?.value
 | `@DocumentIgnore` | 序列化和反序列化时跳过该字段 |
 | `@DocumentConverter(XxxConverter::class)` | 指定该字段专用的转换器实现类 |
 
-字段注解示例（Kotlin；Java Bean 直接把注解写在字段上即可。Kotlin 属性可以不写 use-site target，注解默认落在字段上；需要标在 getter/setter 时使用 `@get:` / `@set:`）：
+字段注解示例（Kotlin；Java Bean 直接把注解写在字段上即可。普通 Kotlin 属性如果注解默认落在 property 上，Java 反射读不到，建议使用 `@field:`；引入 `serialization-kotlin` 后，data class / Kotlin 属性可以通过 Kotlin 反射读取无 use-site target 的注解）：
 
 ```kotlin
 import com.mingliqiye.document.annotation.DocumentIgnore

@@ -4,6 +4,7 @@ import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
+import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
 /**
  * YAML 文档映射器。
@@ -15,6 +16,7 @@ public open class YamlMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
     deserializers: Map<Class<*>, JsonDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
+    propertyMetadataResolver: PropertyMetadataResolver?,
 ) : DocumentMapper(
     "yaml",
     { source -> YamlReader(source).read() },
@@ -22,18 +24,19 @@ public open class YamlMapper internal constructor(
     serializers,
     deserializers,
     objectInstantiator,
+    propertyMetadataResolver,
 ) {
 
     /**
      * 创建默认 YAML 映射器。
      */
-    public constructor() : this(emptyMap(), emptyMap(), null)
+    public constructor() : this(emptyMap(), emptyMap(), null, null)
 
     /**
      * 供格式专用 Mapper 子类使用的构造器。
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
-        this(emptyMap(), emptyMap(), objectInstantiator)
+        this(emptyMap(), emptyMap(), objectInstantiator, null)
 
     public companion object {
 

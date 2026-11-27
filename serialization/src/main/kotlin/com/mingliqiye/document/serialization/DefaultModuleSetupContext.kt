@@ -10,6 +10,7 @@ internal class DefaultModuleSetupContext : ModuleSetupContext {
     private val serializers = LinkedHashMap<Class<*>, JsonSerializer<*>>()
     private val deserializers = LinkedHashMap<Class<*>, JsonDeserializer<*>>()
     private var objectInstantiator: ObjectInstantiator? = null
+    private var propertyMetadataResolver: PropertyMetadataResolver? = null
 
     override fun addSerializer(serializer: JsonSerializer<*>) {
         serializers[serializer.getType().getRawType()] = serializer
@@ -28,9 +29,15 @@ internal class DefaultModuleSetupContext : ModuleSetupContext {
         objectInstantiator = instantiator
     }
 
+    override fun setPropertyMetadataResolver(resolver: PropertyMetadataResolver?) {
+        propertyMetadataResolver = resolver
+    }
+
     fun serializers(): Map<Class<*>, JsonSerializer<*>> = serializers
 
     fun deserializers(): Map<Class<*>, JsonDeserializer<*>> = deserializers
 
     fun objectInstantiator(): ObjectInstantiator? = objectInstantiator
+
+    fun propertyMetadataResolver(): PropertyMetadataResolver? = propertyMetadataResolver
 }

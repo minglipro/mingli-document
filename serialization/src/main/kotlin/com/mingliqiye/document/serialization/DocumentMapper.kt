@@ -53,6 +53,7 @@ public abstract class DocumentMapper protected constructor(
     private val serializers: Map<Class<*>, JsonSerializer<*>>,
     private val deserializers: Map<Class<*>, JsonDeserializer<*>>,
     private val objectInstantiator: ObjectInstantiator?,
+    private val propertyMetadataResolver: PropertyMetadataResolver?,
 ) : DocumentMapperApi {
 
     /**
@@ -66,7 +67,7 @@ public abstract class DocumentMapper protected constructor(
         formatName: String,
         parseText: (String) -> Node,
         writeText: (Node, Boolean) -> String,
-    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null)
+    ) : this(formatName, parseText, writeText, emptyMap(), emptyMap(), null, null)
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
@@ -773,10 +774,17 @@ public abstract class DocumentMapper protected constructor(
             property.name,
             propertyType,
             elements,
+            propertyMetadataResolver?.resolve(type, property.name).orEmpty(),
         )
     }
 
-    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(type, field.name, field.genericType, listOf(field))
+    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(
+        type,
+        field.name,
+        field.genericType,
+        listOf(field),
+        propertyMetadataResolver?.resolve(type, field.name).orEmpty(),
+    )
 
     private fun findField(type: Class<*>, name: String): Field? {
         var current: Class<*>? = type

@@ -24,4 +24,9 @@ public interface ModuleSetupContext {
      * 设置对象实例化策略。
      */
     public fun setObjectInstantiator(instantiator: ObjectInstantiator?)
+
+    /**
+     * 设置属性元数据解析器。
+     */
+    public fun setPropertyMetadataResolver(resolver: PropertyMetadataResolver?)
 }

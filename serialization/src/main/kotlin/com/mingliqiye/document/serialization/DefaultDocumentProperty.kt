@@ -18,17 +18,19 @@ internal class DefaultDocumentProperty(
     override val name: String,
     override val type: Type,
     private val elements: List<AnnotatedElement>,
+    private val additionalAnnotations: List<Annotation> = emptyList(),
 ) : DocumentProperty {
 
     override val annotations: List<Annotation> =
-        elements.flatMap { it.annotations.toList() }.distinct()
+        (elements.flatMap { it.annotations.toList() } + additionalAnnotations).distinct()
 
     override val documentName: String =
         getAnnotation(DocumentName::class.java)?.value ?: name
 
-    override fun <A : Annotation> getAnnotation(annotationClass: Class<A>): A? = elements.firstNotNullOfOrNull { AnnotationGetter.getAnnotation(it, annotationClass) }
+    override fun <A : Annotation> getAnnotation(annotationClass: Class<A>): A? = additionalAnnotations.firstOrNull { annotationClass.isInstance(it) }?.let(annotationClass::cast)
+        ?: elements.firstNotNullOfOrNull { AnnotationGetter.getAnnotation(it, annotationClass) }
 
-    override fun hasAnnotation(annotationClass: Class<out Annotation>): Boolean = elements.any { AnnotationGetter.getAnnotation(it, annotationClass) != null }
+    override fun hasAnnotation(annotationClass: Class<out Annotation>): Boolean = getAnnotation(annotationClass) != null
 
     override fun getRawType(): Class<*> = resolveRawType(type)
 

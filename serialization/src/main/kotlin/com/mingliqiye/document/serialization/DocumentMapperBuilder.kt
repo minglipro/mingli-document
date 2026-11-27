@@ -16,6 +16,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
     private val deserializers = LinkedHashMap<Class<*>, JsonDeserializer<*>>()
     private val modules = LinkedHashMap<String, DocumentModule>()
     private var objectInstantiator: ObjectInstantiator? = null
+    private var propertyMetadataResolver: PropertyMetadataResolver? = null
 
     /**
      * 注册序列化器。
@@ -104,6 +105,7 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
             allSerializers,
             allDeserializers,
             moduleContext.objectInstantiator() ?: objectInstantiator,
+            moduleContext.propertyMetadataResolver() ?: propertyMetadataResolver,
         )
     }
 
@@ -114,5 +116,6 @@ public abstract class DocumentMapperBuilder<M : DocumentMapper> {
         serializers: Map<Class<*>, JsonSerializer<*>>,
         deserializers: Map<Class<*>, JsonDeserializer<*>>,
         objectInstantiator: ObjectInstantiator?,
+        propertyMetadataResolver: PropertyMetadataResolver?,
     ): M
 }

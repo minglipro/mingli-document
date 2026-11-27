@@ -7,6 +7,7 @@ import com.mingliqiye.document.serialization.exception.DocumentSerializationExce
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class KotlinDataClassTest {
 
@@ -53,8 +54,10 @@ class KotlinDataClassTest {
     fun documentNameIsRead() {
         val value = Named("小于", 18)
         val node = jsonMapper.toNode(value)
-        val restored = jsonMapper.fromNode(node, Named::class.java)
+        assertEquals("小于", node.asObject()["display_name"]?.asString())
+        assertNull(node.asObject()["name"])
 
+        val restored = jsonMapper.fromNode(node, Named::class.java)
         assertEquals(value, restored)
     }
 
@@ -94,7 +97,7 @@ class KotlinDataClassTest {
     private data class Settings(val name: String = "guest", val age: Int = 18)
 
     private data class Named(
-        @field:DocumentName("display_name") val name: String,
+        @DocumentName("display_name") val name: String,
         val age: Int,
     )
 
