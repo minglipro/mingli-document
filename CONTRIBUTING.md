@@ -30,9 +30,9 @@
 |---|---|---|
 | `annotation` | 格式无关注解 | 无 |
 | `exception` | 文档处理异常 | `mingli-exception` |
-| `core` | 文档树、Codec/SPI 契约 | `exception` |
-| `format-json` | JSON 编解码实现 | `core` |
-| `format-yaml` | YAML 编解码实现 | `core`、SnakeYAML |
+| `core` | 文档树、类型引用契约 | `exception` |
+| `format-json` | JSON Mapper | `serialization`、`core` |
+| `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
 | `serialization` | Java 实体与树之间的映射 | `core` |
 
 允许的依赖方向：
@@ -43,16 +43,16 @@ annotation       独立
 exception
     ↑
 core
- ├── format-json
- ├── format-yaml
  └── serialization
+      ├── format-json
+      └── format-yaml
 ```
 
 规则：
 
 - `core` 不能依赖任何具体格式模块。
 - `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`serialization`。
-- `format-*` 只能依赖 `core` 及其 API。
+- `format-*` 依赖 `serialization` 与 `core`，通过继承 `DocumentMapper` 暴露格式 Mapper。
 - `serialization` 主代码不依赖具体格式。
 - 测试可以临时依赖其他模块做集成验证，但不能把测试依赖带入主代码 API。
 - 传递暴露给使用方的类型使用 `api`；纯实现依赖使用 `implementation`。
@@ -74,7 +74,7 @@ core
 
 ```text
 DocumentMapperApi          -> DefaultDocumentMapper
-DocumentCodec              -> JsonCodec
+DocumentMapper             -> JsonMapper / YamlMapper
 Node                       -> DefaultObjectNode 等
 JsonConverter              -> 用户自定义实现
 ```
@@ -101,7 +101,7 @@ JsonConverter              -> 用户自定义实现
 | 类型 | 命名 |
 |---|---|
 | 行为 API | `XxxApi` |
-| 角色接口 | `Xxx`，例如 `Node`、`DocumentCodec` |
+| 角色接口 | `Xxx`，例如 `Node`、`JsonSerializer` |
 | 默认实现 | `DefaultXxx` |
 | 仅内部实现 | `internal class XxxImpl` 或 `internal class DefaultXxx` |
 | 异常 | `XxxException` |
@@ -153,17 +153,21 @@ Node
 
 ```text
 DocumentMapperApi
-    └── DefaultDocumentMapper
+    └── DocumentMapper（serialization 基类）
+          ├── JsonMapper（format-json）
+          └── YamlMapper（format-yaml）
 ```
 
-`DefaultDocumentMapper` 负责编排，内部可通过 `private` 方法或 `internal` 具体类组织反射、类型转换和集合处理。
+`DocumentMapper` 负责编排与实体映射，内部通过 `private` 方法或 `internal` 具体类组织反射、类型转换和集合处理。
+格式模块只负责提供文本解析/写出函数，并继承 `DocumentMapper`。
 
 规则：
 
 - 不新增内部 SPI 接口，除非确认存在第二个可替换实现；
 - 不引入 Java `ServiceLoader` / `META-INF/services` 自动发现；
-- 对外扩展点只保留：`DocumentCodec`、`JsonSerializer`、`JsonDeserializer`、`JsonConverter`；
-- 未来 YAML/XML 只实现 `DocumentCodec`，不依赖 `serialization` 内部实现。
+- 内部格式 Codec 不对外暴露；
+- 对外扩展点只保留：`JsonSerializer`、`JsonDeserializer`、`JsonConverter`；
+- 未来 XML 模块继承 `DocumentMapper`，例如 `XmlMapper`。
 
 ---
 

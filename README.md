@@ -4,8 +4,8 @@
 
 `com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
 
-- **格式无关**：`core` 定义节点树与 `DocumentCodec` SPI，核心 API 不依赖任何具体格式；
-- **JSON/YAML 编解码**：`format-json` 提供 JSON/JSONC，`format-yaml` 提供 YAML 解析与输出；
+- **格式无关**：`core` 只定义节点树与类型引用，不依赖任何具体格式；
+- **JSON/YAML Mapper**：`format-json` 提供 `JsonMapper`，`format-yaml` 提供 `YamlMapper`，两者继承通用 `DocumentMapper`；
 - **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
 
 > XML **尚未实现**，只在路线图中；详见「限制与路线图」。
@@ -16,24 +16,23 @@
 |---|---|---|
 | `annotation` | 格式无关注解：`@DocumentName`、`@DocumentIgnore`、`@DocumentConverter` | 无 |
 | `exception` | 文档异常基类 `DocumentException` | `com.mingliqiye.exception:mingli-exception:1.1.1-Final` |
-| `core` | 文档树 `Node`、`DocumentCodec` / `DocumentParser` / `DocumentWriter` SPI、`DocumentTypeReference` | `exception` |
-| `format-json` | JSON/JSONC 编解码器 `JsonCodec`、`JsonReader` | `core` |
-| `format-yaml` | YAML 编解码器 `YamlCodec`、`YamlReader` | `core`、SnakeYAML |
-| `serialization` | Java Bean ↔ `Node` 映射、转换器 SPI、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
+| `core` | 文档树 `Node`、`DocumentTypeReference` | `exception` |
+| `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
+| `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
+| `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
 
 ```text
-format-json   ──► core ──► exception ──► mingli-exception
-format-yaml   ──► core
-serialization ──► core
-              ──► annotation（implementation）
+format-json ──► serialization ──► core ──► exception ──► mingli-exception
+format-yaml ──► serialization
+serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
 annotation：项目内无依赖
 ```
 
-- `core` 不依赖任何具体格式，`format-json`、`format-yaml` 与 `serialization` 之间也不互相依赖（`serialization` 只在测试中依赖 `format-json`）。
-- 需要文本解析/输出时，业务方按需引入 `serialization` 与 `format-json` 或 `format-yaml`。
+- `core` 不依赖任何具体格式；`format-json` / `format-yaml` 依赖 `serialization`，并继承其 `DocumentMapper` 基类。
+- 外部使用方只需要引入对应格式模块（如 `format-json`）即可获得 `JsonMapper`；不需要接触内部 Codec 实现。
 
 ## 坐标
 
@@ -65,8 +64,7 @@ dependencies {
 
 ```kotlin
 // Main.kt
-import com.mingliqiye.document.format.json.JsonCodec
-import com.mingliqiye.document.serialization.DocumentMapperApi
+import com.mingliqiye.document.format.json.JsonMapper
 
 class User {
     var name: String = ""
@@ -74,8 +72,8 @@ class User {
 }
 
 fun main() {
-    // 需要文本编解码（parse/format）时注入 codec；只做树映射可省略 .codec(...)
-    val mapper = DocumentMapperApi.builder().codec(JsonCodec).build()
+    // JSON 格式使用 JsonMapper；YAML 使用 YamlMapper
+    val mapper = JsonMapper()
 
     val user = User().apply {
         name = "小于"
@@ -90,7 +88,7 @@ fun main() {
     val restored = mapper.fromNode(node, User::class.java)
     println("${restored.name}:${restored.age}") // 小于:18
 
-    // 文本 -> 实体（需要 codec）
+    // 文本 -> 实体
     val parsed = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
     println(parsed.age) // 18
 
@@ -100,17 +98,17 @@ fun main() {
 }
 ```
 
-`DocumentMapperApi` 的主要方法：
+`DocumentMapper` 的主要方法：
 
 | 方法 | 作用 |
 |---|---|
 | `toNode(value)` | 任意实体、集合、`Map`、数组或 `Node` → 文档树 |
 | `fromNode(node, Class)` / `fromNode(node, DocumentTypeReference)` | 文档树 → Java 实体（支持泛型类型） |
-| `parse(source, Class)` / `parse(source, DocumentTypeReference)` | 文本 → Java 实体（需要 codec） |
-| `format(value)` / `formatPretty(value)` | Java 实体 → 紧凑 / 格式化文本（需要 codec） |
+| `parse(source, Class)` / `parse(source, DocumentTypeReference)` | 文本 → Java 实体 |
+| `format(value)` / `formatPretty(value)` | Java 实体 → 紧凑 / 格式化文本 |
 | `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
 
-> `DocumentMapperApi` 的伴生对象还提供 `fromNode<T>()`、`parse<T>()`、`convert<T>()` 三个 reified 便捷扩展（需导入对应扩展），按 Kotlin 泛型自动构造类型引用。
+> `JsonMapper` / `YamlMapper` 继承 `DocumentMapper`；格式模块内部 Codec 不对外暴露。
 
 ## 自定义转换器
 
@@ -157,12 +155,10 @@ class MoneyConverter : JsonConverter<Money> {
 在 Builder 中注册：
 
 ```kotlin
-import com.mingliqiye.document.format.json.JsonCodec
-import com.mingliqiye.document.serialization.DocumentMapperApi
+import com.mingliqiye.document.format.json.JsonMapper
 
 fun main() {
-    val mapper = DocumentMapperApi.builder()
-        .codec(JsonCodec)
+    val mapper = JsonMapper.builder()
         .addConverter(MoneyConverter()) // 同时注册序列化和反序列化方向
         .build()
 
@@ -198,7 +194,6 @@ import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.serialization.DeserializationContext
-import com.mingliqiye.document.serialization.DocumentMapperApi
 import com.mingliqiye.document.serialization.JsonConverter
 import com.mingliqiye.document.serialization.SerializationContext
 
@@ -229,7 +224,7 @@ class LabeledWallet {
 }
 
 fun main() {
-    val mapper = DocumentMapperApi.builder().build()
+    val mapper = JsonMapper()
     val node = mapper.toNode(LabeledWallet().apply { money = Money(12) })
     println(node.asObject()["money"]?.asString()) // 12 USD
 }
@@ -259,8 +254,7 @@ val label = property?.getAnnotation(MoneyLabel::class.java)?.value
 ```kotlin
 import com.mingliqiye.document.annotation.DocumentIgnore
 import com.mingliqiye.document.annotation.DocumentName
-import com.mingliqiye.document.format.json.JsonCodec
-import com.mingliqiye.document.serialization.DocumentMapperApi
+import com.mingliqiye.document.format.json.JsonMapper
 
 class Profile {
     @field:DocumentName("display_name")
@@ -271,7 +265,7 @@ class Profile {
 }
 
 fun main() {
-    val mapper = DocumentMapperApi.builder().codec(JsonCodec).build()
+    val mapper = JsonMapper()
     val node = mapper.toNode(Profile().apply { name = "小于" }).asObject()
 
     println(node["display_name"]?.asString()) // 小于
@@ -284,7 +278,7 @@ fun main() {
 
 ```kotlin
 import com.mingliqiye.document.annotation.DocumentConverter
-import com.mingliqiye.document.serialization.DocumentMapperApi
+import com.mingliqiye.document.format.json.JsonMapper
 
 // 复用上文的 Money 与 MoneyConverter
 class Wallet {
@@ -293,7 +287,7 @@ class Wallet {
 }
 
 fun main() {
-    val mapper = DocumentMapperApi.builder().build() // 纯树映射，不需要 codec
+    val mapper = JsonMapper() // 字段转换器不依赖文本 codec
     val node = mapper.toNode(Wallet().apply { money = Money(12) })
     println(node.asObject()["money"]?.asString()) // 12 CNY
 }
@@ -339,7 +333,7 @@ val label = text?.value ?: text?.alias // value 与 alias 互为别名
 
 ## JSON 支持
 
-`JsonCodec` 是 `DocumentCodec` 的 JSON 实现，`JsonReader` 默认按 **JSONC** 方式解析：
+`JsonMapper` 是 JSON 格式的 Mapper，`JsonReader` 默认按 **JSONC** 方式解析：
 
 - 允许 `//` 行注释和 `/* ... */` 块注释；
 - 允许额外空白，并兼容 BOM 与常见 Unicode 空白字符；
@@ -347,7 +341,7 @@ val label = text?.value ?: text?.alias // value 与 alias 互为别名
 - 解析失败抛出 `JsonParseException`，异常信息包含 `line`、`column` 定位。
 
 ```kotlin
-import com.mingliqiye.document.format.json.JsonCodec
+import com.mingliqiye.document.format.json.JsonMapper
 import com.mingliqiye.document.format.json.JsonParseException
 import com.mingliqiye.document.format.json.JsonReader
 import com.mingliqiye.document.format.json.toJsonNode
@@ -373,9 +367,9 @@ fun main() {
         println(e.message) // 带 line / column 的错误信息
     }
 
-    // 也可以直接使用 codec
-    val parsed = JsonCodec.parse(json)
-    println(JsonCodec.write(parsed, true))
+    // 也可以使用文档树扩展
+    val parsed = json.toJsonNode()
+    println(parsed.toJsonString(pretty = true))
 }
 ```
 
@@ -388,7 +382,7 @@ fun main() {
 YAML 使用 [SnakeYAML](https://bitbucket.org/snakeyaml/snakeyaml) 2.6，并通过 `SafeConstructor` 只还原标准 YAML 标量和集合。
 
 ```kotlin
-import com.mingliqiye.document.format.yaml.YamlCodec
+import com.mingliqiye.document.format.yaml.YamlMapper
 import com.mingliqiye.document.format.yaml.toYamlNode
 import com.mingliqiye.document.format.yaml.toYamlString
 
@@ -410,11 +404,8 @@ fun main() {
     // 块格式输出
     println(node.toYamlString(pretty = true))
 
-    // 作为 Mapper codec 使用
-    val mapper = com.mingliqiye.document.serialization.DocumentMapperApi
-        .builder()
-        .codec(YamlCodec)
-        .build()
+    // 作为 Mapper 使用
+    val mapper = YamlMapper()
     println(mapper.formatPretty(node))
 }
 ```
@@ -454,12 +445,12 @@ gradle ktlintFormat
 - 格式实现有 JSON（`format-json`）和 YAML（`format-yaml`）；
 - Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
 - 实体需要无参构造器；不支持带参数构造器的实体（Kotlin 类所有构造参数都有默认值时编译器会生成无参构造器，可以正常映射）；
-- 文本 `parse` / `format` 需要构建 Mapper 时传入 codec，否则抛 `DocumentSerializationException`；
+- `JsonMapper` / `YamlMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
 - 序列化检测循环引用，最大嵌套深度为 128；JSON 解析最大嵌套深度为 512。
 
 **尚未实现**：
 
-- XML 适配器尚未实现。`core` 只提供 `DocumentCodec` SPI（`parse` / `write` / `format`），新增格式需要自行实现该接口。
+- XML 适配器尚未实现；格式模块通过继承 `DocumentMapper` 提供 Mapper，内部 Codec 不对外暴露。
 - XML 适配器计划在 `core` API 稳定后再接入。
 
 常见异常：
@@ -468,7 +459,7 @@ gradle ktlintFormat
 |---|---|---|
 | `DocumentException` | `exception` | 文档处理异常公共基类 |
 | `DocumentTypeException` | `exception` | 节点类型与预期不符（如对数组调用 `asObject()`） |
-| `DocumentSerializationException` | `serialization` | Bean 映射失败、未配置 codec、循环引用等 |
+| `DocumentSerializationException` | `serialization` | Bean 映射失败、循环引用、格式函数不可用等 |
 | `JsonParseException` | `format-json` | JSON/JSONC 语法错误 |
 | `YamlParseException` | `format-yaml` | YAML 语法错误或不支持的类型 |
 
