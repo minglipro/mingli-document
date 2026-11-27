@@ -126,6 +126,28 @@ public class CsvConfigBuilder {
     }
 
     /**
+     * 设置反序列化前是否解析本地 $ref。
+     *
+     * @param resolve 是否解析引用
+     * @return 当前构建器
+     */
+    public fun resolveReferences(resolve: Boolean): CsvConfigBuilder {
+        base.resolveReferences(resolve)
+        return this
+    }
+
+    /**
+     * 设置序列化时是否输出对象身份 $ref。
+     *
+     * @param write 是否输出引用
+     * @return 当前构建器
+     */
+    public fun writeReferences(write: Boolean): CsvConfigBuilder {
+        base.writeReferences(write)
+        return this
+    }
+
+    /**
      * 构建配置。
      */
     public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema)

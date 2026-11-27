@@ -26,7 +26,7 @@
 - [x] 多态类型（type 字段 + 类型注册）
 - [x] 构造器注入
 - [x] Builder 模式实例化
-- [x] 输入本地 `$ref` 解析\n- [ ] 对象身份引用序列化
+- [x] 输入本地 `$ref` 解析\n- [x] 对象身份引用序列化
 - [ ] Java record / Kotlin value class / sealed class
 - [ ] 只读属性
 - [ ] 字段 merge / update
