@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0
+
+### 新增
+
+- 原生 Token Reader：CSV / Properties / TOML / YAML / XML（默认配置）
+- JSON Double 使用 Schubfach 最短表示
+- `fuzzContinuous` 持续随机 fuzz harness
+- YAML `maxAliases` 配置
+- XML 解析错误静默处理
+
+### 说明
+
+- 1.4.0 与 1.3.0 API 兼容
+- 原生 Token 路径在非默认配置或 Node 限制存在时自动回退
+- 本地 dev 能力统一发布为 1.4.0
+
 ## 1.3.0
 
 ### 新增

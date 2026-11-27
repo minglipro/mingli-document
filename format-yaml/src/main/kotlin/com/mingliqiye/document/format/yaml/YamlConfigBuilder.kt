@@ -11,6 +11,7 @@ public class YamlConfigBuilder {
 
     private val base = DocumentMapperConfig.builder()
     private var pretty = false
+    private var maxAliases = 0
 
     /**
      * 为指定字段绑定转换器。
@@ -58,6 +59,20 @@ public class YamlConfigBuilder {
      */
     public fun pretty(pretty: Boolean): YamlConfigBuilder {
         this.pretty = pretty
+        return this
+    }
+
+    /**
+     * 设置单文档允许的非标量 alias 最大数量，0 表示使用 SnakeYAML 默认值。
+     *
+     * 该限制作用于原生 Token 路径与 Node 回退路径（[YamlReader]）。
+     *
+     * @param maxAliases 最大 alias 数量
+     * @return 当前构建器
+     */
+    public fun maxAliases(maxAliases: Int): YamlConfigBuilder {
+        require(maxAliases >= 0) { "maxAliases must be >= 0" }
+        this.maxAliases = maxAliases
         return this
     }
 
@@ -125,5 +140,5 @@ public class YamlConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): YamlConfig = YamlConfig(base.build(), pretty)
+    public fun build(): YamlConfig = YamlConfig(base.build(), pretty, maxAliases)
 }

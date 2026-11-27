@@ -14,7 +14,7 @@ internal object YamlCodec {
     fun parse(source: String): Node = YamlReader(source).read()
 
     /** 解析多文档 YAML 文本，按文档顺序返回全部文档树。 */
-    fun parseAll(source: String): List<Node> = YamlMultiDocumentReader(source).readAll()
+    fun parseAll(source: String, maxDepth: Int = 0, maxAliases: Int = 0): List<Node> = YamlMultiDocumentReader(source, maxDepth, maxAliases).readAll()
 
     /** 写出 YAML 文本。 */
     fun write(node: Node, pretty: Boolean): String = YamlWriter(pretty).write(node)

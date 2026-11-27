@@ -5,7 +5,7 @@ TOML 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:toml:1.3.0")
+implementation("com.mingliqiye.document.format:toml:1.4.0")
 ```
 
 ## 主要 API
@@ -39,6 +39,7 @@ val text = mapper.format(user)
 - 内联表写出
 - 文件/流读写
 - Token 直读 Bean
+- 原生 TOML Token Reader
 
 ## 限制
 

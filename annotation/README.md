@@ -29,7 +29,7 @@ com.mingliqiye.document.annotation
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:annotation:1.3.0")
+implementation("com.mingliqiye.document:annotation:1.4.0")
 ```
 
 ## 示例

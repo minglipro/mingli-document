@@ -5,7 +5,7 @@ JSON / JSONC 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:json:1.3.0")
+implementation("com.mingliqiye.document.format:json:1.4.0")
 ```
 
 ## 主要 API
@@ -64,6 +64,7 @@ val mapper = JsonMapper(
 - Token 直读 Bean
 - 轻量 JSON Schema 校验
 - 紧凑模式纯 UTF-8 字节写出（不经过中间 String）
+- Double 使用 Schubfach 最短表示
 
 ## JSON Schema
 

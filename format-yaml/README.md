@@ -5,7 +5,7 @@ YAML 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:yaml:1.3.0")
+implementation("com.mingliqiye.document.format:yaml:1.4.0")
 ```
 
 ## 主要 API
@@ -47,6 +47,7 @@ val result = YamlMapper().formatAll(nodes)
 - SnakeYAML SafeConstructor
 - 解析深度限制
 - alias 扩张限制
+- 原生 YAML Token Reader
 - 文件/流读写
 
 ## 限制

@@ -1,0 +1,289 @@
+package com.mingliqiye.document.format.yaml
+
+import com.mingliqiye.document.format.yaml.exception.YamlParseException
+import com.mingliqiye.document.serialization.DocumentToken
+import com.mingliqiye.document.serialization.DocumentTokenReader
+import com.mingliqiye.document.serialization.DocumentTokenType
+import org.yaml.snakeyaml.LoaderOptions
+import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.constructor.SafeConstructor
+import org.yaml.snakeyaml.error.YAMLException
+import org.yaml.snakeyaml.nodes.AnchorNode
+import org.yaml.snakeyaml.nodes.MappingNode
+import org.yaml.snakeyaml.nodes.NodeTuple
+import org.yaml.snakeyaml.nodes.ScalarNode
+import org.yaml.snakeyaml.nodes.SequenceNode
+import org.yaml.snakeyaml.nodes.Tag
+import java.io.StringReader
+import java.math.BigDecimal
+import java.math.BigInteger
+import java.util.Date
+import java.util.IdentityHashMap
+import org.yaml.snakeyaml.nodes.Node as YamlNode
+
+/**
+ * YAML 原生 Token 读取器。
+ *
+ * 通过 SnakeYAML 的 `compose` 直接得到 YAML AST（[MappingNode]/[SequenceNode]/
+ * [ScalarNode]），遍历生成 Token 流，不构建 core `Node` 树。Scalar tag 到 Token
+ * 的映射与 [YamlNodeMapping] 对齐：
+ *
+ * - `!!null` -> [DocumentTokenType.NULL]
+ * - `!!bool` -> [DocumentTokenType.BOOLEAN]
+ * - `!!int` / `!!float` -> [DocumentTokenType.NUMBER]，数字文本经 SafeConstructor
+ *   归一化（`0x1F`、`1_000` 等输出十进制 raw；NaN/Infinity 拒绝）
+ * - `!!binary` -> [DocumentTokenType.BINARY]，Base64 解码为原始字节
+ * - `!!timestamp` -> [DocumentTokenType.STRING]，ISO-8601 instant 文本
+ * - 其他 tag -> [DocumentTokenType.STRING]
+ *
+ * mapping 字段名沿用 [YamlNodeMapping] 规则（null -> `"null"`，string/number/boolean
+ * -> `toString()`）；merge key 与重复 key 复用 SafeConstructor 的 AST 级校验，
+ * 与 [YamlReader] 语义一致。
+ *
+ * 限制在 Token 生成阶段执行（`0` 表示使用 SnakeYAML 默认值，与 [YamlReader] 一致）：
+ * - [maxDepth] 交给 SnakeYAML `nestingDepthLimit`；
+ * - [maxAliases] 交给 SnakeYAML `maxAliasesForCollections`；
+ * - [maxStringLength] 在遍历时校验 STRING / FIELD_NAME 文本长度。
+ *
+ * Token 层无法等价实现的语义：
+ * - 递归节点（如 `&a {self: *a}`）抛出 [YamlParseException]，不构建环；
+ * - 非标准自定义 tag 的标量按 STRING 处理（Node 路径会因缺少构造器报错）；
+ * - 显式 `!!set` / `!!omap` / `!!pairs` 集合 tag 按底层 mapping 结构输出
+ *   （Node 路径会构造 Set/List 后得到 ArrayNode）；
+ * - 显式 `!!bool` 非法值时与 Node 路径一致，返回 NULL。
+ *
+ * @param source YAML 文本（单文档，多文档输入抛异常）
+ * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
+ * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
+ * @param maxStringLength 单个字符串最大长度；`0` 表示不限制
+ */
+internal class YamlTokenReader(
+    source: String,
+    maxDepth: Int = 0,
+    maxAliases: Int = 0,
+    maxStringLength: Int = 0,
+) : DocumentTokenReader {
+
+    private val tokens: List<DocumentToken> = buildTokens(source, maxDepth, maxAliases, maxStringLength)
+    private var index = -1
+    private var current: DocumentToken? = null
+
+    override val currentToken: DocumentTokenType?
+        get() = current?.type
+
+    override val textValue: String?
+        get() = current?.text
+
+    override val booleanValue: Boolean?
+        get() = current?.booleanValue
+
+    override val binaryValue: ByteArray?
+        get() = current?.binaryValue
+
+    override fun nextToken(): DocumentTokenType? {
+        index++
+        if (index >= tokens.size) {
+            current = null
+            return null
+        }
+        val token = tokens[index]
+        current = token
+        return token.type
+    }
+
+    private companion object {
+
+        private fun buildTokens(
+            source: String,
+            maxDepth: Int,
+            maxAliases: Int,
+            maxStringLength: Int,
+        ): List<DocumentToken> = try {
+            val constructor = YamlTokenConstructor(createOptions(maxDepth, maxAliases))
+            val root = Yaml(constructor).compose(StringReader(source))
+            val tokens = ArrayList<DocumentToken>()
+            if (root == null) {
+                tokens.add(DocumentToken.nullValue())
+            } else {
+                YamlTokenTraversal(constructor, maxStringLength).append(root, tokens)
+            }
+            tokens
+        } catch (e: YAMLException) {
+            throw YamlParseException("Invalid YAML: ${e.message}", e)
+        } catch (e: IllegalArgumentException) {
+            throw YamlParseException("Invalid YAML: ${e.message}", e)
+        }
+
+        private fun createOptions(maxDepth: Int, maxAliases: Int): LoaderOptions {
+            val options = LoaderOptions()
+            options.setAllowDuplicateKeys(false)
+            if (maxDepth > 0) {
+                options.setNestingDepthLimit(maxDepth)
+            }
+            if (maxAliases > 0) {
+                options.setMaxAliasesForCollections(maxAliases)
+            }
+            return options
+        }
+    }
+}
+
+/**
+ * 暴露 SafeConstructor 的 AST 级校验能力。
+ *
+ * Token 路径只对单个 Scalar 调用 [constructNodeValue]（复用 SafeConstructor 的
+ * tag 构造器），对 Mapping 调用 [flattenMappingNode] 完成重复 key / merge key
+ * 处理；不构造完整文档树。
+ */
+private class YamlTokenConstructor(
+    options: LoaderOptions,
+) : SafeConstructor(options) {
+
+    /** 按 SnakeYAML tag 构造单个 AST 节点的值（Scalar 用）。 */
+    fun constructNodeValue(node: YamlNode): Any? = constructObject(node)
+
+    /** 执行重复 key 校验与 merge key 展开（Mapping 用，与 Node 路径一致）。 */
+    fun flattenMappingNode(node: MappingNode) {
+        flattenMapping(node)
+    }
+}
+
+/**
+ * YAML AST -> Token 遍历器。
+ */
+private class YamlTokenTraversal(
+    private val constructor: YamlTokenConstructor,
+    private val maxStringLength: Int,
+) {
+
+    private val activeNodes = IdentityHashMap<YamlNode, Boolean>()
+
+    fun append(node: YamlNode, tokens: MutableList<DocumentToken>) {
+        when (node) {
+            is AnchorNode -> append(node.realNode, tokens)
+            is MappingNode -> appendMapping(node, tokens)
+            is SequenceNode -> appendSequence(node, tokens)
+            is ScalarNode -> appendScalar(node, tokens)
+            else -> throw YamlParseException("Unsupported YAML node type: ${node.javaClass.name}")
+        }
+    }
+
+    private fun appendMapping(node: MappingNode, tokens: MutableList<DocumentToken>) {
+        enter(node) {
+            constructor.flattenMappingNode(node)
+            tokens.add(DocumentToken.startObject())
+            for (tuple in node.value) {
+                appendField(tuple, tokens)
+            }
+            tokens.add(DocumentToken.endObject())
+        }
+    }
+
+    private fun appendField(tuple: NodeTuple, tokens: MutableList<DocumentToken>) {
+        val name = fieldName(constructor.constructNodeValue(tuple.keyNode))
+        checkStringLength(name)
+        tokens.add(DocumentToken.fieldName(name))
+        append(tuple.valueNode, tokens)
+    }
+
+    private fun appendSequence(node: SequenceNode, tokens: MutableList<DocumentToken>) {
+        enter(node) {
+            tokens.add(DocumentToken.startArray())
+            for (element in node.value) {
+                append(element, tokens)
+            }
+            tokens.add(DocumentToken.endArray())
+        }
+    }
+
+    private fun appendScalar(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+        when {
+            node.tag == Tag.NULL -> tokens.add(DocumentToken.nullValue())
+            node.tag == Tag.BOOL -> appendBoolean(node, tokens)
+            node.tag == Tag.INT || node.tag == Tag.FLOAT -> appendNumber(node, tokens)
+            node.tag == Tag.BINARY -> appendBinary(node, tokens)
+            node.tag == Tag.TIMESTAMP -> appendTimestamp(node, tokens)
+            else -> appendString(node.value, tokens)
+        }
+    }
+
+    private fun appendBoolean(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+        val value = constructor.constructNodeValue(node)
+        if (value is Boolean) {
+            tokens.add(DocumentToken.boolean(value))
+        } else {
+            // 显式 !!bool 非法值时 SnakeYAML 构造为 null，与 Node 路径一致。
+            tokens.add(DocumentToken.nullValue())
+        }
+    }
+
+    private fun appendNumber(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+        tokens.add(DocumentToken.number(numberRaw(constructor.constructNodeValue(node))))
+    }
+
+    private fun appendBinary(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+        val value = constructor.constructNodeValue(node)
+        if (value !is ByteArray) {
+            throw YamlParseException("Invalid YAML binary value")
+        }
+        tokens.add(DocumentToken.binary(value))
+    }
+
+    private fun appendTimestamp(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+        val value = constructor.constructNodeValue(node)
+        if (value !is Date) {
+            throw YamlParseException("Invalid YAML timestamp value")
+        }
+        appendString(value.toInstant().toString(), tokens)
+    }
+
+    private fun appendString(value: String, tokens: MutableList<DocumentToken>) {
+        checkStringLength(value)
+        tokens.add(DocumentToken.string(value))
+    }
+
+    private fun numberRaw(value: Any?): String = when (value) {
+        is Double -> {
+            if (!value.isFinite()) {
+                throw YamlParseException("YAML NaN/Infinity numbers are not supported")
+            }
+            BigDecimal.valueOf(value).toPlainString()
+        }
+
+        is Float -> {
+            if (!value.isFinite()) {
+                throw YamlParseException("YAML NaN/Infinity numbers are not supported")
+            }
+            BigDecimal.valueOf(value.toDouble()).toPlainString()
+        }
+
+        is BigDecimal -> value.toPlainString()
+        is BigInteger -> value.toString()
+        is Number -> value.toString()
+        else -> throw YamlParseException("Unsupported YAML number type: ${value?.javaClass?.name ?: "null"}")
+    }
+
+    private fun fieldName(value: Any?): String = when (value) {
+        null -> "null"
+        is String -> value
+        is Number, is Boolean, is Char -> value.toString()
+        else -> throw YamlParseException("Unsupported YAML mapping key type: ${value.javaClass.name}")
+    }
+
+    private fun checkStringLength(value: String) {
+        if (maxStringLength > 0 && value.length > maxStringLength) {
+            throw YamlParseException("String length ${value.length} exceeds maxStringLength $maxStringLength")
+        }
+    }
+
+    private fun enter(node: YamlNode, block: () -> Unit) {
+        if (activeNodes.put(node, true) != null) {
+            throw YamlParseException("Recursive YAML nodes are not supported")
+        }
+        try {
+            block()
+        } finally {
+            activeNodes.remove(node)
+        }
+    }
+}

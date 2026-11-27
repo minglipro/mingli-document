@@ -1,5 +1,6 @@
 package com.mingliqiye.document.format.json
 
+import com.fasterxml.jackson.core.io.schubfach.DoubleToDecimal
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
@@ -60,7 +61,7 @@ internal class JsonStreamWriter(
     override fun writeDouble(value: Double) {
         require(value.isFinite()) { "NaN and Infinity cannot be serialized" }
         beforeValue()
-        builder.append(value)
+        builder.append(DoubleToDecimal.toString(value))
     }
 
     override fun writeBoolean(value: Boolean) {

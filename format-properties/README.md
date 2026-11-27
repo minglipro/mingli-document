@@ -5,7 +5,7 @@ Java Properties 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:properties:1.3.0")
+implementation("com.mingliqiye.document.format:properties:1.4.0")
 ```
 
 ## 主要 API
@@ -56,6 +56,7 @@ user.tags[0]=a
 - 扁平文本与 Node 树互转
 - 文件/流读取与保存
 - Token 直读 Bean
+- 原生 Properties Token Reader
 
 ## 构建
 

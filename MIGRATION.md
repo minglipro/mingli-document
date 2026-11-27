@@ -1,4 +1,17 @@
-# 从 1.0.0 迁移到 1.1.0/1.2.0/1.3.0
+# 从 1.0.0 迁移到 1.1.0/1.2.0/1.3.0/1.4.0
+
+## 1.4.0
+
+1.4.0 保持 1.3.0 API 兼容，新增能力默认关闭或内部生效：
+
+```text
+CSV / Properties / TOML / YAML / XML 原生 Token Reader
+JSON Schubfach Double 格式化
+fuzzContinuous
+YAML maxAliases
+```
+
+无需迁移。
 
 ## 1.3.0
 
@@ -34,10 +47,10 @@ remoteReferenceResolver
 请统一升级：
 
 ```kotlin
-implementation(platform("com.mingliqiye.document:mingli-document-bom:1.3.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:1.4.0"))
 ```
 
-或者手动把版本从 `1.0.0` 改为 `1.3.0`。
+或者手动把版本从 `1.0.0` 改为 `1.4.0`。
 
 ## 转换器接口改名
 

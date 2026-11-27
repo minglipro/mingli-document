@@ -49,9 +49,11 @@
 
 ## 阶段 3：性能与流式
 
-- [x] CSV 原生 Token Reader\n- [ ] YAML / XML / Properties / TOML 原生 Token Reader
+- [x] CSV 原生 Token Reader
+- [x] Properties 原生 Token Reader
+- [x] TOML 原生 Token Reader\n- [x] YAML 原生 Token Reader\n- [x] XML 原生 Token Reader（默认配置）
 - [x] JSON 紧凑模式纯字节写出
-- [ ] Ryu / Schubfach 数字格式化
+- [x] Schubfach Double 最短格式化
 - [ ] 运行期代码生成
 - [ ] 编译期代码生成
 - [ ] 大文件流式 Bean 映射
@@ -68,7 +70,7 @@
 - [x] 全格式 maxInputSize
 - [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
-- [ ] Jazzer / JQF 持续 fuzz
+- [x] 持续 fuzz harness（fuzzContinuous）\n- [ ] Jazzer / JQF 覆盖率引导 fuzz
 - [ ] 安全测试基线
 
 ---

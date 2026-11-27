@@ -11,12 +11,9 @@ import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.xml.exception.XmlParseException
 import org.w3c.dom.Attr
 import org.w3c.dom.Element
-import org.xml.sax.InputSource
-import java.io.StringReader
 import java.math.BigDecimal
 import java.util.ArrayDeque
 import java.util.Base64
-import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * XML 读取入口。
@@ -88,24 +85,7 @@ public class XmlReader(
      * @throws XmlParseException XML 格式非法或混合内容被拒绝时抛出
      */
     public fun read(): Node {
-        val factory = DocumentBuilderFactory.newInstance()
-        factory.isNamespaceAware = namespaceAware
-        factory.isXIncludeAware = false
-        factory.isExpandEntityReferences = false
-        try {
-            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            factory.setFeature("http://xml.org/sax/features/external-general-entities", false)
-            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-        } catch (e: Exception) {
-            throw XmlParseException("Cannot configure XML parser securely", e)
-        }
-
-        val document = try {
-            factory.newDocumentBuilder().parse(InputSource(StringReader(source)))
-        } catch (e: Exception) {
-            throw XmlParseException("Invalid XML: ${e.message}", e)
-        }
-        val root = document.documentElement ?: throw XmlParseException("XML document has no root element")
+        val root = XmlDom.parse(source, namespaceAware)
         checkDepth(root)
         return toNode(root)
     }

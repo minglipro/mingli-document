@@ -11,6 +11,8 @@ public class YamlConfig internal constructor(
     base: DocumentMapperConfig,
     /** `format()` 是否默认输出块格式 YAML。 */
     public val pretty: Boolean,
+    /** 单文档允许的非标量 alias 最大数量；`0` 表示使用 SnakeYAML 默认值。 */
+    public val maxAliases: Int = 0,
 ) : DocumentMapperConfig(base) {
 
     public companion object {

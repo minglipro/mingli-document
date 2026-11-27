@@ -12,6 +12,7 @@ dependencies {
     api(project(":core"))
     api(project(":exception"))
     api(project(":serialization"))
+    implementation("com.fasterxml.jackson.core:jackson-core:2.15.3")
     testImplementation(kotlin("test"))
 }
 

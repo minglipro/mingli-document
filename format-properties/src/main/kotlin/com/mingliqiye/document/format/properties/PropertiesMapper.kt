@@ -5,7 +5,6 @@ import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
-import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
@@ -31,6 +30,8 @@ public open class PropertiesMapper internal constructor(
     config,
 ) {
 
+    private val mapperConfig: DocumentMapperConfig = config
+
     /**
      * 创建默认 Properties 映射器。
      */
@@ -49,11 +50,20 @@ public open class PropertiesMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader {
-        val node = PropertiesReader(source).read()
-        validateNodeLimits(node)
-        return NodeTokenReader(node)
-    }
+    /**
+     * 创建 Properties 原生 Token 读取器。
+     *
+     * 使用 [PropertiesTokenReader] 直接从平铺 key/value 生成 Token 流，不再先构建
+     * 完整 Node 树；maxNodeDepth/maxNodeCount/maxStringLength 在生成 Token 时校验，
+     * 语义与 Node 路径一致（超限抛
+     * [com.mingliqiye.document.serialization.exception.DocumentSerializationException]）。
+     */
+    override fun createTextTokenReader(source: String): DocumentTokenReader = PropertiesTokenReader(
+        source,
+        mapperConfig.maxNodeDepth,
+        mapperConfig.maxNodeCount,
+        mapperConfig.maxStringLength,
+    )
 
     public companion object {
 
