@@ -3,8 +3,10 @@ package com.mingliqiye.document.format.csv
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
+import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
@@ -35,6 +37,8 @@ public open class CsvMapper internal constructor(
     propertyMetadataResolver,
     config,
 ) {
+
+    private val mapperConfig: DocumentMapperConfig = config
 
     /**
      * 创建默认 CSV 映射器。
@@ -75,6 +79,8 @@ public open class CsvMapper internal constructor(
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
+
+    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(parseCsv(source, mapperConfig))
 
     public companion object {
 

@@ -2,6 +2,7 @@ package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.format.json.JsonMapper
+import com.mingliqiye.document.format.json.exception.JsonParseException
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -23,15 +24,13 @@ class BinaryDocumentMapperTest {
     }
 
     @Test
-    fun textMapperRejectsBinaryApi() {
+    fun jsonByteApiUsesStrictUtf8() {
         val mapper = JsonMapper()
 
-        assertFailsWith<DocumentSerializationException> {
+        assertFailsWith<JsonParseException> {
             mapper.parse(byteArrayOf(1), ByteArray::class.java)
         }
-        assertFailsWith<DocumentSerializationException> {
-            mapper.formatBytes("value")
-        }
+        assertContentEquals("\"value\"".toByteArray(Charsets.UTF_8), mapper.formatBytes("value"))
     }
 
     @Test

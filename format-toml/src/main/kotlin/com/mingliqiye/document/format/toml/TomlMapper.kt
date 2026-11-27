@@ -2,8 +2,10 @@ package com.mingliqiye.document.format.toml
 
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
+import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
@@ -47,6 +49,8 @@ public open class TomlMapper internal constructor(
      */
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
+
+    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(TomlReader(source).read())
 
     public companion object {
 

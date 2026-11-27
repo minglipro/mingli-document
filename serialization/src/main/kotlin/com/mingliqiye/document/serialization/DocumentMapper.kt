@@ -140,7 +140,10 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
-    override fun <T> parse(source: String, targetType: Class<T>): T = fromNode(parseText(source), targetType)
+    override fun <T> parse(source: String, targetType: Class<T>): T {
+        createTextTokenReader(source)?.let { return fromTokens(it, targetType) }
+        return fromNode(parseText(source), targetType)
+    }
 
     /**
      * 使用格式解析函数将文本解析为指定泛型类型。
@@ -150,7 +153,20 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
-    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = fromNode(parseText(source), targetType)
+    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T {
+        createTextTokenReader(source)?.let { return fromTokens(it, targetType) }
+        return fromNode(parseText(source), targetType)
+    }
+
+    /**
+     * 为文本格式创建 Token Reader。
+     *
+     * 返回 `null` 时回退到 Node 解析函数。
+     *
+     * @param source 文本内容
+     * @return Token Reader 或 `null`
+     */
+    protected open fun createTextTokenReader(source: String): DocumentTokenReader? = null
 
     /**
      * 为二进制格式创建 Token Reader。
