@@ -10,6 +10,7 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 - `DocumentMapperBuilder`
 - `DocumentMapperConfig`
 - 字段转换器、日期格式、数字格式
+- 多态类型注册与类型属性
 - Bean 元数据缓存与访问器
 - `DocumentTokenReader` / `DocumentTokenWriter`
 - `BinaryDocumentMapper`
@@ -84,6 +85,34 @@ maxInputSize            单次输入最大字节数，0 表示不限制
 - 字段级配置
 
 注册。
+
+## 多态类型
+
+```kotlin
+@DocumentTypeInfo("kind")
+interface Animal
+
+@DocumentTypeName("cat")
+class Cat : Animal
+
+val config = DocumentMapperConfig.builder()
+    .subtype(Animal::class.java, "cat", Cat::class.java)
+    .build()
+
+val mapper = JsonMapper(config)
+```
+
+字段声明为 `Animal` 时自动写入：
+
+```json
+{
+  "kind": "cat"
+}
+```
+
+反序列化按 `kind` 查找已注册子类；缺失或未知类型会抛 `DocumentSerializationException`。
+
+多态只使用显式注册的 registry，不扫描子类。
 
 ## 构建
 

@@ -17,6 +17,8 @@ com.mingliqiye.document.annotation
 | `@DocumentConverter(XxxConverter::class)` | 字段专用双向转换器 |
 | `@DocumentSerializer(XxxSerializer::class)` | 字段专用序列化器 |
 | `@DocumentDeserializer(XxxDeserializer::class)` | 字段专用反序列化器 |
+| `@DocumentTypeInfo(property)` | 多态基类/接口的类型属性名 |
+| `@DocumentTypeName("name")` | 多态子类的类型名 |
 | `@DocumentDateTimeFormat(pattern, timezone)` | 日期时间格式 |
 | `@DocumentNumberFormat(pattern, locale)` | 数字格式 |
 | `@DocumentRootName("root")` | XML 根元素名 |

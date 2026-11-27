@@ -302,6 +302,8 @@ val fromReader = mapper.parse(StringReader(writer.toString()), User::class.java)
 | `@DocumentConverter(XxxConverter::class)` | 字段专用双向转换器 |
 | `@DocumentSerializer(XxxSerializer::class)` | 字段专用序列化器 |
 | `@DocumentDeserializer(XxxDeserializer::class)` | 字段专用反序列化器 |
+| `@DocumentTypeInfo(property)` | 多态基类类型属性 |
+| `@DocumentTypeName("name")` | 多态子类型名 |
 | `@DocumentDateTimeFormat("yyyy-MM-dd")` | 日期/时间格式 |
 | `@DocumentNumberFormat("#,##0.00")` | 数字格式 |
 | `@DocumentRootName("user")` | XML 根元素名 |

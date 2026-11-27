@@ -58,6 +58,7 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  * - 基本类型及包装类型、String、枚举、BigDecimal、BigInteger
  * - 数组、Collection、Map
  * - 标准 Java Bean（public getter/setter、public 字段，或无参构造器）
+ * - 通过配置显式注册的多态基类/接口（字段声明为基类时写入/读取子类型信息）
  *
  * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
@@ -595,6 +596,11 @@ public abstract class DocumentMapper protected constructor(
             propertyDeserializer(property)?.let { deserializer ->
                 return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
             }
+            if (config.hasSubtypes) {
+                config.subtypeRegistry(rawType)?.let { registry ->
+                    return deserializePolymorphic(reader.readNode(), registry, path, property)
+                }
+            }
             findDeserializer(rawType)?.let { deserializer ->
                 return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
             }
@@ -702,9 +708,20 @@ public abstract class DocumentMapper protected constructor(
             else -> null
         }
         if (rawType != null) {
-            if (propertyDeserializer(property) != null ||
-                (hasDeserializers && findDeserializer(rawType) != null)
-            ) {
+            if (propertyDeserializer(property) != null) {
+                return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
+            }
+            if (config.hasSubtypes) {
+                config.subtypeRegistry(rawType)?.let { registry ->
+                    return deserializePolymorphic(
+                        TokenTreeReader.readNode(reader),
+                        registry,
+                        path.toString(),
+                        property,
+                    )
+                }
+            }
+            if (hasDeserializers && findDeserializer(rawType) != null) {
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
             }
             val instantiator = objectInstantiator
@@ -1249,6 +1266,8 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         property: DocumentProperty? = null,
         path: String = "$",
+        declaredType: Type? = property?.type,
+        polymorphic: Boolean = true,
     ): Node {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
@@ -1256,6 +1275,11 @@ public abstract class DocumentMapper protected constructor(
         if (value != null && value !is Node) {
             propertySerializer(property)?.let { serializer ->
                 return serializeWithSerializer(serializer, value, property, path)
+            }
+            if (polymorphic && config.hasSubtypes) {
+                polymorphicRegistry(declaredType, value.javaClass)?.let { registry ->
+                    return serializePolymorphic(value, registry, declaredType, seen, depth, property, path)
+                }
             }
             val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
                 ?: findSerializer(value.javaClass)
@@ -1272,18 +1296,124 @@ public abstract class DocumentMapper protected constructor(
             is Boolean -> BooleanNode.of(value)
             is Number -> serializeNumber(value)
             is Enum<*> -> StringNode.of(value.name)
-            is Map<*, *> -> serializeMap(value, seen, depth)
-            is Iterable<*> -> serializeIterable(value, seen, depth)
-            is Array<*> -> serializeArray(value, seen, depth)
+            is Map<*, *> -> serializeMap(value, seen, depth, declaredType, path)
+            is Iterable<*> -> serializeIterable(value, seen, depth, declaredType, path)
+            is Array<*> -> serializeArray(value, seen, depth, declaredType, path)
             else -> {
                 val type = value.javaClass
                 if (type.isArray) {
-                    serializeReflectArray(value, seen, depth)
+                    serializeReflectArray(value, seen, depth, declaredType, path)
                 } else {
                     serializeBean(value, seen, depth, path)
                 }
             }
         }
+    }
+
+    private fun rawClassOrNull(type: Type?): Class<*>? = when (type) {
+        null -> null
+        is Class<*> -> type
+        is ParameterizedType -> type.rawType as? Class<*>
+        is GenericArrayType -> rawClassOrNull(type.genericComponentType)
+            ?.let { ReflectArray.newInstance(it, 0).javaClass }
+
+        is WildcardType -> rawClassOrNull(type.upperBounds.firstOrNull())
+        is TypeVariable<*> -> rawClassOrNull(type.bounds.firstOrNull())
+        else -> null
+    }
+
+    /**
+     * 解析声明类型对应的多态注册表。
+     *
+     * 有声明类型时只匹配该类型本身（声明为具体子类不会回退到父类注册）；
+     * 没有声明类型（顶层对象、原始集合元素）时按实际类型从注册表中反查。
+     */
+    private fun polymorphicRegistry(declaredType: Type?, actualClass: Class<*>): SubtypeRegistry? {
+        val declaredRawType = rawClassOrNull(declaredType)
+        if (declaredRawType != null) {
+            return config.subtypeRegistry(declaredRawType)
+        }
+        return registryForValue(actualClass)
+    }
+
+    private fun registryForValue(actualClass: Class<*>): SubtypeRegistry? {
+        val candidates = config.subtypeRegistries().filter {
+            it.baseClass.isAssignableFrom(actualClass) && it.typeName(actualClass) != null
+        }
+        if (candidates.isEmpty()) {
+            return null
+        }
+        if (candidates.size == 1) {
+            return candidates.first()
+        }
+        val mostSpecific = candidates.firstOrNull { candidate ->
+            candidates.all { other ->
+                other === candidate || other.baseClass.isAssignableFrom(candidate.baseClass)
+            }
+        }
+        return mostSpecific ?: throw DocumentSerializationException(
+            "Ambiguous polymorphic bases for ${actualClass.name}: " +
+                candidates.joinToString { it.baseClass.name },
+        )
+    }
+
+    private fun serializePolymorphic(
+        value: Any,
+        registry: SubtypeRegistry,
+        declaredType: Type?,
+        seen: IdentityHashMap<Any, Boolean>,
+        depth: Int,
+        property: DocumentProperty?,
+        path: String,
+    ): Node {
+        val typeName = registry.typeName(value.javaClass)
+            ?: throw DocumentSerializationException(
+                "No subtype registered for ${value.javaClass.name} under polymorphic base " +
+                    "${registry.baseClass.name} at $path",
+            )
+        val payload = serializeValue(
+            value,
+            seen,
+            depth,
+            property,
+            path,
+            declaredType = value.javaClass,
+            polymorphic = false,
+        )
+        if (payload !is ObjectNode) {
+            throw DocumentSerializationException(
+                "Polymorphic subtype ${value.javaClass.name} must serialize to an object at $path " +
+                    "but was ${payload.type}",
+            )
+        }
+        if (payload.containsKey(registry.typeProperty)) {
+            throw DocumentSerializationException(
+                "Field '${registry.typeProperty}' of ${value.javaClass.name} conflicts with " +
+                    "the polymorphic type property at $path",
+            )
+        }
+        val fields = LinkedHashMap<String, Node>(payload.size + 1)
+        fields[registry.typeProperty] = StringNode.of(typeName)
+        for ((key, node) in payload.asMap()) {
+            fields[key] = node
+        }
+        return ObjectNode.from(fields)
+    }
+
+    private fun elementType(declaredType: Type?): Type? = when (declaredType) {
+        is ParameterizedType -> declaredType.actualTypeArguments.firstOrNull()
+        is GenericArrayType -> declaredType.genericComponentType
+        is Class<*> -> if (declaredType.isArray) declaredType.componentType else null
+        is WildcardType -> elementType(declaredType.upperBounds.firstOrNull())
+        is TypeVariable<*> -> elementType(declaredType.bounds.firstOrNull())
+        else -> null
+    }
+
+    private fun mapValueType(declaredType: Type?): Type? = when (declaredType) {
+        is ParameterizedType -> declaredType.actualTypeArguments.getOrNull(1)
+        is WildcardType -> mapValueType(declaredType.upperBounds.firstOrNull())
+        is TypeVariable<*> -> mapValueType(declaredType.bounds.firstOrNull())
+        else -> null
     }
 
     private fun serializeNumber(value: Number): Node = when (value) {
@@ -1335,6 +1465,8 @@ public abstract class DocumentMapper protected constructor(
         property: DocumentProperty?,
         path: DecodePath,
         writer: DocumentValueWriter,
+        declaredType: Type? = property?.type,
+        polymorphic: Boolean = true,
     ) {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
@@ -1343,6 +1475,14 @@ public abstract class DocumentMapper protected constructor(
             propertySerializer(property)?.let { serializer ->
                 writer.writeNode(serializeWithSerializer(serializer, value, property, path.toString()))
                 return
+            }
+            if (polymorphic && config.hasSubtypes) {
+                polymorphicRegistry(declaredType, value.javaClass)?.let { registry ->
+                    writer.writeNode(
+                        serializePolymorphic(value, registry, declaredType, seen, depth, property, path.toString()),
+                    )
+                    return
+                }
             }
             val serializer = if (hasSerializers) {
                 findSerializer(property?.getRawType() ?: value.javaClass)
@@ -1365,34 +1505,38 @@ public abstract class DocumentMapper protected constructor(
             is Number -> writeNumberValue(value, writer)
             is Enum<*> -> writer.writeString(value.name)
             is Map<*, *> -> {
+                val valueType = mapValueType(declaredType)
                 writer.startObject()
                 for ((key, child) in value) {
-                    writer.fieldName(key?.toString() ?: "null")
+                    val fieldName = key?.toString() ?: "null"
+                    writer.fieldName(fieldName)
                     val mark = path.mark()
-                    path.field(key?.toString() ?: "null")
-                    writeValue(child, seen, depth + 1, null, path, writer)
+                    path.field(fieldName)
+                    writeValue(child, seen, depth + 1, null, path, writer, valueType)
                     path.truncate(mark)
                 }
                 writer.endObject()
             }
 
             is Iterable<*> -> {
+                val elementType = elementType(declaredType)
                 writer.startArray()
                 for (element in value) {
                     val mark = path.mark()
                     path.literal("[]")
-                    writeValue(element, seen, depth + 1, null, path, writer)
+                    writeValue(element, seen, depth + 1, null, path, writer, elementType)
                     path.truncate(mark)
                 }
                 writer.endArray()
             }
 
             is Array<*> -> {
+                val componentType = elementType(declaredType) ?: value.javaClass.componentType
                 writer.startArray()
                 for (element in value) {
                     val mark = path.mark()
                     path.literal("[]")
-                    writeValue(element, seen, depth + 1, null, path, writer)
+                    writeValue(element, seen, depth + 1, null, path, writer, componentType)
                     path.truncate(mark)
                 }
                 writer.endArray()
@@ -1401,7 +1545,7 @@ public abstract class DocumentMapper protected constructor(
             else -> {
                 val type = value.javaClass
                 if (type.isArray) {
-                    writeReflectArray(value, seen, depth, path, writer)
+                    writeReflectArray(value, seen, depth, path, writer, declaredType)
                 } else {
                     writeBean(value, seen, depth, path, writer)
                 }
@@ -1415,13 +1559,15 @@ public abstract class DocumentMapper protected constructor(
         depth: Int,
         path: DecodePath,
         writer: DocumentValueWriter,
+        declaredType: Type?,
     ) {
         val length = ReflectArray.getLength(value)
+        val componentType = elementType(declaredType) ?: value.javaClass.componentType
         writer.startArray()
         for (index in 0 until length) {
             val mark = path.mark()
             path.index(index)
-            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, path, writer)
+            writeValue(ReflectArray.get(value, index), seen, depth + 1, null, path, writer, componentType)
             path.truncate(mark)
         }
         writer.endArray()
@@ -1452,6 +1598,7 @@ public abstract class DocumentMapper protected constructor(
                     metadata,
                     path,
                     writer,
+                    metadata.type,
                 )
                 path.truncate(mark)
             }
@@ -1463,10 +1610,14 @@ public abstract class DocumentMapper protected constructor(
         map: Map<*, *>,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        declaredType: Type?,
+        path: String,
     ): Node = withCycleCheck(map, seen) {
+        val valueType = mapValueType(declaredType)
         val fields = LinkedHashMap<String, Node>(map.size)
         for ((key, value) in map) {
-            fields[key?.toString() ?: "null"] = serializeValue(value, seen, depth + 1)
+            val fieldName = key?.toString() ?: "null"
+            fields[fieldName] = serializeValue(value, seen, depth + 1, null, "$path.$fieldName", valueType)
         }
         ObjectNode.from(fields)
     }
@@ -1475,10 +1626,15 @@ public abstract class DocumentMapper protected constructor(
         iterable: Iterable<*>,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        declaredType: Type?,
+        path: String,
     ): Node = withCycleCheck(iterable, seen) {
+        val elementType = elementType(declaredType)
         val elements = ArrayList<Node>()
+        var index = 0
         for (element in iterable) {
-            elements.add(serializeValue(element, seen, depth + 1))
+            elements.add(serializeValue(element, seen, depth + 1, null, "$path[$index]", elementType))
+            index++
         }
         ArrayNode.from(elements)
     }
@@ -1487,10 +1643,15 @@ public abstract class DocumentMapper protected constructor(
         array: Array<*>,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        declaredType: Type?,
+        path: String,
     ): Node = withCycleCheck(array, seen) {
+        val componentType = elementType(declaredType) ?: array.javaClass.componentType
         val elements = ArrayList<Node>(array.size)
+        var index = 0
         for (element in array) {
-            elements.add(serializeValue(element, seen, depth + 1))
+            elements.add(serializeValue(element, seen, depth + 1, null, "$path[$index]", componentType))
+            index++
         }
         ArrayNode.from(elements)
     }
@@ -1499,8 +1660,11 @@ public abstract class DocumentMapper protected constructor(
         array: Any,
         seen: IdentityHashMap<Any, Boolean>,
         depth: Int,
+        declaredType: Type?,
+        path: String,
     ): Node {
         val size = ReflectArray.getLength(array)
+        val componentType = elementType(declaredType) ?: array.javaClass.componentType
         val elements = ArrayList<Node>(size)
         return withCycleCheck(array, seen) {
             for (index in 0 until size) {
@@ -1509,6 +1673,9 @@ public abstract class DocumentMapper protected constructor(
                         ReflectArray.get(array, index),
                         seen,
                         depth + 1,
+                        null,
+                        "$path[$index]",
+                        componentType,
                     ),
                 )
             }
@@ -1535,6 +1702,7 @@ public abstract class DocumentMapper protected constructor(
                 depth + 1,
                 metadata,
                 "$path.${metadata.name}",
+                metadata.type,
             )
         }
         ObjectNode.from(fields)
@@ -1545,6 +1713,7 @@ public abstract class DocumentMapper protected constructor(
         type: Type,
         path: String,
         property: DocumentProperty? = null,
+        polymorphic: Boolean = true,
     ): Any? {
         if (node is NullNode) {
             if (type is Class<*> && type.isPrimitive) {
@@ -1562,6 +1731,11 @@ public abstract class DocumentMapper protected constructor(
             else -> null
         }
         if (rawType != null) {
+            if (polymorphic && config.hasSubtypes) {
+                config.subtypeRegistry(rawType)?.let { registry ->
+                    return deserializePolymorphic(node, registry, path, property)
+                }
+            }
             val deserializer = findDeserializer(rawType)
             if (deserializer != null) {
                 return deserializeWithDeserializer(deserializer, node, property, path)
@@ -1583,6 +1757,58 @@ public abstract class DocumentMapper protected constructor(
 
             else -> throw DocumentSerializationException("Unsupported type at $path: $type")
         }
+    }
+
+    /**
+     * 按类型属性解析具体子类，并以子类为目标类型重新反序列化。
+     *
+     * 子类路径屏蔽多态解析，避免注册表出现继承关系时无限递归；字段级反序列化器
+     * 已在调用前处理，全局子类反序列化器仍然生效。
+     */
+    private fun deserializePolymorphic(
+        node: Node,
+        registry: SubtypeRegistry,
+        path: String,
+        property: DocumentProperty?,
+    ): Any? {
+        if (!node.isObject) {
+            throw DocumentSerializationException(
+                "Expected object node for polymorphic base ${registry.baseClass.name} at $path " +
+                    "but was ${node.type}",
+            )
+        }
+        val objectNode = node.asObject()
+        val typeNode = objectNode[registry.typeProperty]
+            ?: throw DocumentSerializationException(
+                "Missing polymorphic type property '${registry.typeProperty}' for base " +
+                    "${registry.baseClass.name} at $path",
+            )
+        if (!typeNode.isString) {
+            throw DocumentSerializationException(
+                "Polymorphic type property '${registry.typeProperty}' for base " +
+                    "${registry.baseClass.name} must be a string at $path but was ${typeNode.type}",
+            )
+        }
+        val typeName = typeNode.asString()
+        val subtypeClass = registry.subtypeClass(typeName)
+            ?: throw DocumentSerializationException(
+                "Unknown polymorphic type name '$typeName' for type property " +
+                    "'${registry.typeProperty}' of base ${registry.baseClass.name} at $path; " +
+                    "registered names: ${registry.typeNames.joinToString()}",
+            )
+        val fields = LinkedHashMap<String, Node>(objectNode.size)
+        for ((key, value) in objectNode.asMap()) {
+            if (key != registry.typeProperty) {
+                fields[key] = value
+            }
+        }
+        return deserializeValue(
+            ObjectNode.from(fields),
+            subtypeClass,
+            path,
+            property,
+            polymorphic = false,
+        )
     }
 
     private fun deserializeClass(node: Node, type: Class<*>, path: String): Any? {
@@ -1672,7 +1898,7 @@ public abstract class DocumentMapper protected constructor(
                 map
             }
 
-            else -> deserializeClass(node, rawType, path)
+            else -> deserializeValue(node, rawType, path)
         }
     }
 

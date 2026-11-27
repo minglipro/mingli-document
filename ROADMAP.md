@@ -23,7 +23,7 @@
 ## 阶段 1：高级数据绑定
 
 - [x] 字段命名策略（SNAKE_CASE / KEBAB_CASE / UPPER_CAMEL）
-- [ ] 多态类型（type 字段 + 类型注册）
+- [x] 多态类型（type 字段 + 类型注册）
 - [ ] 构造器注入
 - [ ] Builder 模式实例化
 - [ ] 对象引用 / `$ref`
