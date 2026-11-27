@@ -62,7 +62,7 @@
 ## 阶段 4：安全边界
 
 - [ ] 全格式 maxDepth
-- [ ] 全格式 maxInputSize
+- [x] 全格式 maxInputSize
 - [ ] 全格式 maxStringLength
 - [ ] YAML alias 扩张限制
 - [ ] Jazzer / JQF 持续 fuzz
@@ -82,9 +82,9 @@
 
 ## 阶段 6：构建与发布
 
-- [ ] 自定义 Charset
-- [ ] 原子文件写入
-- [ ] 自动创建父目录
+- [x] 自定义 Charset
+- [x] 原子文件写入
+- [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）\n- [ ] Gitea CI
 - [ ] Maven Central 发布
 - [ ] SBOM / 校验和

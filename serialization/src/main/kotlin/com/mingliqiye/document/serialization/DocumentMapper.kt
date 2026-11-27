@@ -34,8 +34,10 @@ import java.lang.reflect.TypeVariable
 import java.lang.reflect.WildcardType
 import java.math.BigDecimal
 import java.math.BigInteger
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.Base64
 import java.util.IdentityHashMap
 import java.util.LinkedHashMap
@@ -153,6 +155,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> parse(source: String, targetType: Class<T>): T {
+        checkInputSize(source.length.toLong())
         createTextTokenReader(source)?.let { return fromTokens(it, targetType) }
         return fromNode(parseText(source), targetType)
     }
@@ -166,6 +169,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(source.length.toLong())
         createTextTokenReader(source)?.let { return fromTokens(it, targetType) }
         return fromNode(parseText(source), targetType)
     }
@@ -198,6 +202,7 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      */
     override fun <T> parse(source: ByteArray, targetType: Class<T>): T {
+        checkInputSize(source.size.toLong())
         createTokenReader(source)?.let { return fromTokens(it, targetType) }
         val parser = parseBytes
             ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
@@ -212,6 +217,7 @@ public abstract class DocumentMapper protected constructor(
      * @return Java 实体
      */
     override fun <T> parse(source: ByteArray, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(source.size.toLong())
         createTokenReader(source)?.let { return fromTokens(it, targetType) }
         val parser = parseBytes
             ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
@@ -254,11 +260,18 @@ public abstract class DocumentMapper protected constructor(
 
     override fun <T> parse(path: Path, targetType: Class<T>): T = parse(path, DocumentTypeReference.of(targetType))
 
-    override fun <T> parse(path: Path, targetType: DocumentTypeReference<T>): T = parseBytesOrText(Files.readAllBytes(path), targetType)
+    override fun <T> parse(path: Path, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(Files.size(path))
+        return parseBytesOrText(Files.readAllBytes(path), targetType)
+    }
 
     override fun <T> parse(input: InputStream, targetType: Class<T>): T = parse(input, DocumentTypeReference.of(targetType))
 
-    override fun <T> parse(input: InputStream, targetType: DocumentTypeReference<T>): T = parseBytesOrText(input.readBytes(), targetType)
+    override fun <T> parse(input: InputStream, targetType: DocumentTypeReference<T>): T {
+        val bytes = input.readBytes()
+        checkInputSize(bytes.size.toLong())
+        return parseBytesOrText(bytes, targetType)
+    }
 
     override fun <T> parse(reader: Reader, targetType: Class<T>): T = parse(reader, DocumentTypeReference.of(targetType))
 
@@ -266,7 +279,9 @@ public abstract class DocumentMapper protected constructor(
         if (!usesTextFormat) {
             throw DocumentSerializationException("$formatName mapper does not support character streams")
         }
-        return parse(reader.readText(), targetType)
+        val source = reader.readText()
+        checkInputSize(source.length.toLong())
+        return parse(source, targetType)
     }
 
     override fun format(value: Any?, file: File) {
@@ -274,7 +289,7 @@ public abstract class DocumentMapper protected constructor(
     }
 
     override fun format(value: Any?, path: Path) {
-        Files.write(path, outputBytes(value))
+        writeFile(path, outputBytes(value))
     }
 
     override fun format(value: Any?, output: OutputStream) {
@@ -290,16 +305,50 @@ public abstract class DocumentMapper protected constructor(
         writer.flush()
     }
 
-    private fun <T> parseBytesOrText(bytes: ByteArray, targetType: DocumentTypeReference<T>): T = if (usesTextFormat) {
-        parse(String(bytes, Charsets.UTF_8), targetType)
-    } else {
-        parse(bytes, targetType)
+    private fun <T> parseBytesOrText(bytes: ByteArray, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(bytes.size.toLong())
+        return if (usesTextFormat) {
+            parse(String(bytes, config.fileCharset), targetType)
+        } else {
+            parse(bytes, targetType)
+        }
     }
 
     private fun outputBytes(value: Any?): ByteArray = if (usesTextFormat) {
-        format(value).toByteArray(Charsets.UTF_8)
+        format(value).toByteArray(config.fileCharset)
     } else {
         formatBytes(value)
+    }
+
+    protected fun checkInputSize(size: Long) {
+        val limit = config.maxInputSize
+        if (limit > 0 && size > limit) {
+            throw DocumentSerializationException("Input size $size exceeds maxInputSize $limit")
+        }
+    }
+
+    private fun writeFile(path: Path, bytes: ByteArray) {
+        val absolute = path.toAbsolutePath()
+        val parent = absolute.parent
+        if (config.createParentDirectories && parent != null) {
+            Files.createDirectories(parent)
+        }
+        if (!config.atomicFileWrite) {
+            Files.write(path, bytes)
+            return
+        }
+        val directory = parent ?: throw DocumentSerializationException("Cannot resolve parent directory for $path")
+        val temporary = Files.createTempFile(directory, ".${absolute.fileName}.", ".tmp")
+        try {
+            Files.write(temporary, bytes)
+            try {
+                Files.move(temporary, absolute, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temporary, absolute, StandardCopyOption.REPLACE_EXISTING)
+            }
+        } finally {
+            Files.deleteIfExists(temporary)
+        }
     }
 
     /**

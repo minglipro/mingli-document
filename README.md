@@ -283,10 +283,13 @@ val fromReader = mapper.parse(StringReader(writer.toString()), User::class.java)
 
 说明：
 
-- 文本格式文件/流默认使用 UTF-8
-- `File` / `Path` API 会自己打开和关闭文件
+- 文本格式文件/流默认使用 UTF-8，可通过 `DocumentMapperConfig.fileCharset(...)` 修改
+- 文件 API 会自己打开和关闭文件
 - 调用方传入的 `InputStream` / `OutputStream` / `Reader` / `Writer` 不会被关闭
 - 二进制格式不支持 `Reader` / `Writer`，会抛 `DocumentSerializationException`
+- `atomicFileWrite(true)` 使用临时文件 + 原子替换
+- `createParentDirectories(true)` 自动创建父目录
+- `maxInputSize(n)` 限制单次输入最大字节数
 
 ## 注解
 

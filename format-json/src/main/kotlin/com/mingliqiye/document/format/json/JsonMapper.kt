@@ -60,9 +60,14 @@ public open class JsonMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun <T> parse(source: String, targetType: Class<T>): T = parseDirect(source, DocumentTypeReference.of(targetType))
+    override fun <T> parse(source: String, targetType: Class<T>): T = parseText(source, DocumentTypeReference.of(targetType))
 
-    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = parseDirect(source, targetType)
+    override fun <T> parse(source: String, targetType: DocumentTypeReference<T>): T = parseText(source, targetType)
+
+    private fun <T> parseText(source: String, targetType: DocumentTypeReference<T>): T {
+        checkInputSize(source.length.toLong())
+        return parseDirect(source, targetType)
+    }
 
     /**
      * 创建字节输入的 Token 读取器，供基类 `parse(ByteArray, ...)` 使用。

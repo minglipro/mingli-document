@@ -46,6 +46,10 @@ val config = DocumentMapperConfig.builder()
     .failOnUnknownFields(true)
     .writeNulls(false)
     .namingStrategy(PropertyNamingStrategy.SNAKE_CASE)
+    .fileCharset(Charsets.UTF_8)
+    .atomicFileWrite(true)
+    .createParentDirectories(true)
+    .maxInputSize(16L * 1024 * 1024)
     .build()
 ```
 
@@ -60,6 +64,15 @@ LOWER_CAMEL
 ```
 
 `@DocumentName` 显式注解优先于命名策略。
+
+文件读写选项：
+
+```text
+fileCharset             文本文件/流字符集，默认 UTF-8
+atomicFileWrite         临时文件 + 原子替换
+createParentDirectories 自动创建父目录
+maxInputSize            单次输入最大字节数，0 表示不限制
+```
 
 ## 转换器
 

@@ -1,5 +1,6 @@
 package com.mingliqiye.document.serialization
 
+import java.nio.charset.Charset
 import java.util.LinkedHashMap
 
 /**
@@ -12,6 +13,10 @@ public class DocumentMapperConfigBuilder {
     private var failOnUnknownFields = false
     private var writeNulls = true
     private var namingStrategy = PropertyNamingStrategy.AS_IS
+    private var fileCharset: Charset = Charsets.UTF_8
+    private var atomicFileWrite = false
+    private var createParentDirectories = false
+    private var maxInputSize = 0L
 
     /**
      * 为指定字段绑定转换器。
@@ -75,6 +80,51 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置文本文件/流读写字符集。
+     *
+     * @param charset 字符集
+     * @return 当前构建器
+     */
+    public fun fileCharset(charset: Charset): DocumentMapperConfigBuilder {
+        this.fileCharset = charset
+        return this
+    }
+
+    /**
+     * 设置写文件时是否原子替换。
+     *
+     * @param atomic 是否原子写入
+     * @return 当前构建器
+     */
+    public fun atomicFileWrite(atomic: Boolean): DocumentMapperConfigBuilder {
+        this.atomicFileWrite = atomic
+        return this
+    }
+
+    /**
+     * 设置写文件时是否自动创建父目录。
+     *
+     * @param create 是否创建父目录
+     * @return 当前构建器
+     */
+    public fun createParentDirectories(create: Boolean): DocumentMapperConfigBuilder {
+        this.createParentDirectories = create
+        return this
+    }
+
+    /**
+     * 设置单次输入最大字节数，0 表示不限制。
+     *
+     * @param max 最大字节数
+     * @return 当前构建器
+     */
+    public fun maxInputSize(max: Long): DocumentMapperConfigBuilder {
+        require(max >= 0) { "maxInputSize must be >= 0" }
+        this.maxInputSize = max
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      */
     public fun build(): DocumentMapperConfig = DocumentMapperConfig.from(
@@ -83,5 +133,9 @@ public class DocumentMapperConfigBuilder {
         failOnUnknownFields,
         writeNulls,
         namingStrategy,
+        fileCharset,
+        atomicFileWrite,
+        createParentDirectories,
+        maxInputSize,
     )
 }
