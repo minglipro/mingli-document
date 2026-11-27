@@ -5,7 +5,7 @@ Java Properties 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:properties:1.4.0")
+implementation("com.mingliqiye.document.format:properties:1.5.0")
 ```
 
 ## 主要 API

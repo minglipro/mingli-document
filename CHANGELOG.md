@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.0
+
+### 新增
+
+- 11 个 Jazzer 覆盖率引导 fuzz 目标
+- Gradle `fuzzJazzer` 任务
+- `fuzzContinuous` 持续随机 fuzz
+- 本地 dev 能力统一发布
+
+### 说明
+
+- 1.5.0 与 1.4.0 API 兼容
+- Jazzer 任务不在常规 build/test 中运行
+
 ## 1.4.0
 
 ### 新增
