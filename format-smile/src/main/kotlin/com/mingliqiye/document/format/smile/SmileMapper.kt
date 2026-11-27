@@ -30,7 +30,7 @@ public open class SmileMapper internal constructor(
     config: DocumentMapperConfig,
 ) : BinaryDocumentMapper(
     "smile",
-    { source -> SmileReader(source).read() },
+    { source -> SmileReader(source, config.maxNodeDepth).read() },
     { node, _ -> SmileWriter().write(node) },
     serializers,
     deserializers,

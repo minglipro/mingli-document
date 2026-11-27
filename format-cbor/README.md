@@ -53,6 +53,14 @@ val nodeBytes = node.toCanonicalCborBytes()
 
 对象 key 按 UTF-8 长度升序、同长度按字节序排序，数组保持原顺序。
 
+## 解析深度
+
+```kotlin
+CborReader(bytes, maxDepth = 64).read()
+```
+
+`CborMapper(DocumentMapperConfig.builder().maxNodeDepth(64).build())` 的 Node 回退路径也会限制深度；Token 直读路径由 Bean 映射配置控制。
+
 ## 限制
 
 - CBOR tag 不单独保留

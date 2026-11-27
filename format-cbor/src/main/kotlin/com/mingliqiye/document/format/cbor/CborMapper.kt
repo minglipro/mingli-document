@@ -33,7 +33,7 @@ public open class CborMapper internal constructor(
     config: DocumentMapperConfig,
 ) : BinaryDocumentMapper(
     "cbor",
-    { source -> CborReader(source).read() },
+    { source -> CborReader(source, config.maxNodeDepth).read() },
     { node, _ -> CborWriter().write(node) },
     serializers,
     deserializers,

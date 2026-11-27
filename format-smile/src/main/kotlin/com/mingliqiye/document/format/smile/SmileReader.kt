@@ -31,8 +31,9 @@ import java.io.IOException
  *
  * @param source Smile 二进制内容
  */
-public class SmileReader(
+public class SmileReader @JvmOverloads constructor(
     private val source: ByteArray,
+    private val maxDepth: Int = 0,
 ) {
 
     /**
@@ -58,16 +59,16 @@ public class SmileReader(
     private fun readDocument(parser: JsonParser): Node {
         val firstToken = parser.nextToken()
             ?: throw SmileParseException("Smile document has no top-level value")
-        val node = readValue(parser, firstToken)
+        val node = readValue(parser, firstToken, 1)
         if (parser.nextToken() != null) {
             throw SmileParseException("Smile document must contain exactly one top-level value")
         }
         return node
     }
 
-    private fun readValue(parser: JsonParser, token: JsonToken): Node = when (token) {
-        JsonToken.START_OBJECT -> readObject(parser)
-        JsonToken.START_ARRAY -> readArray(parser)
+    private fun readValue(parser: JsonParser, token: JsonToken, depth: Int): Node = when (token) {
+        JsonToken.START_OBJECT -> readObject(parser, depth)
+        JsonToken.START_ARRAY -> readArray(parser, depth)
         JsonToken.VALUE_STRING -> StringNode.of(parser.text)
         JsonToken.VALUE_NUMBER_INT -> NumberNode.ofRaw(parser.text)
         JsonToken.VALUE_NUMBER_FLOAT -> readFloatNode(parser)
@@ -94,7 +95,8 @@ public class SmileReader(
         return BinaryNode.of(value)
     }
 
-    private fun readArray(parser: JsonParser): ArrayNode {
+    private fun readArray(parser: JsonParser, depth: Int): ArrayNode {
+        checkDepth(depth)
         val elements = ArrayList<Node>()
         while (true) {
             val token = parser.nextToken()
@@ -102,11 +104,12 @@ public class SmileReader(
             if (token == JsonToken.END_ARRAY) {
                 return ArrayNode.from(elements)
             }
-            elements.add(readValue(parser, token))
+            elements.add(readValue(parser, token, depth + 1))
         }
     }
 
-    private fun readObject(parser: JsonParser): ObjectNode {
+    private fun readObject(parser: JsonParser, depth: Int): ObjectNode {
+        checkDepth(depth)
         val fields = LinkedHashMap<String, Node>()
         while (true) {
             val token = parser.nextToken()
@@ -120,7 +123,13 @@ public class SmileReader(
             val name = parser.currentName
             val valueToken = parser.nextToken()
                 ?: throw SmileParseException("Smile document ended after field '$name'")
-            fields[name] = readValue(parser, valueToken)
+            fields[name] = readValue(parser, valueToken, depth + 1)
+        }
+    }
+
+    private fun checkDepth(depth: Int) {
+        if (maxDepth > 0 && depth > maxDepth) {
+            throw SmileParseException("Smile nesting depth $depth exceeds maxDepth $maxDepth")
         }
     }
 

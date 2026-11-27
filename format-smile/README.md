@@ -35,6 +35,14 @@ mapper.format(user, file)
 val restored = mapper.parse(file, User::class.java)
 ```
 
+## 解析深度
+
+```kotlin
+SmileReader(bytes, maxDepth = 64).read()
+```
+
+`SmileMapper(DocumentMapperConfig.builder().maxNodeDepth(64).build())` 的 Node 回退路径也会限制深度。
+
 ## 特性
 
 - Smile 二进制
