@@ -72,7 +72,7 @@
 
 ## 阶段 5：Schema 与生态
 
-- [ ] JSON Schema
+- [x] JSON Schema（常用 draft-07 子集）
 - [ ] Schema Registry 适配
 - [ ] OpenAPI / Swagger 生成
 - [ ] Bean Validation 集成

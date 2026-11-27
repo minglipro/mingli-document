@@ -62,6 +62,43 @@ val mapper = JsonMapper(
 - 深度限制
 - 文件/流读写
 - Token 直读 Bean
+- 轻量 JSON Schema 校验
+
+## JSON Schema
+
+```kotlin
+import com.mingliqiye.document.format.json.schema.JsonSchema
+
+val schema = JsonSchema.compile(
+    """
+    {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1}
+      }
+    }
+    """.trimIndent(),
+)
+
+val errors = schema.validate(node)
+schema.isValid(node)
+schema.validateOrThrow(node)
+```
+
+支持：
+
+```text
+type / enum / const
+properties / required / additionalProperties / patternProperties
+items / minItems / maxItems / uniqueItems
+minimum / maximum / exclusiveMinimum / exclusiveMaximum / multipleOf
+minLength / maxLength / pattern
+allOf / anyOf / oneOf / not
+本地 $ref
+```
+
+不支持远程 `$ref`、`format`、`if/then/else` 等高级关键字。
 
 ## 构建
 
