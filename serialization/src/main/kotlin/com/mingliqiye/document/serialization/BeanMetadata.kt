@@ -10,6 +10,8 @@ internal class BeanMetadata(
     val knownFields: Set<String>,
 ) {
 
+    val readableProperties: List<BeanPropertyAccessor> = properties.filter { it.canRead }
+
     private val propertiesByName: Map<String, BeanPropertyAccessor> =
         properties.associateBy { it.metadata.documentName }
 

@@ -81,6 +81,8 @@ public abstract class DocumentMapper protected constructor(
     private val constructorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
+    private val hasSerializers = serializers.isNotEmpty()
+    private val hasDeserializers = deserializers.isNotEmpty()
     private val converterCache = ConcurrentHashMap<Class<*>, Any>()
     private val propertyConverterCache = ConcurrentHashMap<DocumentProperty, Any>()
     private val noConverter = Any()
@@ -541,7 +543,9 @@ public abstract class DocumentMapper protected constructor(
             else -> null
         }
         if (rawType != null) {
-            if (propertyDeserializer(property) != null || findDeserializer(rawType) != null) {
+            if (propertyDeserializer(property) != null ||
+                (hasDeserializers && findDeserializer(rawType) != null)
+            ) {
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
             }
             val instantiator = objectInstantiator
@@ -1181,8 +1185,12 @@ public abstract class DocumentMapper protected constructor(
                 writer.writeNode(serializeWithSerializer(serializer, value, property, path.toString()))
                 return
             }
-            val serializer = findSerializer(property?.getRawType() ?: value.javaClass)
-                ?: findSerializer(value.javaClass)
+            val serializer = if (hasSerializers) {
+                findSerializer(property?.getRawType() ?: value.javaClass)
+                    ?: findSerializer(value.javaClass)
+            } else {
+                null
+            }
             if (serializer != null) {
                 writer.writeNode(serializeWithSerializer(serializer, value, property, path.toString()))
                 return
@@ -1269,10 +1277,7 @@ public abstract class DocumentMapper protected constructor(
     ) {
         withCycleCheck(bean, seen) {
             writer.startObject()
-            for (accessor in beanMetadata(bean.javaClass).properties) {
-                if (!accessor.canRead) {
-                    continue
-                }
+            for (accessor in beanMetadata(bean.javaClass).readableProperties) {
                 val metadata = accessor.metadata
                 val value = accessor.read(bean)
                 if (!config.writeNulls && value == null) {
@@ -1359,10 +1364,7 @@ public abstract class DocumentMapper protected constructor(
         path: String,
     ): Node = withCycleCheck(bean, seen) {
         val fields = LinkedHashMap<String, Node>()
-        for (accessor in beanMetadata(bean.javaClass).properties) {
-            if (!accessor.canRead) {
-                continue
-            }
+        for (accessor in beanMetadata(bean.javaClass).readableProperties) {
             val metadata = accessor.metadata
             val value = accessor.read(bean)
             if (!config.writeNulls && value == null) {

@@ -27,6 +27,9 @@ public open class DocumentMapperConfig protected constructor(
 
     internal fun fieldConverter(property: DocumentProperty): JsonConverter<*>? = fieldConverters[FieldKey(property.declaringClass, property.name)]
 
+    internal val hasFieldConverters: Boolean
+        get() = fieldConverters.isNotEmpty()
+
     public companion object {
 
         /**

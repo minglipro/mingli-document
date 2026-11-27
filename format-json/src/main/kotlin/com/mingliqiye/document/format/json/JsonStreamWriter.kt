@@ -22,7 +22,7 @@ internal class JsonStreamWriter(
     private val pretty: Boolean,
 ) : DocumentTokenWriter {
 
-    private val builder = StringBuilder()
+    private val builder = StringBuilder(32 * 1024)
     private val quotedNames = HashMap<String, String>()
     private var firstElements = BooleanArray(8)
     private var depth = 0
