@@ -21,6 +21,10 @@ allprojects {
     group = if (name.startsWith("format-")) formatGroup else defaultGroup
     version = projectVersion
 
+    if (name == "bom") {
+        return@allprojects
+    }
+
     plugins.apply("idea")
     plugins.apply("java")
     plugins.apply("maven-publish")

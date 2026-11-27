@@ -73,6 +73,37 @@ avro
 protobuf
 ```
 
+### 使用 BOM 统一版本
+
+不想为每个模块写版本时，可以导入 BOM：
+
+```kotlin
+dependencies {
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:1.0.0"))
+
+    implementation("com.mingliqiye.document:core")
+    implementation("com.mingliqiye.document:serialization")
+    implementation("com.mingliqiye.document.format:json")
+    implementation("com.mingliqiye.document.format:yaml")
+}
+```
+
+Maven：
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>com.mingliqiye.document</groupId>
+            <artifactId>mingli-document-bom</artifactId>
+            <version>1.0.0</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
 ## 快速开始
 
 ```kotlin
@@ -353,6 +384,7 @@ gradle :benchmarks:jmh
 | `serialization-kotlin` | Kotlin data class 支持 |
 | `schema` | 格式无关 Schema |
 | `format-*` | 各格式 Mapper |
+| `bom` | Maven BOM：`mingli-document-bom` |
 | `benchmarks` | JMH 性能基准（不发布） |
 | `fuzz` | 解析器模糊测试（不发布） |
 
