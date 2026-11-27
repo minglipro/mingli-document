@@ -20,11 +20,14 @@
 | `format-xml` | XML Mapper `XmlMapper`、`XmlReader` | `serialization`、`core` |
 | `format-properties` | Properties Mapper `PropertiesMapper`、`PropertiesReader` | `serialization`、`core` |
 | `format-toml` | TOML Mapper `TomlMapper`、`TomlReader` | `serialization`、`core`、Tomlj |
-| `format-csv` | CSV Mapper `CsvMapper`、`CsvReader` | `serialization`、`core`、Commons CSV |
+| `format-csv` | CSV Mapper `CsvMapper`、`CsvReader`、`CsvSchema` | `serialization`、`core`、`schema`、Commons CSV |
 | `format-ion` | Ion Mapper `IonMapper`、`IonReader`（文本 + 二进制） | `serialization`、`core`、Ion Java |
 | `format-cbor` | CBOR Mapper `CborMapper`（二进制） | `serialization`、`core`、Jackson CBOR |
 | `format-smile` | Smile Mapper `SmileMapper`（二进制） | `serialization`、`core`、Jackson Smile |
-| `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
+| `schema` | 格式无关 Schema：`DocumentSchema`、`SchemaField`、`SchemaType` | `core` |
+| `format-avro` | Avro Schema：`AvroSchema`（暂未含 Avro 编解码） | `schema`、`core` |
+| `format-protobuf` | Protobuf Schema：`ProtobufSchema`（暂未含 Protobuf 编解码） | `schema`、`core` |
+| `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、Token 直读/直写、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 | `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
@@ -69,6 +72,9 @@ dependencies {
     implementation("com.mingliqiye.document:format-ion:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-cbor:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-smile:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:schema:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-avro:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:format-protobuf:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
     // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
     implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
@@ -1015,6 +1021,33 @@ val bean = mapper.fromTokens(tokenReader, User::class.java)
 - Node 树 API、`fromNode`、`toNode` 保持可用。
 
 `BinaryDocumentMapper` 是二进制 Mapper 基类：文本 API 不支持，字节 API 走 Token 或 Node fallback。
+
+## Schema 层
+
+`schema` 提供格式无关的结构描述：
+
+```kotlin
+import com.mingliqiye.document.schema.DocumentSchema
+import com.mingliqiye.document.schema.SchemaType
+import com.mingliqiye.document.format.csv.CsvSchema
+
+val schema = CsvSchema.builder("user")
+    .field("name", SchemaType.STRING)
+    .field("age", SchemaType.INT)
+    .build()
+
+val mapper = CsvMapper(schema)
+```
+
+当前 Schema 适配：
+
+| 模块 | Schema |
+|---|---|
+| `format-csv` | `CsvSchema`，支持按 schema 顺序读列、类型解析、表头/无表头 |
+| `format-avro` | `AvroSchema` + `AvroType`（记录名/namespace/字段/类型映射） |
+| `format-protobuf` | `ProtobufSchema` + `ProtobufType` + `ProtobufSchemaField`（message/字段编号/repeated） |
+
+Avro/Protobuf 目前是 Schema 适配层，完整 wire 编解码后续接入。
 
 ## 性能基准
 

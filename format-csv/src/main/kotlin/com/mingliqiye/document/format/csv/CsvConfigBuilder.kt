@@ -12,6 +12,7 @@ public class CsvConfigBuilder {
     private val base = DocumentMapperConfig.builder()
     private var delimiter: Char = DEFAULT_CSV_DELIMITER
     private var header: Boolean = DEFAULT_CSV_HEADER
+    private var schema: CsvSchema? = null
 
     /**
      * 为指定字段绑定转换器。
@@ -64,6 +65,8 @@ public class CsvConfigBuilder {
 
     /**
      * 设置是否使用表头。
+     *
+     * 设置 Schema 后本选项被 [CsvSchema.header] 覆盖。
      */
     public fun header(header: Boolean): CsvConfigBuilder {
         this.header = header
@@ -71,7 +74,20 @@ public class CsvConfigBuilder {
     }
 
     /**
+     * 设置 CSV Schema。
+     *
+     * 设置后按 Schema 的列顺序与字段类型读写，且 [CsvSchema.header] 优先于 [header]。
+     *
+     * @param schema CSV Schema；null 表示不使用 Schema
+     * @return 当前构建器
+     */
+    public fun schema(schema: CsvSchema?): CsvConfigBuilder {
+        this.schema = schema
+        return this
+    }
+
+    /**
      * 构建配置。
      */
-    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header)
+    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema)
 }
