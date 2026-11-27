@@ -32,11 +32,14 @@ internal object YamlNodeMapping {
      *
      * 关闭重复键容忍，重复映射键会作为格式错误上报。
      */
-    fun createYaml(maxDepth: Int = 0): Yaml {
+    fun createYaml(maxDepth: Int = 0, maxAliases: Int = 0): Yaml {
         val options = LoaderOptions()
         options.setAllowDuplicateKeys(false)
         if (maxDepth > 0) {
             options.setNestingDepthLimit(maxDepth)
+        }
+        if (maxAliases > 0) {
+            options.setMaxAliasesForCollections(maxAliases)
         }
         return Yaml(SafeConstructor(options))
     }
@@ -47,8 +50,8 @@ internal object YamlNodeMapping {
      * @param source YAML 文本
      * @throws YamlParseException YAML 格式非法时抛出
      */
-    fun readRoot(source: String, maxDepth: Int = 0): Node = load {
-        toNode(createYaml(maxDepth).load<Any?>(source))
+    fun readRoot(source: String, maxDepth: Int = 0, maxAliases: Int = 0): Node = load {
+        toNode(createYaml(maxDepth, maxAliases).load<Any?>(source))
     }
 
     /**
@@ -60,9 +63,9 @@ internal object YamlNodeMapping {
      * @param source YAML 文本
      * @throws YamlParseException YAML 格式非法时抛出
      */
-    fun readAll(source: String, maxDepth: Int = 0): List<Node> = load {
+    fun readAll(source: String, maxDepth: Int = 0, maxAliases: Int = 0): List<Node> = load {
         val nodes = ArrayList<Node>()
-        for (document in createYaml(maxDepth).loadAll(source)) {
+        for (document in createYaml(maxDepth, maxAliases).loadAll(source)) {
             nodes.add(toNode(document))
         }
         nodes

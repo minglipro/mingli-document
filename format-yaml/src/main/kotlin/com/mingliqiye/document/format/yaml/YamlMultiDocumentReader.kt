@@ -22,6 +22,7 @@ import com.mingliqiye.document.format.yaml.exception.YamlParseException
 public class YamlMultiDocumentReader @JvmOverloads constructor(
     private val source: String,
     private val maxDepth: Int = 0,
+    private val maxAliases: Int = 0,
 ) {
 
     /**
@@ -30,7 +31,7 @@ public class YamlMultiDocumentReader @JvmOverloads constructor(
      * @return 按文档顺序排列的文档树列表
      * @throws YamlParseException YAML 格式非法或包含不支持的类型时抛出
      */
-    public fun readAll(): List<Node> = YamlNodeMapping.readAll(source, maxDepth)
+    public fun readAll(): List<Node> = YamlNodeMapping.readAll(source, maxDepth, maxAliases)
 
     public companion object {
 
