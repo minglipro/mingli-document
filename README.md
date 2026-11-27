@@ -108,6 +108,7 @@ gradle publish
 - `projectVersion` 以 `-SNAPSHOT` 结尾时只推送 snapshot 仓库
 - 正式版本只推送 release 仓库
 - Gradle Plugin 专用仓库不参与本项目发布
+- 发布时使用本机 GPG 为 jar、pom、module metadata、javadoc、kotlindoc 生成 `.asc` 签名
 
 `benchmarks` 和 `fuzz` 是开发工具模块，不发布。
 
