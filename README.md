@@ -20,12 +20,14 @@
 | `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
 | `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
+| `serialization-kotlin` | Kotlin data class 实例化（主构造器） | `serialization`、`annotation`、`kotlin-reflect` |
 
 依赖方向（`A ──► B` 表示 A 依赖 B）：
 
 ```text
 format-json ──► serialization ──► core ──► exception ──► mingli-exception
 format-yaml ──► serialization
+serialization-kotlin ──► serialization
 serialization ──► annotation（implementation）
               ──► alias-for 1.0.3（api）
 annotation：项目内无依赖
@@ -47,6 +49,7 @@ dependencies {
     implementation("com.mingliqiye.document:serialization:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-json:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document:format-yaml:1.0-SNAPSHOT")
+    implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
     // 注解模块在 serialization 中是 implementation 依赖，不会传递到消费方编译类路径
     implementation("com.mingliqiye.document:annotation:1.0-SNAPSHOT")
 }
@@ -109,6 +112,37 @@ fun main() {
 | `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
 
 > `JsonMapper` / `YamlMapper` 继承 `DocumentMapper`；格式模块内部 Codec 不对外暴露。
+
+## Kotlin data class
+
+Java Bean 需要无参构造器；Kotlin data class 可以通过 `serialization-kotlin` 使用主构造器反序列化。
+
+```kotlin
+import com.mingliqiye.document.format.json.JsonMapper
+import com.mingliqiye.document.serialization.kotlin.KotlinDataClassInstantiator
+
+data class User(val name: String, val age: Int)
+
+fun main() {
+    val mapper = JsonMapper.builder()
+        .objectInstantiator(KotlinDataClassInstantiator)
+        .build()
+
+    val user = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
+    println(mapper.formatPretty(user))
+}
+```
+
+支持：
+
+- 主构造器参数反序列化
+- 默认参数（缺失时使用默认值）
+- 嵌套 data class
+- `List` / `Map` 中的 data class
+- `@DocumentName`、`@DocumentIgnore`
+- 非 data class 自动回退到默认 Java Bean 逻辑
+
+> `serialization-kotlin` 依赖 `kotlin-reflect`；不需要 Kotlin 反射时可以不引入该模块。
 
 ## 自定义转换器
 
@@ -428,6 +462,7 @@ gradlew.bat ktlintCheck build
 gradle :serialization:test
 gradle :format-json:test
 gradle :format-yaml:test
+gradle :serialization-kotlin:test
 
 # 自动格式化 Kotlin 代码
 gradle ktlintFormat
@@ -444,7 +479,7 @@ gradle ktlintFormat
 
 - 格式实现有 JSON（`format-json`）和 YAML（`format-yaml`）；
 - Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
-- 实体需要无参构造器；不支持带参数构造器的实体（Kotlin 类所有构造参数都有默认值时编译器会生成无参构造器，可以正常映射）；
+- Java Bean 需要无参构造器；Kotlin data class 可配合 `serialization-kotlin` 使用主构造器反序列化；
 - `JsonMapper` / `YamlMapper` 自带对应格式的文本解析与写出；通用 `DocumentMapper` 不直接对外构造；
 - 序列化检测循环引用，最大嵌套深度为 128；JSON 解析最大嵌套深度为 512。
 

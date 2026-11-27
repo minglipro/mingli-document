@@ -33,7 +33,8 @@
 | `core` | 文档树、类型引用契约 | `exception` |
 | `format-json` | JSON Mapper | `serialization`、`core` |
 | `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
-| `serialization` | Java 实体与树之间的映射 | `core` |
+| `serialization` | Java 实体与树之间的映射、DocumentMapper 基类 | `core`、`annotation` |
+| `serialization-kotlin` | Kotlin data class 实例化 | `serialization`、`annotation`、`kotlin-reflect` |
 
 允许的依赖方向：
 
@@ -45,7 +46,8 @@ exception
 core
  └── serialization
       ├── format-json
-      └── format-yaml
+      ├── format-yaml
+      └── serialization-kotlin
 ```
 
 规则：
@@ -53,6 +55,7 @@ core
 - `core` 不能依赖任何具体格式模块。
 - `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`serialization`。
 - `format-*` 依赖 `serialization` 与 `core`，通过继承 `DocumentMapper` 暴露格式 Mapper。
+- `serialization-kotlin` 只扩展对象实例化策略，不绑定具体格式。
 - `serialization` 主代码不依赖具体格式。
 - 测试可以临时依赖其他模块做集成验证，但不能把测试依赖带入主代码 API。
 - 传递暴露给使用方的类型使用 `api`；纯实现依赖使用 `implementation`。
@@ -433,6 +436,7 @@ build(serialization): 补充 format-json 测试依赖
 - [x] 所有模块启用 Explicit API Mode
 - [x] 接口契约测试补齐
 - [x] YAML 适配器接入（`format-yaml`）
+- [x] Kotlin data class 实例化模块（`serialization-kotlin`）
 - [ ] XML 适配器在 core API 稳定后接入
 - [ ] 补充 CI 门禁
 - [ ] document 私服发布配置
