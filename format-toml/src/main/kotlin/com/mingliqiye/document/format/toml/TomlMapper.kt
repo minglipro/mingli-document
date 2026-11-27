@@ -50,7 +50,11 @@ public open class TomlMapper internal constructor(
     protected constructor(objectInstantiator: ObjectInstantiator?) :
         this(emptyMap(), emptyMap(), objectInstantiator, null, DocumentMapperConfig.empty())
 
-    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(TomlReader(source).read())
+    override fun createTextTokenReader(source: String): DocumentTokenReader {
+        val node = TomlReader(source).read()
+        validateNodeLimits(node)
+        return NodeTokenReader(node)
+    }
 
     public companion object {
 

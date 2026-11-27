@@ -144,6 +144,13 @@ public abstract class DocumentMapper protected constructor(
     }
 
     /**
+     * 按当前配置校验 Node 树深度/节点数；供文本格式 Token 路径使用。
+     */
+    protected fun validateNodeLimits(node: Node) {
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+    }
+
+    /**
      * 将文档树反序列化为指定 Java 类型。
      *
      * @param node 文档树
