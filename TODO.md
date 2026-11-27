@@ -265,6 +265,19 @@ ProtobufSchema  -> ProtobufMapper
 
 ---
 
+'
+## 边界增强（第二轮）
+
+- [x] Avro OCF 容器与 writer/reader 双 Schema 演进（9d7cf73）
+- [x] Protobuf 嵌套 message/enum/map/oneof 的 Schema -> Descriptor（2fcfcee）
+- [x] XML 标量属性、Clark 命名空间、混合内容策略（7406fb6）
+
+剩余明确不支持项：
+
+- Avro：非默认 codec、appendTo/sync、跨 schema 容器级覆盖
+- Protobuf：extensions、group、MessageSet、proto3 语义 1:1 还原
+- XML：mixed content 文本/子元素相对顺序、Clark 前缀自动声明范围
+'
 ## 暂不做
 
 - 运行期代码生成
