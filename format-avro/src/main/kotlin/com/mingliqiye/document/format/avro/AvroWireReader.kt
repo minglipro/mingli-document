@@ -12,8 +12,8 @@ import org.apache.avro.io.DecoderFactory
  * Avro 二进制不自带 Schema，读取时必须提供 writer Schema；提供 reader Schema 时按
  * Avro Schema 解析规则做演进（新增带默认值字段、删除字段、类型提升）。数据损坏、
  * 字节截断、存在尾随字节、Schema 不匹配或无法演进统一抛出 [AvroParseException]；
- * Avro `float`/`double` 的 NaN、Infinity 无法由 [NumberNode] 表达，同样抛出
- * [AvroParseException]。
+ * Avro `float`/`double` 的 NaN、Infinity 无法由
+ * [com.mingliqiye.document.core.NumberNode] 表达，同样抛出 [AvroParseException]。
  */
 internal class AvroWireReader(
     private val writerSchema: Schema,

@@ -14,6 +14,7 @@ dependencies {
     api(project(":exception"))
     api(project(":serialization"))
     api("org.apache.avro:avro:1.11.3")
+    implementation("org.xerial.snappy:snappy-java:1.1.10.5")
     testImplementation(kotlin("test"))
 }
 

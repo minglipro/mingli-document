@@ -41,8 +41,23 @@ val restored = mapper.parse(bytes, User::class.java)
 ## OCF
 
 ```kotlin
-val ocf = mapper.formatContainerBytes(records)
-val nodes = mapper.parseContainerToNodes(ocf)
+val ocf = mapper.formatContainerBytes(records, AvroCodec.DEFLATE)
+val appended = mapper.appendContainerBytes(ocf, moreRecords)
+val nodes = mapper.parseContainerToNodes(appended)
+```
+
+支持 codec：
+
+```text
+NULL
+DEFLATE
+SNAPPY
+```
+
+文件追加：
+
+```kotlin
+mapper.appendContainer(file, records)
 ```
 
 ## 特性
@@ -50,14 +65,16 @@ val nodes = mapper.parseContainerToNodes(ocf)
 - Avro Schema <-> `org.apache.avro.Schema`
 - record / array / map / enum / fixed / union / bytes
 - Object Container File
+- OCF codec：null / deflate / snappy
+- appendTo 文件追加
 - writer/reader 双 Schema 演进
 - 文件/流读写
 
 ## 限制
 
 - 裸二进制需要调用方提供 Schema
-- OCF 仅默认 codec
-- 不支持 `appendTo`
+- 追加不能改变容器 codec/schema
+- 不支持 bzip2 / xz / zstandard
 - 非有限浮点拒绝
 
 ## 构建
