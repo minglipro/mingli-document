@@ -1,8 +1,10 @@
 package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.annotation.DocumentConverter
+import com.mingliqiye.document.annotation.DocumentCreator
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
 import com.mingliqiye.document.annotation.DocumentDeserializer
+import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.annotation.DocumentNumberFormat
 import com.mingliqiye.document.annotation.DocumentSerializer
 import com.mingliqiye.document.core.ArrayNode
@@ -26,8 +28,10 @@ import java.io.Writer
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.GenericArrayType
+import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
+import java.lang.reflect.Parameter
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
 import java.lang.reflect.TypeVariable
@@ -58,9 +62,14 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  * - 基本类型及包装类型、String、枚举、BigDecimal、BigInteger
  * - 数组、Collection、Map
  * - 标准 Java Bean（public getter/setter、public 字段，或无参构造器）
+ * - 通过 [com.mingliqiye.document.annotation.DocumentCreator] 标注构造器的不可变 Bean：
+ *   按构造参数名（[DocumentName] 或 `-parameters` 保留的参数名）从文档取值，
+ *   支持泛型、嵌套 Bean、集合、Map、可空与基本类型；构造参数与属性同名时，
+ *   参数的 [DocumentName] 同时用于写出，保证读写字段名对称。
  * - 通过配置显式注册的多态基类/接口（字段声明为基类时写入/读取子类型信息）
  *
- * 不支持带参数构造器的实体；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
+ * 没有 [com.mingliqiye.document.annotation.DocumentCreator] 标注的实体仍使用无参构造器 + setter；
+ * 嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
 public abstract class DocumentMapper protected constructor(
     /** 格式名称，例如 json、yaml。 */
@@ -94,6 +103,8 @@ public abstract class DocumentMapper protected constructor(
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
     private val constructorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
+    private val beanCreatorCache = ConcurrentHashMap<Class<*>, Any>()
+    private val noBeanCreator = Any()
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
     private val hasSerializers = serializers.isNotEmpty()
@@ -610,6 +621,9 @@ public abstract class DocumentMapper protected constructor(
             findDeserializer(rawType)?.let { deserializer ->
                 return deserializeWithDeserializer(deserializer, reader.readNode(), property, path)
             }
+            if (beanCreator(rawType) != null) {
+                return readBean(reader, rawType, path)
+            }
             if (objectInstantiator?.canInstantiate(rawType) == true) {
                 val streamed = objectInstantiator.instantiate(
                     reader,
@@ -729,6 +743,9 @@ public abstract class DocumentMapper protected constructor(
             }
             if (hasDeserializers && findDeserializer(rawType) != null) {
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
+            }
+            if (beanCreator(rawType) != null) {
+                return readTokenBean(reader, rawType, path)
             }
             val instantiator = objectInstantiator
             if (token == DocumentTokenType.START_OBJECT &&
@@ -903,6 +920,10 @@ public abstract class DocumentMapper protected constructor(
         if (reader.currentToken != DocumentTokenType.START_OBJECT) {
             throw DocumentSerializationException("Expected object at $path but was ${reader.currentToken}")
         }
+        val creator = beanCreator(type)
+        if (creator != null) {
+            return readTokenBeanWithCreator(reader, type, creator, path)
+        }
         val instance = instantiate(type)
         val metadata = beanMetadata(type)
         val trackSeen = config.missingFieldPolicy != MissingFieldPolicy.KEEP_DEFAULT
@@ -940,6 +961,49 @@ public abstract class DocumentMapper protected constructor(
             applyMissingFields(instance, metadata, seen ?: emptySet(), path.toString())
         }
         return instance
+    }
+
+    /**
+     * 使用 [DocumentCreator] 构造器从 Token 流创建实例。
+     */
+    private fun readTokenBeanWithCreator(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        creator: BeanCreatorMetadata,
+        path: DecodePath,
+    ): Any {
+        val arguments = creator.newArguments()
+        val present = BooleanArray(creator.argumentCount)
+        while (true) {
+            when (reader.nextToken()) {
+                null -> throw DocumentSerializationException("Unexpected end of object at $path")
+                DocumentTokenType.END_OBJECT -> break
+                DocumentTokenType.FIELD_NAME -> {
+                    val fieldName = reader.textValue
+                        ?: throw DocumentSerializationException("Missing field name at $path")
+                    val parameter = creator.parameter(fieldName)
+                    reader.nextToken() ?: throw DocumentSerializationException("Unexpected end of object at $path")
+                    if (parameter != null) {
+                        val mark = path.mark()
+                        path.field(fieldName)
+                        arguments[parameter.index] = readTokenValue(reader, parameter.type, null, path)
+                        path.truncate(mark)
+                        present[parameter.index] = true
+                    } else {
+                        if (config.failOnUnknownFields) {
+                            throw DocumentSerializationException(
+                                "Unknown field '$fieldName' for ${type.name} at $path",
+                            )
+                        }
+                        TokenTreeReader.skipValue(reader)
+                    }
+                }
+
+                else -> throw DocumentSerializationException("Expected field name or end of object at $path")
+            }
+        }
+        fillMissingCreatorArguments(creator, arguments, present, path.toString())
+        return invokeCreator(creator, arguments, path.toString())
     }
 
     private fun readTokenCollection(
@@ -1193,6 +1257,10 @@ public abstract class DocumentMapper protected constructor(
         type: Class<*>,
         path: String,
     ): Any {
+        val creator = beanCreator(type)
+        if (creator != null) {
+            return readBeanWithCreator(reader, type, creator, path)
+        }
         val instance = instantiate(type)
         val metadata = beanMetadata(type)
         val seen = HashSet<String>()
@@ -1216,6 +1284,38 @@ public abstract class DocumentMapper protected constructor(
         reader.endObject()
         applyMissingFields(instance, metadata, seen, path)
         return instance
+    }
+
+    /**
+     * 使用 [DocumentCreator] 构造器从流式读取器创建实例。
+     */
+    private fun readBeanWithCreator(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        creator: BeanCreatorMetadata,
+        path: String,
+    ): Any {
+        val arguments = creator.newArguments()
+        val present = BooleanArray(creator.argumentCount)
+        reader.beginObject()
+        while (reader.hasNextField()) {
+            val fieldName = reader.readFieldName()
+            val parameter = creator.parameter(fieldName)
+            if (parameter != null) {
+                arguments[parameter.index] = readValue(reader, parameter.type, null, "$path.$fieldName")
+                present[parameter.index] = true
+            } else {
+                if (config.failOnUnknownFields) {
+                    throw DocumentSerializationException(
+                        "Unknown field '$fieldName' for ${type.name} at $path",
+                    )
+                }
+                reader.skipValue()
+            }
+        }
+        reader.endObject()
+        fillMissingCreatorArguments(creator, arguments, present, path)
+        return invokeCreator(creator, arguments, path)
     }
 
     private fun applyMissingFields(
@@ -1264,6 +1364,70 @@ public abstract class DocumentMapper protected constructor(
         }
 
         else -> null
+    }
+
+    /**
+     * 为构造器注入中没有出现在文档里的参数填充默认值。
+     *
+     * 构造器没有 Java 字段的"原始默认值"概念：引用类型参数在
+     * [MissingFieldPolicy.KEEP_DEFAULT] / [MissingFieldPolicy.SET_NULL] 下传 `null`，
+     * 基本类型参数传 Java 默认值；[MissingFieldPolicy.SET_EMPTY] 额外对
+     * String/集合/Map/数组传空值；[MissingFieldPolicy.FAIL] 抛异常。
+     */
+    private fun fillMissingCreatorArguments(
+        creator: BeanCreatorMetadata,
+        arguments: Array<Any?>,
+        present: BooleanArray,
+        path: String,
+    ) {
+        for (parameter in creator.parameters) {
+            if (present[parameter.index]) {
+                continue
+            }
+            arguments[parameter.index] = missingCreatorValue(parameter, path)
+        }
+    }
+
+    private fun missingCreatorValue(parameter: BeanCreatorParameter, path: String): Any? {
+        val policy = config.missingFieldPolicy
+        if (policy == MissingFieldPolicy.FAIL) {
+            throw DocumentSerializationException("Missing field '${parameter.documentName}' at $path")
+        }
+        val rawType = rawClassOrNull(parameter.type)
+        val value = if (policy == MissingFieldPolicy.SET_EMPTY) missingValue(policy, rawType) else null
+        if (value == null && rawType?.isPrimitive == true) {
+            return primitiveDefault(rawType)
+        }
+        return value
+    }
+
+    private fun primitiveDefault(type: Class<*>): Any = when (type) {
+        java.lang.Boolean.TYPE -> false
+        java.lang.Character.TYPE -> '\u0000'
+        java.lang.Byte.TYPE -> 0.toByte()
+        java.lang.Short.TYPE -> 0.toShort()
+        java.lang.Integer.TYPE -> 0
+        java.lang.Long.TYPE -> 0L
+        java.lang.Float.TYPE -> 0.0f
+        java.lang.Double.TYPE -> 0.0
+        else -> throw DocumentSerializationException("Unsupported primitive constructor parameter type ${type.name}")
+    }
+
+    /**
+     * 通过 [DocumentCreator] 构造器创建实例。
+     */
+    private fun invokeCreator(creator: BeanCreatorMetadata, arguments: Array<Any?>, path: String): Any = try {
+        creator.constructor.newInstance(*arguments)
+    } catch (e: InvocationTargetException) {
+        throw DocumentSerializationException(
+            "Constructor of ${creator.ownerType.name} threw an exception at $path",
+            e.targetException,
+        )
+    } catch (e: ReflectiveOperationException) {
+        throw DocumentSerializationException(
+            "Cannot invoke @DocumentCreator constructor of ${creator.ownerType.name} at $path",
+            e,
+        )
     }
 
     private fun serializeValue(
@@ -1588,13 +1752,14 @@ public abstract class DocumentMapper protected constructor(
     ) {
         withCycleCheck(bean, seen) {
             writer.startObject()
+            val creator = beanCreator(bean.javaClass)
             for (accessor in beanMetadata(bean.javaClass).readableProperties) {
                 val metadata = accessor.metadata
                 val value = accessor.read(bean)
                 if (!config.writeNulls && value == null) {
                     continue
                 }
-                writer.fieldName(metadata.documentName)
+                writer.fieldName(serializedDocumentName(creator, metadata))
                 val mark = path.mark()
                 path.field(metadata.name)
                 writeValue(
@@ -1696,13 +1861,14 @@ public abstract class DocumentMapper protected constructor(
         path: String,
     ): Node = withCycleCheck(bean, seen) {
         val fields = LinkedHashMap<String, Node>()
+        val creator = beanCreator(bean.javaClass)
         for (accessor in beanMetadata(bean.javaClass).readableProperties) {
             val metadata = accessor.metadata
             val value = accessor.read(bean)
             if (!config.writeNulls && value == null) {
                 continue
             }
-            fields[metadata.documentName] = serializeValue(
+            fields[serializedDocumentName(creator, metadata)] = serializeValue(
                 value,
                 seen,
                 depth + 1,
@@ -1947,6 +2113,10 @@ public abstract class DocumentMapper protected constructor(
             throw DocumentSerializationException("Expected object node at $path")
         }
         val objectNode = node.asObject()
+        val creator = beanCreator(type)
+        if (creator != null) {
+            return deserializeBeanWithCreator(objectNode, type, creator, path)
+        }
         val customInstance = objectInstantiator?.instantiate(
             type,
             objectNode,
@@ -1992,6 +2162,39 @@ public abstract class DocumentMapper protected constructor(
         }
         applyMissingFields(instance, metadata, seen, path)
         return instance
+    }
+
+    /**
+     * 使用 [DocumentCreator] 构造器从对象节点创建实例。
+     */
+    private fun deserializeBeanWithCreator(
+        objectNode: ObjectNode,
+        type: Class<*>,
+        creator: BeanCreatorMetadata,
+        path: String,
+    ): Any {
+        if (config.failOnUnknownFields) {
+            val knownFields = creator.documentNames
+            for (key in objectNode.keys) {
+                if (key !in knownFields) {
+                    throw DocumentSerializationException("Unknown field '$key' for ${type.name} at $path")
+                }
+            }
+        }
+        val arguments = creator.newArguments()
+        val present = BooleanArray(creator.argumentCount)
+        for (parameter in creator.parameters) {
+            val valueNode = objectNode[parameter.documentName] ?: continue
+            arguments[parameter.index] = deserializeValue(
+                valueNode,
+                parameter.type,
+                "$path.${parameter.documentName}",
+                null,
+            )
+            present[parameter.index] = true
+        }
+        fillMissingCreatorArguments(creator, arguments, present, path)
+        return invokeCreator(creator, arguments, path)
     }
 
     private fun requireNumber(node: Node, path: String): NumberNode = node.asNumberOrNull()
@@ -2105,6 +2308,72 @@ public abstract class DocumentMapper protected constructor(
         propertyMetadataResolver?.resolve(type, field.name).orEmpty(),
         config.namingStrategy,
     )
+
+    /**
+     * 获取类型上 [DocumentCreator] 标注的构造器元数据；没有标注时返回 `null`。
+     *
+     * 结果按类型缓存，同一类型只解析一次反射信息。
+     */
+    private fun beanCreator(type: Class<*>): BeanCreatorMetadata? {
+        val cached = beanCreatorCache.computeIfAbsent(type) { createBeanCreator(type) ?: noBeanCreator }
+        return if (cached === noBeanCreator) null else cached as BeanCreatorMetadata
+    }
+
+    private fun createBeanCreator(type: Class<*>): BeanCreatorMetadata? {
+        var selected: Constructor<*>? = null
+        for (constructor in type.declaredConstructors) {
+            if (!constructor.isAnnotationPresent(DocumentCreator::class.java)) {
+                continue
+            }
+            if (selected != null) {
+                throw DocumentSerializationException("Multiple @DocumentCreator constructors on ${type.name}")
+            }
+            selected = constructor
+        }
+        val constructor = selected ?: return null
+        try {
+            constructor.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot access @DocumentCreator constructor of ${type.name}", e)
+        }
+        val parameters = constructor.parameters.mapIndexed { index, parameter ->
+            createBeanCreatorParameter(type, index, parameter)
+        }
+        val duplicates = parameters.groupBy { it.documentName }.filterValues { it.size > 1 }.keys
+        if (duplicates.isNotEmpty()) {
+            throw DocumentSerializationException(
+                "Duplicate @DocumentCreator parameter document names $duplicates on ${type.name}",
+            )
+        }
+        return BeanCreatorMetadata(type, constructor, parameters)
+    }
+
+    private fun createBeanCreatorParameter(type: Class<*>, index: Int, parameter: Parameter): BeanCreatorParameter {
+        val annotation = parameter.getAnnotation(DocumentName::class.java)
+        val javaName = parameter.name.takeIf { parameter.isNamePresent }
+        val documentName = annotation?.value
+            ?: javaName?.let { config.namingStrategy.translate(it) }
+            ?: throw DocumentSerializationException(
+                "Constructor parameter $index of ${type.name} has no @DocumentName annotation and its name " +
+                    "is not available at runtime; annotate the parameter with @DocumentName or compile with -parameters",
+            )
+        return BeanCreatorParameter(
+            index,
+            javaName,
+            documentName,
+            annotation?.value,
+            parameter.parameterizedType,
+        )
+    }
+
+    /**
+     * 计算序列化时使用的文档字段名。
+     *
+     * 类型存在 [DocumentCreator] 构造器、构造参数可反射出 Java 参数名且与属性同名时，
+     * 参数上显式的 [DocumentName] 同时用于写出，保证不可变 Bean 的读写字段名对称；
+     * 否则沿用属性自身的文档字段名。
+     */
+    private fun serializedDocumentName(creator: BeanCreatorMetadata?, metadata: DocumentProperty): String = creator?.parameterByJavaName(metadata.name)?.explicitDocumentName ?: metadata.documentName
 
     private fun beanMetadata(type: Class<*>): BeanMetadata = beanMetadataCache.computeIfAbsent(type, ::createBeanMetadata)
 

@@ -118,6 +118,28 @@ val mapper = JsonMapper(config)
 
 多态只使用显式注册的 registry，不扫描子类。
 
+## 构造器注入
+
+不可变 Java Bean 可以用 `@DocumentCreator` 指定反序列化构造器：
+
+```java
+class User {
+    private final String name;
+    private final int age;
+
+    @DocumentCreator
+    User(@DocumentName("name") String name, @DocumentName("age") int age) {
+        this.name = name;
+        this.age = age;
+    }
+}
+```
+
+- 构造参数用 `@DocumentName` 指定文档字段名
+- 没有注解时回退到反射参数名（需要 `-parameters`）
+- 缺字段按 `MissingFieldPolicy` 处理
+- 未标注构造器继续走原有无参构造逻辑
+
 ## 构建
 
 ```bash

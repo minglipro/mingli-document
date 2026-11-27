@@ -19,6 +19,7 @@ com.mingliqiye.document.annotation
 | `@DocumentDeserializer(XxxDeserializer::class)` | 字段专用反序列化器 |
 | `@DocumentTypeInfo(property)` | 多态基类/接口的类型属性名 |
 | `@DocumentTypeName("name")` | 多态子类的类型名 |
+| `@DocumentCreator` | 标记反序列化构造器 |
 | `@DocumentDateTimeFormat(pattern, timezone)` | 日期时间格式 |
 | `@DocumentNumberFormat(pattern, locale)` | 数字格式 |
 | `@DocumentRootName("root")` | XML 根元素名 |
