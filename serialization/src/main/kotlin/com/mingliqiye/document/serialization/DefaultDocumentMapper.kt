@@ -61,6 +61,8 @@ class DocumentSerializationException @JvmOverloads constructor(
 class DefaultDocumentMapper(
     /** 可选的文本格式编解码器；用于 [parse] / [format] 便捷方法。 */
     val codec: DocumentCodec? = null,
+    /** 自定义转换器注册表。 */
+    val converterRegistry: DocumentConverterRegistryApi = DocumentConverterRegistryApi.empty(),
 ) : DocumentMapperApi {
 
     private val propertyCache = ConcurrentHashMap<Class<*>, List<PropertyDescriptor>>()
@@ -170,6 +172,22 @@ class DefaultDocumentMapper(
         "DefaultDocumentMapper has no DocumentCodec; pass one to the constructor to use parse/format",
     )
 
+    /**
+     * 注册自定义转换器。
+     *
+     * @param converter 转换器
+     * @return 当前 Mapper，便于链式调用
+     */
+    fun registerConverter(converter: DocumentConverter<*>): DefaultDocumentMapper {
+        converterRegistry.register(converter)
+        return this
+    }
+
+    private fun serializeWithConverter(converter: DocumentConverter<*>, value: Any): Node {
+        @Suppress("UNCHECKED_CAST")
+        return (converter as DocumentConverter<Any>).toNode(value)
+    }
+
     private fun serializeValue(
         value: Any?,
         seen: IdentityHashMap<Any, Boolean>,
@@ -177,6 +195,12 @@ class DefaultDocumentMapper(
     ): Node {
         if (depth > MAX_SERIALIZATION_DEPTH) {
             throw DocumentSerializationException("Maximum serialization depth exceeded")
+        }
+        if (value != null && value !is Node) {
+            val converter = converterRegistry.find(value.javaClass)
+            if (converter != null) {
+                return serializeWithConverter(converter, value)
+            }
         }
         return when (value) {
             null -> NullNode.INSTANCE
@@ -339,6 +363,11 @@ class DefaultDocumentMapper(
         }
         if (type == Any::class.java) {
             return node
+        }
+        val converter = converterRegistry.find(type)
+        if (converter != null) {
+            @Suppress("UNCHECKED_CAST")
+            return (converter as DocumentConverter<Any>).fromNode(node)
         }
         return when {
             type == String::class.java || type == CharSequence::class.java -> node.asString()

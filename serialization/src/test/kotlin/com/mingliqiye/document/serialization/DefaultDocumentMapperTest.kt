@@ -2,6 +2,7 @@ package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
@@ -72,6 +73,18 @@ class DefaultDocumentMapperTest {
         assertEquals("小于", restored.name)
         assertEquals("杭州", restored.city)
         assertEquals(0, restored.age)
+    }
+
+    @Test
+    fun customConverter() {
+        val registry = DocumentConverterRegistryApi.empty().register(MoneyConverter())
+        val mapper = DefaultDocumentMapper(converterRegistry = registry)
+
+        val node = mapper.toNode(Money(12))
+        assertEquals("12 CNY", node.asString())
+
+        val money = mapper.fromNode(node, Money::class.java)
+        assertEquals(12, money.amount)
     }
 
     @Test
@@ -158,5 +171,15 @@ class DefaultDocumentMapperTest {
         assertFailsWith<DocumentSerializationException> {
             mapper.toNode(first)
         }
+    }
+
+    private data class Money(val amount: Int)
+
+    private class MoneyConverter : DocumentConverter<Money> {
+        override fun toNode(value: Money): Node = StringNode.of("${value.amount} CNY")
+
+        override fun fromNode(node: Node): Money = Money(node.asString().removeSuffix(" CNY").toInt())
+
+        override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
     }
 }
