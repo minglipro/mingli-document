@@ -29,7 +29,7 @@
 | 模块 | 职责 | 对外依赖 |
 |---|---|---|
 | `annotation` | 格式无关注解 | 无 |
-| `exception` | 文档异常基类与各模块专属异常 | `mingli-exception` |
+| `exception` | 文档异常基类 | `mingli-exception` |
 | `core` | 文档树、类型引用契约 | `exception` |
 | `format-json` | JSON Mapper | `serialization`、`core` |
 | `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
