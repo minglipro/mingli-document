@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.core.Node
+import com.mingliqiye.document.format.json.exception.JsonParseException
 
 /**
  * JSON 读取入口。

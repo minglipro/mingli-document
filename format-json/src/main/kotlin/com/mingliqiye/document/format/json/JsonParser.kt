@@ -7,6 +7,7 @@ import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
+import com.mingliqiye.document.format.json.exception.JsonParseException
 import java.util.LinkedHashMap
 
 private const val MAX_JSON_DEPTH = 512

@@ -8,6 +8,7 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.json.JsonMapper
+import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

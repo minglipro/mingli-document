@@ -1,4 +1,4 @@
-package com.mingliqiye.document.format.yaml
+package com.mingliqiye.document.format.yaml.exception
 
 import com.mingliqiye.document.exception.DocumentException
 

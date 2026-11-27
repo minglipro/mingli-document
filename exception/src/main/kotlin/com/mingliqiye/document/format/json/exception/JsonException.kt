@@ -1,4 +1,4 @@
-package com.mingliqiye.document.format.json
+package com.mingliqiye.document.format.json.exception
 
 import com.mingliqiye.document.exception.DocumentException
 

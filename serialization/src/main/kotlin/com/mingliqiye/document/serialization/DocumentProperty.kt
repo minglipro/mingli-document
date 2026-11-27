@@ -2,6 +2,7 @@ package com.mingliqiye.document.serialization
 
 import com.mingliqiye.document.annotation.DocumentIgnore
 import com.mingliqiye.document.annotation.DocumentName
+import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import com.mingliqiye.utils.aliasfor.AnnotationGetter
 import java.lang.reflect.AnnotatedElement
 import java.lang.reflect.GenericArrayType

@@ -10,6 +10,7 @@ kotlin {
 
 dependencies {
     api(project(":core"))
+    api(project(":exception"))
     api(project(":serialization"))
     implementation("org.yaml:snakeyaml:2.6")
     testImplementation(kotlin("test"))

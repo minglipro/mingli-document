@@ -8,6 +8,7 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.exception.DocumentTypeException
+import com.mingliqiye.document.format.json.exception.JsonParseException
 import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals

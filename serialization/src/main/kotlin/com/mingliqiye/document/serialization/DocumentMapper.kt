@@ -9,7 +9,7 @@ import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.exception.DocumentException
+import com.mingliqiye.document.serialization.exception.DocumentSerializationException
 import java.beans.IntrospectionException
 import java.beans.Introspector
 import java.beans.PropertyDescriptor
@@ -31,17 +31,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.lang.reflect.Array as ReflectArray
 
 private const val MAX_SERIALIZATION_DEPTH = 128
-
-/**
- * Java 实体与文档树之间的序列化/反序列化异常。
- *
- * @param message 异常信息
- * @param throwable 异常原因
- */
-public class DocumentSerializationException @JvmOverloads constructor(
-    message: String? = null,
-    throwable: Throwable? = null,
-) : DocumentException(message, throwable)
 
 /**
  * Java 实体与 [Node] 树之间的通用映射器基类。

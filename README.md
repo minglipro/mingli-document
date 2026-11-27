@@ -15,7 +15,7 @@
 | 模块 | 职责 | 依赖 |
 |---|---|---|
 | `annotation` | 格式无关注解：`@DocumentName`、`@DocumentIgnore`、`@DocumentConverter` | 无 |
-| `exception` | 文档异常基类 `DocumentException` | `com.mingliqiye.exception:mingli-exception:1.1.1-Final` |
+| `exception` | 文档异常基类与各模块专属异常 | `com.mingliqiye.exception:mingli-exception:1.1.1-Final` |
 | `core` | 文档树 `Node`、`DocumentTypeReference` | `exception` |
 | `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
 | `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
@@ -342,7 +342,7 @@ val label = text?.value ?: text?.alias // value 与 alias 互为别名
 
 ```kotlin
 import com.mingliqiye.document.format.json.JsonMapper
-import com.mingliqiye.document.format.json.JsonParseException
+import com.mingliqiye.document.format.json.exception.JsonParseException
 import com.mingliqiye.document.format.json.JsonReader
 import com.mingliqiye.document.format.json.toJsonNode
 import com.mingliqiye.document.format.json.toJsonString
@@ -459,8 +459,8 @@ gradle ktlintFormat
 |---|---|---|
 | `DocumentException` | `exception` | 文档处理异常公共基类 |
 | `DocumentTypeException` | `exception` | 节点类型与预期不符（如对数组调用 `asObject()`） |
-| `DocumentSerializationException` | `serialization` | Bean 映射失败、循环引用、格式函数不可用等 |
-| `JsonParseException` | `format-json` | JSON/JSONC 语法错误 |
-| `YamlParseException` | `format-yaml` | YAML 语法错误或不支持的类型 |
+| `DocumentSerializationException` | `exception`（`com.mingliqiye.document.serialization.exception`） | Bean 映射失败、循环引用、格式函数不可用等 |
+| `JsonParseException` | `exception`（`com.mingliqiye.document.format.json.exception`） | JSON/JSONC 语法错误 |
+| `YamlParseException` | `exception`（`com.mingliqiye.document.format.yaml.exception`） | YAML 语法错误或不支持的类型 |
 
 更多代码规范、提交规范与模块约束见 [CONTRIBUTING.md](CONTRIBUTING.md)。
