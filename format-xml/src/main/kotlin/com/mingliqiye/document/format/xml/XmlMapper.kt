@@ -3,8 +3,10 @@ package com.mingliqiye.document.format.xml
 import com.mingliqiye.document.annotation.DocumentRootName
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
+import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
+import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
 
@@ -13,6 +15,12 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  *
  * 使用 [DocumentMapper] 的通用 Node 映射能力，并通过 `type` / `nil` 属性保存 XML
  * 无法原生表达的类型信息。
+ *
+ * 通过 [XmlConfig] 可额外启用属性映射与命名空间感知：
+ * - 属性映射：`@DocumentName("@id")` 的字段写成 XML attribute `id="..."`，
+ *   读取时 XML attribute 映射回 `@id` 字段；
+ * - 命名空间感知：字段名可使用 `prefix:local` 形式（如 `ns:name`、`@ns:id`），
+ *   `xmlns` 声明通过 `@xmlns:ns` 属性字段保留。
  */
 public open class XmlMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
@@ -22,11 +30,8 @@ public open class XmlMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "xml",
-    { source -> XmlReader(source).read() },
-    { node, pretty ->
-        val rootName = (config as? XmlConfig)?.rootName ?: "root"
-        XmlWriter(rootName).write(node, pretty)
-    },
+    { source -> XmlReader.from(source, config as? XmlConfig).read() },
+    { node, pretty -> XmlWriter.from(config as? XmlConfig).write(node, pretty) },
     serializers,
     deserializers,
     objectInstantiator,
@@ -67,10 +72,10 @@ public open class XmlMapper internal constructor(
 
     private fun writeXml(value: Any?, pretty: Boolean): String {
         val rootName = value?.javaClass?.getAnnotation(DocumentRootName::class.java)?.value
-            ?: xmlConfig?.rootName
-            ?: "root"
-        return XmlWriter(rootName).write(toNode(value), pretty)
+        return XmlWriter.from(xmlConfig, rootName).write(toNode(value), pretty)
     }
+
+    override fun createTextTokenReader(source: String): DocumentTokenReader = NodeTokenReader(XmlReader.from(source, xmlConfig).read())
 
     public companion object {
 
