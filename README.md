@@ -517,7 +517,8 @@ Apache License, Version 2.0。
 
 ## 变更记录
 
-见 [CHANGELOG.md](CHANGELOG.md)。
+- [CHANGELOG.md](CHANGELOG.md)
+- [1.0.0 -> 1.1.0 迁移指南](MIGRATION.md)
 
 ## 贡献
 
