@@ -360,7 +360,7 @@ internal class DefaultObjectNode(
 
     override fun get(key: String): Node? = fields[key]
 
-    override fun entries(): Set<Map.Entry<String, Node>> = Collections.unmodifiableSet(fields.entries)
+    override fun entries(): Set<Map.Entry<String, Node>> = asMap().entries
 
     override fun asMap(): Map<String, Node> = Collections.unmodifiableMap(fields)
 
