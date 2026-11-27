@@ -1,8 +1,6 @@
 package com.mingliqiye.document.serialization
 
-import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.ObjectNode
-import java.lang.reflect.Type
 
 /**
  * 自定义对象实例化策略。
@@ -25,33 +23,4 @@ public fun interface ObjectInstantiator {
         node: ObjectNode,
         context: InstantiationContext,
     ): Any?
-}
-
-/**
- * 对象实例化上下文。
- */
-public interface InstantiationContext {
-
-    /** 当前节点路径。 */
-    public val path: String
-
-    /**
-     * 将节点反序列化为指定 Java 类型。
-     *
-     * @param node 文档节点
-     * @param targetType 目标类型
-     * @return 反序列化结果
-     */
-    public fun deserialize(node: Node, targetType: Type): Any?
-}
-
-/**
- * [InstantiationContext] 默认实现。
- */
-internal class DefaultInstantiationContext(
-    private val mapper: DocumentMapper,
-    override val path: String,
-) : InstantiationContext {
-
-    override fun deserialize(node: Node, targetType: Type): Any? = mapper.deserializeForInstantiator(node, targetType, path)
 }

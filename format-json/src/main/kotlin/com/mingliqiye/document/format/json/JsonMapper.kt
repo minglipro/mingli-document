@@ -1,7 +1,6 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.serialization.DocumentMapper
-import com.mingliqiye.document.serialization.DocumentMapperBuilder
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
@@ -12,7 +11,7 @@ import com.mingliqiye.document.serialization.ObjectInstantiator
  * 与 Jackson 的 `JsonMapper` 类似：继承通用 [DocumentMapper]，内置 JSON 编解码能力。
  * 外部只使用这个 Mapper，不需要接触内部 Codec SPI。
  */
-public open class JsonMapper private constructor(
+public open class JsonMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
     deserializers: Map<Class<*>, JsonDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
@@ -41,18 +40,6 @@ public open class JsonMapper private constructor(
         /**
          * 创建 JSON Mapper 构建器。
          */
-        public fun builder(): Builder = Builder()
-    }
-
-    /**
-     * [JsonMapper] 构建器。
-     */
-    public class Builder internal constructor() : DocumentMapperBuilder<JsonMapper>() {
-
-        override fun createMapper(
-            serializers: Map<Class<*>, JsonSerializer<*>>,
-            deserializers: Map<Class<*>, JsonDeserializer<*>>,
-            objectInstantiator: ObjectInstantiator?,
-        ): JsonMapper = JsonMapper(serializers, deserializers, objectInstantiator)
+        public fun builder(): JsonMapperBuilder = JsonMapperBuilder()
     }
 }

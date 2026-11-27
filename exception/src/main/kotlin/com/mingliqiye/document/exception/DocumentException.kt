@@ -16,13 +16,3 @@ public open class DocumentException @JvmOverloads constructor(
     enableSuppression: Boolean = false,
     writableStackTrace: Boolean = true,
 ) : MingLiBaseException(message, throwable, enableSuppression, writableStackTrace)
-
-/**
- * 节点类型与预期不符。
- *
- * @param message 异常信息
- */
-public class DocumentTypeException @JvmOverloads constructor(
-    message: String? = null,
-    throwable: Throwable? = null,
-) : DocumentException(message, throwable)

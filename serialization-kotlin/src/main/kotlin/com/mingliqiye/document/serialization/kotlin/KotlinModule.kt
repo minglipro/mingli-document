@@ -1,7 +1,6 @@
 package com.mingliqiye.document.serialization.kotlin
 
 import com.mingliqiye.document.serialization.DocumentModule
-import com.mingliqiye.document.serialization.ModuleSetupContext
 
 /**
  * 获取 Kotlin data class 支持模块。
@@ -14,16 +13,3 @@ import com.mingliqiye.document.serialization.ModuleSetupContext
  * ```
  */
 public fun kotlinModule(): DocumentModule = DefaultKotlinModule
-
-/**
- * Kotlin data class 支持模块默认实现。
- */
-private object DefaultKotlinModule : DocumentModule {
-
-    override val moduleName: String
-        get() = "kotlin"
-
-    override fun setupModule(context: ModuleSetupContext) {
-        context.setObjectInstantiator(KotlinDataClassInstantiator)
-    }
-}

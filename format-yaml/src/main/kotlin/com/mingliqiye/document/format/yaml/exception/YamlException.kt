@@ -16,14 +16,3 @@ public open class YamlException @JvmOverloads constructor(
     enableSuppression: Boolean = false,
     writableStackTrace: Boolean = true,
 ) : DocumentException(message, throwable, enableSuppression, writableStackTrace)
-
-/**
- * YAML 文本解析失败。
- *
- * @param message 异常信息
- * @param throwable 异常原因
- */
-public class YamlParseException @JvmOverloads constructor(
-    message: String? = null,
-    throwable: Throwable? = null,
-) : YamlException(message, throwable)

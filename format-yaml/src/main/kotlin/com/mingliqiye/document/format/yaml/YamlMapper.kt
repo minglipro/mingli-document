@@ -1,7 +1,6 @@
 package com.mingliqiye.document.format.yaml
 
 import com.mingliqiye.document.serialization.DocumentMapper
-import com.mingliqiye.document.serialization.DocumentMapperBuilder
 import com.mingliqiye.document.serialization.JsonDeserializer
 import com.mingliqiye.document.serialization.JsonSerializer
 import com.mingliqiye.document.serialization.ObjectInstantiator
@@ -12,7 +11,7 @@ import com.mingliqiye.document.serialization.ObjectInstantiator
  * 与 Jackson 的 `YAMLMapper` 类似：继承通用 [DocumentMapper]，内置 YAML 编解码能力。
  * 外部只使用这个 Mapper，不需要接触内部 Codec SPI。
  */
-public open class YamlMapper private constructor(
+public open class YamlMapper internal constructor(
     serializers: Map<Class<*>, JsonSerializer<*>>,
     deserializers: Map<Class<*>, JsonDeserializer<*>>,
     objectInstantiator: ObjectInstantiator?,
@@ -41,18 +40,6 @@ public open class YamlMapper private constructor(
         /**
          * 创建 YAML Mapper 构建器。
          */
-        public fun builder(): Builder = Builder()
-    }
-
-    /**
-     * [YamlMapper] 构建器。
-     */
-    public class Builder internal constructor() : DocumentMapperBuilder<YamlMapper>() {
-
-        override fun createMapper(
-            serializers: Map<Class<*>, JsonSerializer<*>>,
-            deserializers: Map<Class<*>, JsonDeserializer<*>>,
-            objectInstantiator: ObjectInstantiator?,
-        ): YamlMapper = YamlMapper(serializers, deserializers, objectInstantiator)
+        public fun builder(): YamlMapperBuilder = YamlMapperBuilder()
     }
 }
