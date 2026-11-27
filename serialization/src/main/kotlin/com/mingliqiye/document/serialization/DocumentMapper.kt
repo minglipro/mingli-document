@@ -764,13 +764,11 @@ public abstract class DocumentMapper protected constructor(
         else -> throw DocumentSerializationException("Unsupported component type: $type")
     }
 
-    private fun documentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty =
-        documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
-            .computeIfAbsent(property.name) { createDocumentProperty(type, property) }
+    private fun documentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty = documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
+        .computeIfAbsent(property.name) { createDocumentProperty(type, property) }
 
-    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty =
-        documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
-            .computeIfAbsent(field.name) { createDocumentProperty(type, field) }
+    private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
+        .computeIfAbsent(field.name) { createDocumentProperty(type, field) }
 
     private fun createDocumentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty {
         val field = findField(type, property.name)
