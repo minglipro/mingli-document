@@ -109,7 +109,11 @@ public abstract class DocumentMapper protected constructor(
      * @return 文档树
      * @throws DocumentSerializationException 序列化失败或存在循环引用时抛出
      */
-    override fun toNode(value: Any?): Node = serializeValue(value, IdentityHashMap(), 0, null, "$")
+    override fun toNode(value: Any?): Node {
+        val node = serializeValue(value, IdentityHashMap(), 0, null, "$")
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
+        return node
+    }
 
     /**
      * 将文档树反序列化为指定 Java 类型。
@@ -120,6 +124,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: Class<T>): T {
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
         @Suppress("UNCHECKED_CAST")
         return deserializeValue(node, targetType, "$") as T
     }
@@ -143,6 +148,7 @@ public abstract class DocumentMapper protected constructor(
      * @throws DocumentSerializationException 反序列化失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T {
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount)
         @Suppress("UNCHECKED_CAST")
         return deserializeValue(node, targetType.type, "$") as T
     }

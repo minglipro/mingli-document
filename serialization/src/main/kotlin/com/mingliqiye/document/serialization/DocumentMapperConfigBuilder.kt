@@ -22,6 +22,8 @@ public class DocumentMapperConfigBuilder {
     private var atomicFileWrite = false
     private var createParentDirectories = false
     private var maxInputSize = 0L
+    private var maxNodeDepth = 0
+    private var maxNodeCount = 0L
 
     /**
      * 为指定字段绑定转换器。
@@ -202,6 +204,30 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置 Node 树最大深度，0 表示不限制。
+     *
+     * @param max 最大深度
+     * @return 当前构建器
+     */
+    public fun maxNodeDepth(max: Int): DocumentMapperConfigBuilder {
+        require(max >= 0) { "maxNodeDepth must be >= 0" }
+        this.maxNodeDepth = max
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大节点数，0 表示不限制。
+     *
+     * @param max 最大节点数
+     * @return 当前构建器
+     */
+    public fun maxNodeCount(max: Long): DocumentMapperConfigBuilder {
+        require(max >= 0) { "maxNodeCount must be >= 0" }
+        this.maxNodeCount = max
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      *
      * @throws IllegalArgumentException 子类型注册项非法（如子类不可赋值给基类、
@@ -217,6 +243,8 @@ public class DocumentMapperConfigBuilder {
         atomicFileWrite,
         createParentDirectories,
         maxInputSize,
+        maxNodeDepth,
+        maxNodeCount,
         SubtypeRegistries.build(subtypeRegistrations, subtypeTypeProperties),
     )
 }

@@ -61,7 +61,7 @@
 
 ## 阶段 4：安全边界
 
-- [ ] 全格式 maxDepth
+- [x] Mapper 层 maxNodeDepth / maxNodeCount\n- [ ] 解析器层全格式 maxDepth
 - [x] 全格式 maxInputSize
 - [ ] 全格式 maxStringLength
 - [ ] YAML alias 扩张限制

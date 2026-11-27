@@ -29,6 +29,10 @@ public open class DocumentMapperConfig protected constructor(
     public val createParentDirectories: Boolean = false,
     /** 单次输入最大字节数；0 表示不限制。 */
     public val maxInputSize: Long = 0L,
+    /** Node 树最大深度；0 表示不限制。 */
+    public val maxNodeDepth: Int = 0,
+    /** Node 树最大节点数；0 表示不限制。 */
+    public val maxNodeCount: Long = 0L,
     private val subtypeRegistries: Map<Class<*>, SubtypeRegistry> = emptyMap(),
 ) {
 
@@ -47,6 +51,8 @@ public open class DocumentMapperConfig protected constructor(
         other.atomicFileWrite,
         other.createParentDirectories,
         other.maxInputSize,
+        other.maxNodeDepth,
+        other.maxNodeCount,
         other.subtypeRegistries,
     )
 
@@ -95,6 +101,8 @@ public open class DocumentMapperConfig protected constructor(
             atomicFileWrite: Boolean,
             createParentDirectories: Boolean,
             maxInputSize: Long,
+            maxNodeDepth: Int,
+            maxNodeCount: Long,
             subtypes: SubtypeRegistries = SubtypeRegistries.EMPTY,
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
@@ -106,6 +114,8 @@ public open class DocumentMapperConfig protected constructor(
             atomicFileWrite,
             createParentDirectories,
             maxInputSize,
+            maxNodeDepth,
+            maxNodeCount,
             subtypes.toMap(),
         )
     }

@@ -51,6 +51,8 @@ val config = DocumentMapperConfig.builder()
     .atomicFileWrite(true)
     .createParentDirectories(true)
     .maxInputSize(16L * 1024 * 1024)
+    .maxNodeDepth(64)
+    .maxNodeCount(100_000)
     .build()
 ```
 
@@ -73,6 +75,8 @@ fileCharset             文本文件/流字符集，默认 UTF-8
 atomicFileWrite         临时文件 + 原子替换
 createParentDirectories 自动创建父目录
 maxInputSize            单次输入最大字节数，0 表示不限制
+maxNodeDepth            Node 树最大深度，0 表示不限制
+maxNodeCount            Node 树最大节点数，0 表示不限制
 ```
 
 ## 转换器
