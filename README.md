@@ -1,129 +1,81 @@
-# document
+# mingli-document
 
-格式无关的文档树模型 + JSON/YAML/XML/Properties/TOML/CSV/Ion/CBOR/Smile/Avro/Protobuf 编解码 + Java Bean 映射。
+一个格式无关的 Java / Kotlin 文档处理库。
 
-`com.mingliqiye.document` 用一棵与具体序列化格式解耦的文档树（`Node`）作为中间层：
-
-- **格式无关**：`core` 只定义节点树与类型引用，不依赖任何具体格式；
-- **多格式 Mapper**：`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`format-cbor`、`format-smile`、`format-avro`、`format-protobuf` 分别提供对应 Mapper，均继承通用 `DocumentMapper`；
-- **Java Bean 映射**：`serialization` 负责 Java/Kotlin 实体与文档树之间的双向映射，支持字段注解与自定义转换器。
-
-## 模块与依赖
-
-| 模块 | 职责 | 依赖 |
-|---|---|---|
-| `annotation` | 格式无关注解：`@DocumentName`、`@DocumentIgnore`、`@DocumentConverter` | 无 |
-| `exception` | 文档异常基类 `DocumentException` / `DocumentTypeException` | `com.mingliqiye.exception:mingli-exception:1.1.1-Final` |
-| `core` | 文档树 `Node`、`DocumentTypeReference` | `exception` |
-| `format-json` | JSON/JSONC Mapper `JsonMapper`、`JsonReader` | `serialization`、`core` |
-| `format-yaml` | YAML Mapper `YamlMapper`、`YamlReader` | `serialization`、`core`、SnakeYAML |
-| `format-xml` | XML Mapper `XmlMapper`、`XmlReader` | `serialization`、`core` |
-| `format-properties` | Properties Mapper `PropertiesMapper`、`PropertiesReader` | `serialization`、`core` |
-| `format-toml` | TOML Mapper `TomlMapper`、`TomlReader` | `serialization`、`core`、Tomlj |
-| `format-csv` | CSV Mapper `CsvMapper`、`CsvReader`、`CsvSchema` | `serialization`、`core`、`schema`、Commons CSV |
-| `format-ion` | Ion Mapper `IonMapper`、`IonReader`（文本 + 二进制） | `serialization`、`core`、Ion Java |
-| `format-cbor` | CBOR Mapper `CborMapper`（二进制） | `serialization`、`core`、Jackson CBOR |
-| `format-smile` | Smile Mapper `SmileMapper`（二进制） | `serialization`、`core`、Jackson Smile |
-| `schema` | 格式无关 Schema：`DocumentSchema`、`SchemaField`、`SchemaType` | `core` |
-| `format-avro` | Avro Mapper/Schema：`AvroMapper`、`AvroSchema` | `serialization`、`schema`、Apache Avro |
-| `format-protobuf` | Protobuf Mapper/Schema：`ProtobufMapper`、`ProtobufSchema` | `serialization`、`schema`、protobuf-java |
-| `serialization` | `DocumentMapper` 基类、Java Bean ↔ `Node` 映射、Token 直读/直写、转换器、字段注解与别名注解读取 | `core`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
-| `serialization-kotlin` | Kotlin data class 支持函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
-
-依赖方向（`A ──► B` 表示 A 依赖 B）：
+它用统一的文档树（`Node`）作为中间层，在 JSON、YAML、XML、Properties、TOML、CSV、Ion、CBOR、Smile、Avro、Protobuf 之间读写，并支持 Java Bean 与 Kotlin data class 映射。
 
 ```text
-format-json ──► serialization ──► core ──► exception ──► mingli-exception
-format-yaml ──► serialization
-format-xml  ──► serialization
-format-properties ──► serialization
-format-toml ──► serialization
-format-csv  ──► serialization
-format-ion  ──► serialization
-format-cbor ──► serialization
-format-smile ──► serialization
-serialization-kotlin ──► serialization
-serialization ──► annotation（implementation）
-              ──► alias-for 1.0.3（api）
-annotation：项目内无依赖
+文本 / 二进制
+      ↓
+  DocumentMapper
+      ↓
+     Node 树
+      ↓
+Java Bean / Kotlin data class
 ```
 
-- `benchmarks` 是开发工具模块，不对外发布；
-- `core` 不依赖任何具体格式；所有 `format-*` 模块依赖 `serialization`，并继承其 `DocumentMapper`/`BinaryDocumentMapper` 基类。
-- 外部使用方只需要引入对应格式模块（如 `format-json`）即可获得 `JsonMapper`；不需要接触内部 Codec 实现。
+## 特性
 
-## 坐标
+- **统一模型**：`ObjectNode`、`ArrayNode`、`StringNode`、`NumberNode`、`BooleanNode`、`BinaryNode`、`NullNode`
+- **11 种格式**：JSON/JSONC、YAML、XML、Properties、TOML、CSV、Ion、CBOR、Smile、Avro、Protobuf
+- **Bean 映射**：Java Bean、Kotlin data class、泛型集合、Map、嵌套对象
+- **注解与转换器**：字段名、忽略字段、日期格式、数字格式、自定义转换器
+- **文本 + 二进制 API**：`parse(String)`、`format`、`parse(ByteArray)`、`formatBytes`
+- **Token API**：流式 Token 读取/写出，二进制格式直读 Bean
+- **Schema 层**：CSV、Avro、Protobuf Schema
+- **安全边界**：JSON 深度限制、XML XXE 防护、YAML SafeConstructor
+- **开发者工具**：JMH 性能基准、fuzz 边界语料
 
-- 普通模块 group：`com.mingliqiye.document`
-- 格式模块 group：`com.mingliqiye.document.format`
-- 版本：来自根 `gradle.properties` 的 `projectVersion`
-- 构建目标：JDK 8
+## 环境要求
 
-分组配置也在根 `gradle.properties`：
+- JDK 8+
+- Kotlin 2.0（使用 `serialization-kotlin` 时）
+- Gradle 8.x（构建源码时）
 
-```properties
-projectVersion=1.0-SNAPSHOT
-projectGroup=com.mingliqiye.document
-formatProjectGroup=com.mingliqiye.document.format
-```
+## 安装
 
-各模块坐标：
+Maven 坐标：
 
-- 普通模块：`com.mingliqiye.document:<模块名>:<projectVersion>`
-- 格式模块：`com.mingliqiye.document.format:format-<格式名>:<projectVersion>`
+- 普通模块：`com.mingliqiye.document:<module>`
+- 格式模块：`com.mingliqiye.document.format:<module>`
 
-例如：
+版本来自项目根 `gradle.properties` 的 `projectVersion`。
 
 ```kotlin
+repositories {
+    maven {
+        url = uri("https://repository.mingliqiye.com/repository/maven-public/")
+    }
+    mavenCentral()
+}
+
 dependencies {
-    implementation("com.mingliqiye.document:serialization:1.0-SNAPSHOT")
     implementation("com.mingliqiye.document.format:format-json:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-yaml:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-xml:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-properties:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-toml:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-csv:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-ion:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-cbor:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-smile:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-avro:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document.format:format-protobuf:1.0-SNAPSHOT")
-    implementation("com.mingliqiye.document:schema:1.0-SNAPSHOT")
+
+    // 需要 Kotlin data class 时
     implementation("com.mingliqiye.document:serialization-kotlin:1.0-SNAPSHOT")
 }
 ```
 
-发布：
+常用格式模块：
 
-```bash
-# 发布到本地 Maven 仓库
-gradle publishToMavenLocal
-
-# 发布到远程仓库：地址与凭据由 Gradle init.gradle 提供
-gradle publish
+```text
+format-json
+format-yaml
+format-xml
+format-properties
+format-toml
+format-csv
+format-ion
+format-cbor
+format-smile
+format-avro
+format-protobuf
 ```
-
-远程发布规则：
-
-- `projectVersion` 以 `-SNAPSHOT` 结尾时只推送 snapshot 仓库
-- 正式版本只推送 release 仓库
-- Gradle Plugin 专用仓库不参与本项目发布
-- 发布时使用本机 GPG 为 jar、pom、module metadata、javadoc、kotlindoc 生成 `.asc` 签名
-
-`benchmarks` 和 `fuzz` 是开发工具模块，不发布。
-
-## 环境要求
-
-- JDK 8：所有模块均配置 `jvmToolchain(8)`，编译与测试目标为 Java 8（见「构建与测试」）。
-- Kotlin 2.0.0（根构建脚本中的 Kotlin JVM 插件版本）。
-- 构建工具：仓库自带 Gradle Wrapper 8.14.7。
 
 ## 快速开始
 
-以下是一个完整 Kotlin 文件（`Main.kt`），引入依赖后可直接运行：
-
 ```kotlin
-// Main.kt
 import com.mingliqiye.document.format.json.JsonMapper
 
 class User {
@@ -132,7 +84,6 @@ class User {
 }
 
 fun main() {
-    // JSON 格式使用 JsonMapper；YAML 使用 YamlMapper
     val mapper = JsonMapper()
 
     val user = User().apply {
@@ -153,467 +104,132 @@ fun main() {
     println(parsed.age) // 18
 
     // 实体 -> 文本
-    println(mapper.format(parsed))       // 紧凑 JSON
-    println(mapper.formatPretty(parsed)) // 两空格缩进 JSON
+    println(mapper.format(parsed))
+    println(mapper.formatPretty(parsed))
 }
 ```
 
-`DocumentMapper` 的主要方法：
+### 换一种格式
 
-| 方法 | 作用 |
-|---|---|
-| `toNode(value)` | 任意实体、集合、`Map`、数组或 `Node` → 文档树 |
-| `fromNode(node, Class)` / `fromNode(node, DocumentTypeReference)` | 文档树 → Java 实体（支持泛型类型） |
-| `parse(source, Class)` / `parse(source, DocumentTypeReference)` | 文本 → Java 实体 |
-| `parse(byteArray, Class)` / `parse(byteArray, DocumentTypeReference)` | 二进制 → Java 实体（二进制 Mapper） |
-| `format(value)` / `formatPretty(value)` | Java 实体 → 紧凑 / 格式化文本 |
-| `formatBytes(value)` | Java 实体 → 二进制（二进制 Mapper） |
-| `fromTokens(tokenReader, Class)` / `fromTokens(tokenReader, DocumentTypeReference)` | Token 流 → Java 实体 |
-| `convert(source, Class)` / `convert(source, DocumentTypeReference)` | 实体↔实体、`Node`↔实体转换 |
-
-> `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` / `CborMapper` / `SmileMapper` 继承 `DocumentMapper` 或 `BinaryDocumentMapper`；格式模块内部 Codec 不对外暴露。
-
-## Kotlin data class
-
-Java Bean 需要无参构造器；Kotlin data class 可以通过 `serialization-kotlin` 使用主构造器反序列化。
+格式 Mapper 的 API 保持一致：
 
 ```kotlin
-import com.mingliqiye.document.annotation.DocumentName
+import com.mingliqiye.document.format.yaml.YamlMapper
+import com.mingliqiye.document.format.xml.XmlMapper
+import com.mingliqiye.document.format.csv.CsvMapper
+
+val yaml = YamlMapper()
+val xml = XmlMapper()
+val csv = CsvMapper()
+
+val yamlText = yaml.format(user)
+val xmlText = xml.format(user)
+```
+
+### Kotlin data class
+
+```kotlin
 import com.mingliqiye.document.format.json.JsonMapper
 import com.mingliqiye.document.serialization.kotlin.kotlinModule
 
-data class User(
-    @DocumentName("display_name") val name: String,
-    val age: Int,
-)
+data class User(val name: String, val age: Int)
 
 fun main() {
     val mapper = JsonMapper.builder()
         .addModule(kotlinModule())
         .build()
 
-    val user = mapper.parse("""{"display_name":"小于","age":18}""", User::class.java)
-    println(mapper.formatPretty(user))
+    val json = mapper.format(User("小于", 18))
+    val user = mapper.parse(json, User::class.java)
+
+    println(user)
 }
 ```
 
-YAML 同样注册模块：
+## 支持的格式
+
+| 格式 | 读取 | 写出 | 说明 |
+|---|---|---|---|
+| JSON / JSONC | ✅ | ✅ | 支持注释、严格 UTF-8 byte API、重复 key 策略、深度限制 |
+| YAML | ✅ | ✅ | 多文档、`!!binary`、Token 路径 |
+| XML | ✅ | ✅ | `type`/`nil` 协议、属性、PREFIX/CLARK 命名空间、混合内容策略 |
+| Properties | ✅ | ✅ | 扁平键值、`.` 路径、`[index]` 数组 |
+| TOML | ✅ | ✅ | 标准表/数组，日期时间映射为字符串 |
+| CSV | ✅ | ✅ | 平坦表、表头、类型推断、CSV Schema |
+| Ion | ✅ | ✅ | 文本 + 二进制，BLOB/CLOB -> `BinaryNode` |
+| CBOR | ✅ | ✅ | 二进制、Token 路径 |
+| Smile | ✅ | ✅ | 二进制、Token 路径 |
+| Avro | ✅ | ✅ | Schema + wire，OCF，schema evolution |
+| Protobuf | ✅ | ✅ | Descriptor + DynamicMessage，嵌套/enum/map/oneof |
+
+### 二进制格式
 
 ```kotlin
-val mapper = YamlMapper.builder()
-    .addModule(kotlinModule())
-    .build()
+import com.mingliqiye.document.format.cbor.CborMapper
+
+val cbor = CborMapper()
+val bytes = cbor.formatBytes(user)
+val restored = cbor.parse(bytes, User::class.java)
 ```
 
-支持：
-
-- 主构造器参数反序列化
-- 默认参数（缺失时使用默认值）
-- 嵌套 data class
-- `List` / `Map` 中的 data class
-- `@DocumentName`、`@DocumentIgnore`
-- 非 data class 自动回退到默认 Java Bean 逻辑
-
-> `serialization-kotlin` 依赖 `kotlin-reflect`；不需要 Kotlin 反射时可以不引入该模块。
->
-> 低层扩展点 `ObjectInstantiator` 仍可通过 `DocumentModule` 的 `ModuleSetupContext` 注入。
-
-## Mapper 模块系统
-
-格式 Mapper 支持类似 Jackson `Module` 的模块机制：
+Avro/Protobuf 需要显式提供 Schema：
 
 ```kotlin
-public interface DocumentModule {
-    public val moduleName: String
-    public fun setupModule(context: ModuleSetupContext)
-}
+import com.mingliqiye.document.format.avro.AvroMapper
+import com.mingliqiye.document.format.protobuf.ProtobufMapper
+
+val avro = AvroMapper(avroSchema)
+val avroBytes = avro.formatBytes(value)
+
+val protobuf = ProtobufMapper(descriptor)
+val protobufBytes = protobuf.formatBytes(value)
 ```
 
-自定义模块：
+## Node 与 Mapper API
 
-```kotlin
-import com.mingliqiye.document.serialization.DocumentModule
-import com.mingliqiye.document.serialization.ModuleSetupContext
+### Node 类型
 
-object MoneyModule : DocumentModule {
-    override val moduleName: String = "money"
-
-    override fun setupModule(context: ModuleSetupContext) {
-        context.addConverter(MoneyConverter())
-    }
-}
-
-fun main() {
-    val mapper = JsonMapper.builder()
-        .addModule(MoneyModule)
-        .build()
-}
+```text
+ObjectNode
+ArrayNode
+StringNode
+NumberNode
+BooleanNode
+BinaryNode
+NullNode
 ```
 
-模块可以：
+`Node` 不可变；`BinaryNode` 会在输入/输出时复制字节数组。
 
-- `addSerializer(...)`
-- `addDeserializer(...)`
-- `addConverter(...)`
-- `setObjectInstantiator(...)`
+### DocumentMapper 主要方法
 
-`addModule(...)` 按 `moduleName` 去重，模块配置在 `build()` 时应用；Builder 自身注册的配置与模块配置会合并。
-
-## 自定义转换器
-
-转换器接口位于 `com.mingliqiye.document.serialization`：
-
-```kotlin
-interface JsonSerializer<T> {
-    fun getType(): DocumentTypeReference<T>
-    fun serialize(value: T, context: SerializationContext): Node
-}
-
-interface JsonDeserializer<T> {
-    fun getType(): DocumentTypeReference<T>
-    fun deserialize(node: Node, context: DeserializationContext): T?
-}
-
-// 双向转换器 = 序列化 + 反序列化
-interface JsonConverter<T> : JsonSerializer<T>, JsonDeserializer<T>
-```
-
-实现一个双向转换器：
-
-```kotlin
-import com.mingliqiye.document.core.DocumentTypeReference
-import com.mingliqiye.document.core.Node
-import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.serialization.DeserializationContext
-import com.mingliqiye.document.serialization.JsonConverter
-import com.mingliqiye.document.serialization.SerializationContext
-
-class Money(val amount: Int)
-
-class MoneyConverter : JsonConverter<Money> {
-    override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
-
-    override fun serialize(value: Money, context: SerializationContext): Node =
-        StringNode.of("${value.amount} CNY")
-
-    override fun deserialize(node: Node, context: DeserializationContext): Money =
-        Money(node.asString().removeSuffix(" CNY").toInt())
-}
-```
-
-在 Builder 中注册：
-
-```kotlin
-import com.mingliqiye.document.format.json.JsonMapper
-
-fun main() {
-    val mapper = JsonMapper.builder()
-        .addConverter(MoneyConverter()) // 同时注册序列化和反序列化方向
-        .build()
-
-    val node = mapper.toNode(Money(12))
-    println(node.asString()) // 12 CNY
-
-    val money = mapper.fromNode(node, Money::class.java)
-    println(money.amount) // 12
-}
-```
-
-只注册单向能力时使用 `addSerializer(...)` / `addDeserializer(...)`，双向用 `addConverter(...)`。注册信息以 `getType().getRawType()` 为键；匹配时先精确匹配，再尝试 `isAssignableFrom`，同一类型后注册的会覆盖先注册的。
-
-### 通过 context.property 读取字段信息
-
-转换器执行时，`SerializationContext.property` / `DeserializationContext.property` 携带当前字段元数据（根对象或集合元素处为 `null`）；`context.path` 可用于错误定位。
-
-`DocumentProperty` 提供：
-
-| 属性/方法 | 说明 |
+| 方法 | 作用 |
 |---|---|
-| `declaringClass` | 声明该属性的 Java 类 |
-| `name` | Java 属性名（不受注解影响） |
-| `type` / `getRawType()` | 泛型类型 / 原始类型 |
-| `documentName` | 应用 `@DocumentName` 后的文档字段名 |
-| `annotations` | 字段及读写方法上合并后的注解列表 |
-| `getAnnotation(Class)` / `hasAnnotation(Class)` | 读取注解，支持 `@AliasFor` 别名解析 |
-| `isIgnored()` | 是否被 `@DocumentIgnore` 标记 |
+| `toNode(value)` | 实体/集合/Map/数组 -> Node |
+| `fromNode(node, Class)` / `fromNode(node, DocumentTypeReference)` | Node -> 实体 |
+| `parse(source, Class)` / `parse(source, DocumentTypeReference)` | 文本 -> 实体 |
+| `parse(bytes, Class)` / `parse(bytes, DocumentTypeReference)` | 二进制 -> 实体 |
+| `format(value)` / `formatPretty(value)` | 实体 -> 文本 |
+| `formatBytes(value)` | 实体 -> 二进制 |
+| `fromTokens(reader, Class)` / `fromTokens(reader, DocumentTypeReference)` | Token -> 实体 |
+| `convert(source, Class)` | 实体/Node -> 实体 |
 
-```kotlin
-import com.mingliqiye.document.annotation.DocumentConverter
-import com.mingliqiye.document.core.DocumentTypeReference
-import com.mingliqiye.document.core.Node
-import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.serialization.DeserializationContext
-import com.mingliqiye.document.serialization.JsonConverter
-import com.mingliqiye.document.serialization.SerializationContext
+## 注解
 
-// 复用一个自定义字段注解
-@Retention(AnnotationRetention.RUNTIME)
-@Target(AnnotationTarget.FIELD)
-annotation class MoneyLabel(val value: String)
-
-// 复用上一节的 Money 类
-class LabeledMoneyConverter : JsonConverter<Money> {
-    override fun getType(): DocumentTypeReference<Money> = DocumentTypeReference.of()
-
-    override fun serialize(value: Money, context: SerializationContext): Node {
-        val label = context.property?.getAnnotation(MoneyLabel::class.java)?.value ?: "?"
-        return StringNode.of("${value.amount} $label")
-    }
-
-    override fun deserialize(node: Node, context: DeserializationContext): Money {
-        val label = context.property?.getAnnotation(MoneyLabel::class.java)?.value ?: "?"
-        return Money(node.asString().removeSuffix(" $label").toInt())
-    }
-}
-
-class LabeledWallet {
-    @field:MoneyLabel("USD")
-    @field:DocumentConverter(LabeledMoneyConverter::class)
-    var money: Money = Money(0)
-}
-
-fun main() {
-    val mapper = JsonMapper()
-    val node = mapper.toNode(LabeledWallet().apply { money = Money(12) })
-    println(node.asObject()["money"]?.asString()) // 12 USD
-}
-```
-
-在转换器中读取字段名与注解：
-
-```kotlin
-val property = context.property                        // 根对象/集合元素处为 null
-val javaName = property?.name                           // Java 属性名
-val documentName = property?.documentName               // 应用 @DocumentName 后的名字
-val label = property?.getAnnotation(MoneyLabel::class.java)?.value
-```
-
-## 字段级配置
-
-格式 Mapper 可以传入 `DocumentMapperConfig`，按 `声明类 + 属性名` 定义字段的解析与格式化方式：
-
-```kotlin
-val config = DocumentMapperConfig.builder()
-    .field(Order::class.java, "createdAt", DateFieldConverter())
-    .build()
-
-val jsonMapper = JsonMapper(config)
-val yamlMapper = YamlMapper(config)
-```
-
-也可以从 Builder 传入：
-
-```kotlin
-val mapper = JsonMapper.builder()
-    .config(config)
-    .build()
-```
-
-格式子模块还可以使用带格式选项的 Config：
-
-```kotlin
-val jsonConfig = JsonConfig.builder()
-    .field(Order::class.java, "createdAt", DateFieldConverter())
-    .allowComments(false)
-    .pretty(true)
-    .build()
-
-val jsonMapper = JsonMapper(jsonConfig)
-
-val yamlConfig = YamlConfig.builder()
-    .field(Order::class.java, "createdAt", DateFieldConverter())
-    .pretty(true)
-    .build()
-
-val yamlMapper = YamlMapper(yamlConfig)
-```
-
-配置中的转换器与普通 `JsonConverter` 完全一致，仍然可以通过 `context.property` 获取：
-
-```kotlin
-context.property?.declaringClass
-context.property?.name
-context.property?.documentName
-```
-
-优先级：
-
-```text
-DocumentMapperConfig 字段配置
-  ↓
-@DocumentConverter 字段注解
-  ↓
-Builder 全局转换器
-  ↓
-内置类型映射
-```
-
-`DocumentMapperConfig` 对 Java Bean 和 Kotlin data class 字段都生效。
-
-## 读写行为配置
-
-`DocumentMapperConfig` 同时提供类似 Jackson `DeserializationFeature` / `SerializationFeature` 的开关：
-
-```kotlin
-val config = DocumentMapperConfig.builder()
-    .missingFieldPolicy(MissingFieldPolicy.SET_EMPTY)
-    .failOnUnknownFields(true)
-    .writeNulls(false)
-    .build()
-
-val mapper = JsonMapper(config)
-```
-
-### missingFieldPolicy
-
-文档缺少 Bean 字段时：
-
-| 策略 | 行为 |
-|---|---|
-| `KEEP_DEFAULT` | 保留对象构造后的默认值（默认） |
-| `SET_NULL` | 引用类型设为 `null`；基本类型保留默认值 |
-| `SET_EMPTY` | `String` 设为 `""`；集合、Map、数组设为空集合；其他引用类型设为 `null` |
-| `FAIL` | 抛出 `DocumentSerializationException` |
-
-### failOnUnknownFields
-
-```kotlin
-DocumentMapperConfig.builder()
-    .failOnUnknownFields(true)
-    .build()
-```
-
-遇到文档中不存在于 Bean 的字段时抛出异常；默认忽略。
-
-### writeNulls
-
-```kotlin
-DocumentMapperConfig.builder()
-    .writeNulls(false)
-    .build()
-```
-
-Bean 字段值为 `null` 时不写出该字段；默认写出。
-
-JSON/YAML/XML 专属 Config 也提供这些方法：
-
-```kotlin
-val jsonConfig = JsonConfig.builder()
-    .missingFieldPolicy(MissingFieldPolicy.SET_EMPTY)
-    .failOnUnknownFields(true)
-    .writeNulls(false)
-    .allowComments(false)
-    .pretty(true)
-    .build()
-```
-
-> `missingFieldPolicy` / `failOnUnknownFields` 主要作用于普通 Java Bean；Kotlin data class 仍按主构造参数规则：必填参数缺失会报错，默认参数保留默认值。
-
-## 日期时间格式
-
-`@DocumentDateTimeFormat` 直接定义单个日期/时间字段的解析与格式化：
-
-```kotlin
-import com.mingliqiye.document.annotation.DocumentDateTimeFormat
-import java.time.LocalDate
-import java.util.Date
-
-class Order {
-    @field:DocumentDateTimeFormat("yyyy-MM-dd HH:mm:ss", timezone = "Asia/Shanghai")
-    var createdAt: Date? = null
-
-    @field:DocumentDateTimeFormat("yyyy/MM/dd")
-    var deliveryDate: LocalDate? = null
-}
-```
-
-支持类型：
-
-```text
-java.util.Date
-java.util.Calendar
-java.sql.Date / Timestamp
-java.time.LocalDate
-java.time.LocalDateTime
-java.time.LocalTime
-java.time.OffsetDateTime
-java.time.ZonedDateTime
-java.time.Instant
-```
-
-`timezone` 可选；不传时使用系统默认时区。
-
-优先级：
-
-```text
-DocumentMapperConfig 字段配置
-  ↓
-@DocumentConverter
-  ↓
-@DocumentDateTimeFormat
-  ↓
-@DocumentNumberFormat
-  ↓
-Builder 全局转换器
-  ↓
-内置类型映射
-```
-
-## 数字格式
-
-`@DocumentNumberFormat` 使用 `DecimalFormat` 定义数字字段的解析与格式化：
-
-```kotlin
-import com.mingliqiye.document.annotation.DocumentNumberFormat
-import java.math.BigDecimal
-
-class Order {
-    @field:DocumentNumberFormat("#,##0.00")
-    var amount: BigDecimal? = null
-
-    @field:DocumentNumberFormat("#,##0", locale = "de-DE")
-    var count: Int = 0
-}
-```
-
-输出示例：
-
-```json
-{"amount":"1,234.50","count":"1"}
-```
-
-支持目标类型：
-
-```text
-BigDecimal
-BigInteger
-Byte / Short / Int / Long
-Float / Double
-Number
-```
-
-`locale` 可选；不传时使用系统默认 Locale。
-
-## 字段注解
-
-注解位于 `com.mingliqiye.document.annotation`：
+注解位于 `com.mingliqiye.document.annotation`。
 
 | 注解 | 作用 |
 |---|---|
-| `@DocumentName("name")` | 指定该字段在文档中的名称 |
-| `@DocumentIgnore` | 序列化和反序列化时跳过该字段 |
-| `@DocumentConverter(XxxConverter::class)` | 指定该字段专用的转换器实现类 |
-| `@DocumentDateTimeFormat("yyyy-MM-dd", timezone = "Asia/Shanghai")` | 指定日期/时间字段的解析与格式化模式 |
-| `@DocumentNumberFormat("#,##0.00", locale = "zh-CN")` | 指定数字字段的解析与格式化模式 |
-| `@DocumentRootName("user")` | 指定 XML 写出根元素名 |
+| `@DocumentName("name")` | 指定文档字段名 |
+| `@DocumentIgnore` | 忽略字段 |
+| `@DocumentConverter(XxxConverter::class)` | 字段专用转换器 |
+| `@DocumentDateTimeFormat("yyyy-MM-dd")` | 日期/时间格式 |
+| `@DocumentNumberFormat("#,##0.00")` | 数字格式 |
+| `@DocumentRootName("user")` | XML 根元素名 |
 
-字段注解示例（Kotlin；Java Bean 直接把注解写在字段上即可。普通 Kotlin 属性如果注解默认落在 property 上，Java 反射读不到，建议使用 `@field:`；引入 `serialization-kotlin` 后，data class / Kotlin 属性可以通过 Kotlin 反射读取无 use-site target 的注解）：
+示例：
 
 ```kotlin
-import com.mingliqiye.document.annotation.DocumentIgnore
-import com.mingliqiye.document.annotation.DocumentName
-import com.mingliqiye.document.format.json.JsonMapper
-
 class Profile {
     @field:DocumentName("display_name")
     var name: String = ""
@@ -621,446 +237,61 @@ class Profile {
     @field:DocumentIgnore
     var age: Int = 0
 }
-
-fun main() {
-    val mapper = JsonMapper()
-    val node = mapper.toNode(Profile().apply { name = "小于" }).asObject()
-
-    println(node["display_name"]?.asString()) // 小于
-    println(node.containsKey("age"))          // false（被忽略）
-    println(mapper.format(Profile().apply { name = "小于" })) // {"display_name":"小于"}
-}
 ```
 
-字段级转换器直接标注在字段上，只对该字段生效，转换器实例按类型缓存：
+## 配置
+
+通用 Mapper 配置：
 
 ```kotlin
-import com.mingliqiye.document.annotation.DocumentConverter
+import com.mingliqiye.document.serialization.MissingFieldPolicy
+import com.mingliqiye.document.serialization.DocumentMapperConfig
+
+val config = DocumentMapperConfig.builder()
+    .missingFieldPolicy(MissingFieldPolicy.FAIL)
+    .failOnUnknownFields(true)
+    .writeNulls(false)
+    .build()
+```
+
+JSON 配置：
+
+```kotlin
+import com.mingliqiye.document.format.json.DuplicateKeyPolicy
+import com.mingliqiye.document.format.json.JsonConfig
 import com.mingliqiye.document.format.json.JsonMapper
 
-// 复用上文的 Money 与 MoneyConverter
-class Wallet {
-    @field:DocumentConverter(MoneyConverter::class)
-    var money: Money = Money(0)
-}
-
-fun main() {
-    val mapper = JsonMapper() // 字段转换器不依赖文本 codec
-    val node = mapper.toNode(Wallet().apply { money = Money(12) })
-    println(node.asObject()["money"]?.asString()) // 12 CNY
-}
-```
-
-> 字段级转换器实现类需要可实例化：无参构造器，或 Kotlin `object`（通过 `INSTANCE` 获取）；并且至少要实现 `JsonSerializer` 或 `JsonDeserializer`。缺少当前方向的实现时会回退到 Builder 注册的转换器或内置映射。
-
-### 优先级
-
-序列化/反序列化时，转换机制的生效顺序（高 → 低）：
-
-1. **字段注解 `@DocumentConverter`**：只作用于被标注的字段，优先级最高；转换器只实现了单向接口时，缺失方向继续回退；
-2. **Builder 注册的转换器**：`addSerializer` / `addDeserializer` / `addConverter` 注册的全局转换器；
-3. **内置 Bean 映射**：getter/setter、集合、`Map`、数组、枚举、数字等默认处理。
-
-一句话：**字段注解 > Builder 注册 > 内置 Bean 映射**。
-
-同时，`@DocumentIgnore` 的字段在进入转换器之前就会被跳过；`@DocumentName` 在内置 Bean 映射中决定文档字段名，转换器也可以通过 `DocumentProperty.documentName` 读取到它，而 `DocumentProperty.name` 始终是 Java 属性名。
-
-## 注解读取与 @AliasFor
-
-`DocumentProperty.getAnnotation(...)` / `hasAnnotation(...)` 内部通过 `com.mingliqiye.utils.aliasfor:alias-for:1.0.3` 的 `AnnotationGetter` 读取注解，因此自定义注解可以用 `@AliasFor` 声明属性互为别名，读取任意一个属性都能得到合并后的值。
-
-```kotlin
-import com.mingliqiye.utils.aliasfor.AliasFor
-
-@Retention(AnnotationRetention.RUNTIME)
-@Target(AnnotationTarget.FIELD)
-annotation class DisplayText(
-    @get:AliasFor("alias") val value: String = "",
-    @get:AliasFor("value") val alias: String = "",
+val mapper = JsonMapper(
+    JsonConfig.builder()
+        .allowComments(true)
+        .pretty(true)
+        .duplicateKeyPolicy(DuplicateKeyPolicy.FAIL)
+        .maxDepth(512)
+        .build(),
 )
 ```
 
-在转换器方法内读取（`context` 为 `SerializationContext` 或 `DeserializationContext`）：
-
-```kotlin
-val text = context.property?.getAnnotation(DisplayText::class.java)
-val label = text?.value ?: text?.alias // value 与 alias 互为别名
-```
-
-`serialization` 以 `api` 依赖方式暴露 `alias-for`，使用方编译自定义注解时可直接引用 `@AliasFor`。
-
-## JSON 支持
-
-`JsonMapper` 是 JSON 格式的 Mapper，`JsonReader` 默认按 **JSONC** 方式解析：
-
-- 允许 `//` 行注释和 `/* ... */` 块注释；
-- 允许额外空白，并兼容 BOM 与常见 Unicode 空白字符；
-- 语法本身保持严格 JSON：拒绝尾逗号、单引号、前导零（如 `01`）、前导加号（如 `+1`）、缺少小数/指数数字（如 `1.`、`1e`）、`NaN`/`Infinity` 等非法字面量；
-- 解析失败抛出 `JsonParseException`，异常信息包含 `line`、`column` 定位。
-
-```kotlin
-import com.mingliqiye.document.format.json.JsonMapper
-import com.mingliqiye.document.format.json.exception.JsonParseException
-import com.mingliqiye.document.format.json.JsonReader
-import com.mingliqiye.document.format.json.toJsonNode
-import com.mingliqiye.document.format.json.toJsonString
-
-fun main() {
-    val json = """
-        // JSONC：允许注释与额外空白
-        {
-          "name": "小于", /* 行内注释 */
-          "age": 18
-        }
-    """.trimIndent()
-
-    val node = json.toJsonNode()
-    println(node.asObject()["name"]?.asString()) // 小于
-    println(node.toJsonString(pretty = true))    // 两空格缩进的 JSON
-
-    // 严格模式：拒绝注释
-    try {
-        JsonReader("""{"a":1} // strict""", allowComments = false).read()
-    } catch (e: JsonParseException) {
-        println(e.message) // 带 line / column 的错误信息
-    }
-
-    // 也可以使用文档树扩展
-    val parsed = json.toJsonNode()
-    println(parsed.toJsonString(pretty = true))
-}
-```
-
-- 从 JSON 解析得到的数字以 `BigDecimal` 保存精确值，并保留原始文本（`NumberNode.raw`），输出时按原文写回；
-- JSON 最大嵌套深度为 512，超过时抛出 `JsonParseException`；
-- 输出格式化使用两空格缩进。
-
-## YAML 支持
-
-YAML 使用 [SnakeYAML](https://bitbucket.org/snakeyaml/snakeyaml) 2.6，并通过 `SafeConstructor` 只还原标准 YAML 标量和集合。
-
-```kotlin
-import com.mingliqiye.document.format.yaml.YamlMapper
-import com.mingliqiye.document.format.yaml.toYamlNode
-import com.mingliqiye.document.format.yaml.toYamlString
-
-fun main() {
-    val text = """
-        name: 小于
-        tags:
-          - a
-          - b
-        profile:
-          age: 18
-    """.trimIndent()
-
-    val node = text.toYamlNode()
-    println(node.asObject()["name"]?.asString()) // 小于
-
-    // 流式紧凑输出（默认）
-    println(node.toYamlString())
-    // 块格式输出
-    println(node.toYamlString(pretty = true))
-
-    // 作为 Mapper 使用
-    val mapper = YamlMapper()
-    println(mapper.formatPretty(node))
-}
-```
-
-- YAML 映射键会转换为字符串（数字键 `1` 转为 `"1"`），复杂映射键不支持；
-- 空文档解析为 `NullNode`；
-- 重复键默认拒绝，解析失败抛出 `YamlParseException`；
-- 不支持 YAML 的 `NaN` / `Infinity` 数字。
-
-## XML 支持
-
-`XmlMapper` 使用标准 JDK DOM/XML 能力，不需要额外 XML 依赖。
-
-由于 XML 没有原生类型信息，`XmlWriter` 使用 `type` / `nil` 属性保存节点类型：
-
-```xml
-<root type="object">
-  <name type="string">小于</name>
-  <age type="number">18</number>
-  <active type="boolean">true</boolean>
-  <tags type="array">
-    <item type="string">a</item>
-    <item type="string">b</item>
-  </tags>
-  <address type="object">
-    <city type="string">杭州</city>
-  </address>
-  <missing nil="true"/>
-</root>
-```
+XML 属性与命名空间：
 
 ```kotlin
 import com.mingliqiye.document.format.xml.XmlConfig
 import com.mingliqiye.document.format.xml.XmlMapper
+import com.mingliqiye.document.format.xml.XmlNamespaceMode
 
 val mapper = XmlMapper(
     XmlConfig.builder()
-        .rootName("user")
+        .attributeMode(true)
+        .namespaceMode(XmlNamespaceMode.CLARK)
         .build(),
 )
-
-val xml = mapper.formatPretty(user)
-val restored = mapper.parse(xml, User::class.java)
 ```
 
-数组统一写成：
-
-```xml
-<tags type="array"><item .../></tags>
-```
-
-对象写成嵌套元素；`null` 使用 `nil="true"`。
-
-约束：
-
-- XML attribute 暂不作为字段映射，只使用 `type` / `nil` 保留类型；
-- 不支持自定义命名空间；
-- 字段名中的非法 XML 字符会编码为 `_xHHHH_`；
-- 解析器禁用 DOCTYPE 与外部实体，避免 XXE。
-
-## Properties 支持
-
-`PropertiesMapper` 将树/Bean 展平成 Java Properties 的 `key=value` 文本：
+CSV Schema：
 
 ```kotlin
-import com.mingliqiye.document.format.properties.PropertiesMapper
-import com.mingliqiye.document.format.properties.toPropertiesNode
-import com.mingliqiye.document.format.properties.toPropertiesString
-
-val node = """
-    user.name=小于
-    user.age=18
-    tags[0]=a
-    tags[1]=b
-""".trimIndent().toPropertiesNode()
-
-println(node.toPropertiesString())
-
-val mapper = PropertiesMapper()
-val text = mapper.format(user)
-val restored = mapper.parse(text, User::class.java)
-```
-
-路径约定：
-
-```text
-user.name       -> 对象字段
-tags[0]         -> 数组元素
-matrix[0][1]    -> 嵌套数组
-```
-
-字段名中的 `%`、`.`、`[`、`]` 使用百分号编码：
-
-```text
-user%2Ename     -> 字段名 "user.name"
-```
-
-约束：
-
-- 根节点必须是对象或数组；
-- Properties 只有字符串值，读取时按 `true` / `false` / 数字 / 字符串推断；
-- 空对象、空数组不会写出；`null` 字段会写成空值；
-- 不保留 Java Properties 的注释与原始顺序。
-
-## TOML 支持
-
-`TomlMapper` 使用 [Tomlj](https://github.com/tomlj/tomlj) 解析，并内置内联 table/array 写出：
-
-```kotlin
-import com.mingliqiye.document.format.toml.TomlMapper
-import com.mingliqiye.document.format.toml.toTomlNode
-import com.mingliqiye.document.format.toml.toTomlString
-
-val node = """
-    name = "小于"
-    age = 18
-    user = { city = "杭州" }
-""".trimIndent().toTomlNode()
-
-println(node.toTomlString())
-
-val mapper = TomlMapper()
-val restored = mapper.parse(mapper.format(user), User::class.java)
-```
-
-限制：
-
-- TOML 没有 null；对象 null 字段省略，数组 null 元素报错；
-- 日期时间读取为 ISO 字符串；
-- 使用 inline table 输出，不输出 `[table]` 分节；
-- Tomlj 1.0.0 对嵌套空数组的回读存在限制。
-
-## CSV 支持
-
-`CsvMapper` 面向平坦表格：
-
-```kotlin
-import com.mingliqiye.document.format.csv.CsvConfig
 import com.mingliqiye.document.format.csv.CsvMapper
-import com.mingliqiye.document.format.csv.toCsvNode
-import com.mingliqiye.document.format.csv.toCsvString
-
-val rows = """
-    name,age
-    小于,18
-    小明,20
-""".trimIndent().toCsvNode()
-
-println(rows.toCsvString())
-
-val mapper = CsvMapper(CsvConfig.builder().delimiter(',').header(true).build())
-val text = mapper.format(users)
-```
-
-限制：
-
-- CSV 没有类型，读取时按 `true` / `false` / 数字 / 字符串推断；
-- 只支持平坦对象行，嵌套对象/数组单元格抛 `CsvException`；
-- 读取根固定为数组；单 Bean 建议用 `DocumentTypeReference.listType(Bean::class.java)`。
-
-## Ion 支持
-
-`IonMapper` 同时支持文本 Ion 与二进制 Ion：
-
-```kotlin
-import com.mingliqiye.document.format.ion.IonMapper
-import com.mingliqiye.document.format.ion.toIonNode
-import com.mingliqiye.document.format.ion.toIonString
-import com.mingliqiye.document.format.ion.toIonNode
-
-val node = """{ name: "小于", age: 18 }""".toIonNode()
-println(node.toIonString(pretty = true))
-
-val mapper = IonMapper()
-val textRestored = mapper.parse(mapper.format(user), User::class.java)
-val binary = mapper.formatBytes(user)
-val binaryRestored = mapper.parse(binary, User::class.java)
-```
-
-二进制 Ion 也可单独使用：
-
-```kotlin
-import com.mingliqiye.document.format.ion.IonBinaryReader
-import com.mingliqiye.document.format.ion.IonBinaryWriter
-
-val node = IonBinaryReader.parse(bytes)
-val bytes = node.toIonBytes()
-```
-
-限制：
-
-- 二进制 Ion 当前交由 ion-java 自动识别文本/二进制输入；
-- 二进制 `parse(ByteArray)` 使用 Token 直读 Bean；
-- Ion BLOB/CLOB 映射为 `BinaryNode`，CLOB 写出统一为 BLOB；
-- symbol/timestamp 写出为字符串，Ion 注解忽略。
-
-## CBOR / Smile 支持
-
-CBOR 和 Smile 是二进制自描述格式，使用 `BinaryDocumentMapper` 的字节 API：
-
-```kotlin
-import com.mingliqiye.document.format.cbor.CborMapper
-import com.mingliqiye.document.format.smile.SmileMapper
-
-val cbor = CborMapper()
-val cborBytes = cbor.formatBytes(user)
-val cborRestored = cbor.parse(cborBytes, User::class.java)
-
-val smile = SmileMapper()
-val smileBytes = smile.formatBytes(user)
-val smileRestored = smile.parse(smileBytes, User::class.java)
-```
-
-也可直接操作文档树：
-
-```kotlin
-val node = cborBytes.toCborNode()
-val bytes = node.toCborBytes()
-
-val smileNode = smileBytes.toSmileNode()
-val smileBytes2 = smileNode.toSmileBytes()
-```
-
-限制：
-
-- 文本 API `parse(String)` / `format` 不支持，由 `BinaryDocumentMapper` 抛出异常；
-- CBOR/Smile 的 `parse(ByteArray)` 使用 Token 直读 Bean；
-- CBOR/Smile 都是单根单文档；多根流不支持；
-- CBOR byte string 映射为 `BinaryNode`；Smile 使用 Jackson Smile 二进制扩展令牌；
-- CBOR 非有限浮点（NaN/Infinity）拒绝；JSON 兼容层未覆盖所有 CBOR tag。
-
-## 二进制节点与字节 API
-
-`core` 现在提供 `BinaryNode`：
-
-```kotlin
-val bytes = BinaryNode.of(byteArrayOf(1, 2, 3))
-val raw = bytes.asBinary()
-```
-
-`BinaryNode` 会复制输入/输出数组，并实现内容相等性。
-
-`DocumentMapperApi` 增加字节 API：
-
-```kotlin
-mapper.parse(bytes, User::class.java)
-mapper.formatBytes(user)
-```
-
-- 文本格式 Mapper 默认不支持字节 API，会抛 `DocumentSerializationException`；
-- 二进制格式 Mapper 通过 `DocumentMapper` 的二进制解析/写出函数接入；
-- Java `ByteArray` Bean 字段会映射为 `BinaryNode`；
-- JSON/XML/YAML/Properties/TOML/CSV 暂时以 Base64 字符串兼容写出，Ion 原生映射为 blob；
-这是 CBOR、Smile、Ion binary 等格式的基础 API。
-
-## Streaming Token API
-
-`serialization` 提供格式无关的 Token 契约，并支持 **Token 直连 Bean**：
-
-```text
-byte[] -> DocumentTokenReader
-             ↓
-      DocumentMapper.fromTokens
-             ↓
-           Bean
-```
-
-核心类型：
-
-```kotlin
-DocumentToken
-DocumentTokenType
-DocumentTokenReader
-DocumentTokenWriter
-BinaryDocumentMapper
-```
-
-```kotlin
-val bean = mapper.fromTokens(tokenReader, User::class.java)
-```
-
-- CBOR、Smile、Ion binary 的 `parse(ByteArray)` 优先走 Token 直读 Bean；
-- 普通 Bean 不构建完整 Node 树；
-- 集合、Map、数组、标量都直接消费 Token；
-- 字段转换器、data class 等仍需要 Node 的局部兼容路径使用 `TokenTreeReader`；
-- Node 树 API、`fromNode`、`toNode` 保持可用。
-
-`BinaryDocumentMapper` 是二进制 Mapper 基类：文本 API 不支持，字节 API 走 Token 或 Node fallback。
-
-## Schema 层
-
-`schema` 提供格式无关的结构描述：
-
-```kotlin
-import com.mingliqiye.document.schema.DocumentSchema
-import com.mingliqiye.document.schema.SchemaType
 import com.mingliqiye.document.format.csv.CsvSchema
+import com.mingliqiye.document.schema.SchemaType
 
 val schema = CsvSchema.builder("user")
     .field("name", SchemaType.STRING)
@@ -1070,186 +301,116 @@ val schema = CsvSchema.builder("user")
 val mapper = CsvMapper(schema)
 ```
 
-当前 Schema 适配：
+## 进阶能力
 
-| 模块 | Schema |
-|---|---|
-| `format-csv` | `CsvSchema`，支持按 schema 顺序读列、类型解析、表头/无表头 |
-| `format-avro` | `AvroSchema` + `AvroType` + `AvroMapper`（wire binary） |
-| `format-protobuf` | `ProtobufSchema` + `ProtobufType` + `ProtobufMapper`（DynamicMessage wire） |
+### 自定义转换器
 
-Avro/Protobuf 已支持二进制 wire 编解码；调用方需要提供 Avro `Schema` 或 Protobuf `Descriptor`。
+实现 `JsonSerializer` / `JsonDeserializer`，通过 Builder 注册或字段注解使用。
 
-## 解析器增强
+### Token 直读
 
-### JSON 安全与字节 API
+二进制格式可以通过 `DocumentTokenReader` 直接解码 Bean，不构建完整 Node 树。
 
-```kotlin
-val mapper = JsonMapper(
-    JsonConfig.builder()
-        .duplicateKeyPolicy(DuplicateKeyPolicy.FAIL)
-        .maxDepth(512)
-        .build(),
-)
+### Schema 层
 
-val bytes = mapper.formatBytes(user)
-val restored = mapper.parse(bytes, User::class.java)
-```
+- `schema` 模块提供 `DocumentSchema`、`SchemaField`、`SchemaType`
+- `format-csv` 提供 `CsvSchema`
+- `format-avro` 提供 `AvroSchema`
+- `format-protobuf` 提供 `ProtobufSchema` / `Descriptor`
 
-- `parse(ByteArray)` 使用严格 UTF-8，非法 UTF-8 抛 `JsonParseException`
-- 重复 key 策略：`LAST_WINS` / `FIRST_WINS` / `FAIL`
-- 超深嵌套抛受控异常，不会 `StackOverflow`
-
-### XML 属性与命名空间
+### 多文档 YAML
 
 ```kotlin
-val mapper = XmlMapper(
-    XmlConfig.builder()
-        .attributeMode(true)     // 默认前缀 @
-        .namespaceAware(true)
-        .build(),
-)
+val nodes = YamlMapper().parseAllToNodes(text)
+val text = YamlMapper().formatAll(nodes)
 ```
 
-- 属性对应 `@id` 这类对象字段
-- 命名空间使用 `prefix:local` 与 `xmlns` 字段保留
-- 保持 `type` / `nil` 协议与 XXE 防护
+### XML 安全
 
-### YAML 多文档与 typed binary
+- 禁用 DOCTYPE
+- 禁用外部实体
+- 禁用 XInclude
+- 支持属性、命名空间和混合内容策略
 
-```kotlin
-val documents = YamlMapper().parseAllToNodes(text)
-val text2 = YamlMapper().formatAll(documents)
-```
+## 性能
 
-- `!!binary` 映射为 `BinaryNode`
-- 多文档使用 `---` 分隔，单文档 API 保持兼容
-
-### Avro / Protobuf wire
-
-```kotlin
-val avroMapper = AvroMapper(avroSchema)
-val bytes = avroMapper.formatBytes(node)
-val node = avroMapper.parse(bytes, Node::class.java)
-
-val protobufMapper = ProtobufMapper(descriptor)
-val protobufBytes = protobufMapper.formatBytes(node)
-```
-
-### 文本格式 Token Reader
-
-YAML、XML、Properties、TOML、CSV 已通过 `NodeTokenReader` 接入统一 Token Bean 解码路径；JSON 使用原生 `JsonTokenReader`。
-
-### 模糊测试
-
-`fuzz` 模块包含各格式 malformed 边界语料和随机畸形输入测试：
-
-```bash
-gradle :fuzz:test
-```
-
-## 性能基准
-
-`benchmarks` 模块提供 JMH 基准。JDK8、1000 个 Bean（约 128 KB JSON）的结果：
-
-| Benchmark | 本项目 | Jackson |
-|---|---:|---:|
-| JSON 解析树 | 0.499 ms | 0.311 ms |
-| JSON → Bean | 0.722 ms | 0.305 ms |
-| JSON → data class | 0.754 ms | 0.305 ms |
-| Bean → JSON | 0.669 ms | 0.207 ms |
-
-Token 直读/直写：
-
-| Benchmark | Token 路径 | Node/旧直读路径 | 提升 |
-|---|---:|---:|---:|
-| JSON → Java Bean | 0.739 ms | 0.943 ms | 约 22% |
-| JSON → Kotlin data class | 0.894 ms | 0.901 ms | 约 1% |
-| CBOR → Bean | 0.891 ms | 1.362 ms | 约 35% |
-| Bean → CBOR | 0.695 ms | 1.433 ms | 约 52% |
-
-说明：
-
-- JSON Token 读取已做 **Token 对象零分配**、**数字原地解析** 和 **懒路径构建**
-- JSON 写出使用预分配缓冲、无转义字符串快速路径、可读属性预编译
-- 无字段转换器时跳过 `FieldKey` 构造与转换器查找
-- JSON Token 路径已快于旧 `JsonValueReader` 直读：Java Bean 约 22%
-- CBOR Token 路径通过省掉 Node 树获得明显收益
-- 数字受 JVM、硬件与 Gradle 构建环境影响，只用于同轮相对比较
-- 详细方法和结果见 [benchmarks/README.md](benchmarks/README.md)
-
-运行：
+JMH 基准位于 `benchmarks` 模块：
 
 ```bash
 gradle :benchmarks:jmh
 ```
+
+当前 JSON/CBOR 的一组结果见 [benchmarks/README.md](benchmarks/README.md)。
+
+## 项目结构
+
+| 模块 | 职责 |
+|---|---|
+| `core` | Node 树、类型引用 |
+| `annotation` | 格式无关注解 |
+| `exception` | 异常基类 |
+| `serialization` | DocumentMapper、Bean 映射、Token |
+| `serialization-kotlin` | Kotlin data class 支持 |
+| `schema` | 格式无关 Schema |
+| `format-*` | 各格式 Mapper |
+| `benchmarks` | JMH 性能基准（不发布） |
+| `fuzz` | 解析器模糊测试（不发布） |
+
 ## 构建与测试
 
 ```bash
-# 全量格式检查与构建（含测试）
-gradle ktlintCheck build
+# 全量检查与构建（含测试、ktlint、Dokka）
+gradle clean ktlintCheck build
 
-# 推荐使用仓库自带 Wrapper（Windows）
-gradlew.bat ktlintCheck build
-
-# 只跑单个模块的测试
-gradle :serialization:test
+# 单模块测试
 gradle :format-json:test
-gradle :format-yaml:test
-gradle :format-xml:test
-gradle :format-properties:test
-gradle :format-toml:test
-gradle :format-csv:test
-gradle :format-ion:test
-gradle :format-cbor:test
-gradle :format-smile:test
-gradle :schema:test
-gradle :format-avro:test
-gradle :format-protobuf:test
+gradle :serialization:test
 gradle :fuzz:test
-gradle :serialization-kotlin:test
 
-# 自动格式化 Kotlin 代码
+# 代码格式
 gradle ktlintFormat
 ```
 
-- 所有模块均应用 `jvmToolchain(8)`，即使用 JDK 8 toolchain 编译与运行测试；本机需能解析到 JDK 8（`settings.gradle.kts` 启用了 Foojay toolchain resolver，缺失时会尝试自动下载）。
-- 静态检查由 ktlint Gradle 插件执行，`ktlintCheck` 失败即视为构建失败。
-- 若本机安装的 Gradle 版本与 Wrapper 不一致，优先使用仓库 Wrapper 复现构建结果（Wrapper 版本见 `gradle/wrapper/gradle-wrapper.properties`）。
-- 测试使用 `kotlin.test` / JUnit Platform，`gradle build` 会执行各模块测试。
+更详细的开发规范、提交约定和发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-## 限制与路线图
+## 发布
 
-当前已实现的范围：
+```bash
+# 本地
+gradle publishToMavenLocal
 
-- 格式实现有 JSON、YAML、XML、Properties、TOML、CSV、Ion（文本 + 二进制）、CBOR、Smile；
-- Java Bean 映射支持：基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、`Map`、以及 public getter/setter 或 public 字段的 Bean；
-- Java Bean 需要无参构造器；Kotlin data class 可配合 `serialization-kotlin` 使用主构造器反序列化；
-- `JsonMapper` / `YamlMapper` / `XmlMapper` / `PropertiesMapper` / `TomlMapper` / `CsvMapper` / `IonMapper` / `CborMapper` / `SmileMapper` 自带对应格式的文本或字节解析与写出；通用 `DocumentMapper` 不直接对外构造；
-- 序列化检测循环引用，最大嵌套深度为 128；JSON 解析最大嵌套深度为 512。
+# 远程：仓库地址与凭据由 Gradle init.gradle 提供
+gradle publish
+```
 
-**尚未实现 / 限制**：
+发布规则：
 
-- XML 适配器使用 `type` / `nil` 属性保存类型信息，暂不支持 XML attribute 映射与自定义命名空间；
-- XML 数组统一写成 `<字段 type="array"><item>...</item></字段>`，对象写成嵌套元素；
-- XML 解析器禁用 DOCTYPE 与外部实体，避免 XXE。
-- 其他格式的通用限制见上文。
+- `-SNAPSHOT` 版本只推送 snapshot 仓库
+- 正式版本只推送 release 仓库
+- Gradle Plugin 专用仓库不参与本库发布
+- jar、pom、module metadata、javadoc、kotlindoc 均带 GPG `.asc` 签名
 
-常见异常：
+## 兼容性说明
 
-| 异常 | 模块 | 触发场景 |
-|---|---|---|
-| `DocumentException` | `exception` | 文档处理异常公共基类 |
-| `DocumentTypeException` | `exception` | 节点类型与预期不符（如对数组调用 `asObject()`） |
-| `DocumentSerializationException` | `serialization`（`com.mingliqiye.document.serialization.exception`） | Bean 映射失败、循环引用、格式函数不可用等 |
-| `JsonParseException` | `format-json`（`com.mingliqiye.document.format.json.exception`） | JSON/JSONC 语法错误 |
-| `YamlParseException` | `format-yaml`（`com.mingliqiye.document.format.yaml.exception`） | YAML 语法错误或不支持的类型 |
-| `XmlParseException` | `format-xml`（`com.mingliqiye.document.format.xml.exception`） | XML 语法错误或不支持的内容 |
-| `PropertiesParseException` | `format-properties`（`com.mingliqiye.document.format.properties.exception`） | Properties 语法错误或路径冲突 |
-| `TomlParseException` | `format-toml`（`com.mingliqiye.document.format.toml.exception`） | TOML 语法错误 |
-| `CsvParseException` | `format-csv`（`com.mingliqiye.document.format.csv.exception`） | CSV 语法错误 |
-| `IonParseException` | `format-ion`（`com.mingliqiye.document.format.ion.exception`） | Ion 文本/二进制错误或根值数量不对 |
-| `CborParseException` | `format-cbor`（`com.mingliqiye.document.format.cbor.exception`） | CBOR 解析错误 |
-| `SmileParseException` | `format-smile`（`com.mingliqiye.document.format.smile.exception`） | Smile 解析错误 |
+- 目标字节码：JDK 8
+- 文本 Token Reader：YAML/XML/Properties/TOML/CSV 通过 `NodeTokenReader` 适配
+- CSV 只支持平坦表格
+- TOML 日期时间映射为字符串
+- Ion timestamp/symbol 映射为字符串，注解忽略
+- Protobuf 不支持 extensions/group/MessageSet
+- XML 混合内容不保留文本与子元素的相对顺序
+- Avro OCF 支持默认 codec；不支持 `appendTo` 续写
 
-更多代码规范、提交规范与模块约束见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+## 许可证
+
+Apache License, Version 2.0。
+
+第三方依赖与许可证见 [NOTICE](NOTICE)，项目许可见 [LICENSE](LICENSE)。
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。
+
+- 开发规范：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 待办与路线图：[TODO.md](TODO.md)
+- 性能数据：[benchmarks/README.md](benchmarks/README.md)

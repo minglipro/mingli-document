@@ -1,473 +1,318 @@
-# 贡献与代码规范
+# 贡献指南
 
-本文件定义 `com.mingliqiye.document` 项目的代码、模块、接口、提交和发布规范。
+感谢参与 `mingli-document`。
 
-目标：
+本文说明开发环境、代码规范、测试要求和提交流程。面向使用者的文档见 [README.md](README.md)。
 
-- 公共 API 先定义契约，再提供实现；
-- 模块职责清晰，依赖方向不能反向；
-- 每个改动都能独立提交、独立构建、独立测试；
-- 代码格式、文档、测试保持统一。
+## 1. 开始之前
 
----
+需要：
 
-## 1. 基本原则
+- JDK 8 或更高版本（构建使用 JDK 8 toolchain）
+- Gradle 8.x
+- Git
+- 发布相关开发需要本机 GPG（`gpg` 命令）
 
-1. 一个提交只做一件事。
-2. 每个提交必须能通过构建和 ktlint。
-3. 公共行为必须有稳定接口；实现类不能泄漏到公共 API。
-4. 模块之间只能按依赖方向引用，不允许循环依赖。
-5. 先设计 API，再写实现；不要先写一个万能类再拆。
-6. 不为“看起来高级”而增加抽象。
+建议先跑一次完整构建：
 
----
-
-## 2. 模块与依赖
-
-当前模块：
-
-| 模块 | 职责 | 对外依赖 |
-|---|---|---|
-| `annotation` | 格式无关注解 | 无 |
-| `exception` | 文档异常基类 | `mingli-exception` |
-| `core` | 文档树、类型引用契约 | `exception` |
-| `format-json` | JSON Mapper | `serialization`、`core` |
-| `format-yaml` | YAML Mapper | `serialization`、`core`、SnakeYAML |
-| `format-xml` | XML Mapper | `serialization`、`core` |
-| `format-properties` | Properties Mapper | `serialization`、`core` |
-| `format-toml` | TOML Mapper | `serialization`、`core`、Tomlj |
-| `format-csv` | CSV Mapper | `serialization`、`core`、Commons CSV |
-| `format-ion` | Ion Mapper（文本 + 二进制） | `serialization`、`core`、Ion Java |
-| `format-cbor` | CBOR Mapper | `serialization`、`core`、Jackson CBOR |
-| `format-smile` | Smile Mapper | `serialization`、`core`、Jackson Smile |
-| `serialization` | Java 实体与树之间的映射、DocumentMapper 基类 | `core`、`annotation` |
-| `serialization-kotlin` | Kotlin data class 模块函数 `kotlinModule()` | `serialization`、`annotation`、`kotlin-reflect` |
-| `benchmarks` | JMH 性能基准（开发工具，不发布） | 各模块、JMH、Jackson（仅测试） |
-
-允许的依赖方向：
-
-```text
-annotation       独立
-
-exception
-    ↑
-core
- └── serialization
-      ├── format-json
-      ├── format-yaml
-├── format-xml
-├── format-properties
-├── format-toml
-├── format-csv
-├── format-ion
-├── format-cbor
-├── format-smile
-      └── serialization-kotlin
+```bash
+gradle clean ktlintCheck build
 ```
 
-规则：
-
-- `core` 不能依赖任何具体格式模块。
-- `annotation` 不能依赖 `core`、`format-json`、`format-yaml`、`format-xml`、`format-properties`、`format-toml`、`format-csv`、`format-ion`、`format-cbor`、`format-smile`、`serialization`。
-- `format-*` 依赖 `serialization` 与 `core`，通过继承 `DocumentMapper` 暴露格式 Mapper。
-- `serialization-kotlin` 提供 `kotlinModule()` 与 kotlin-reflect，不绑定具体格式。
-- `serialization` 主代码不依赖具体格式。
-- 测试可以临时依赖其他模块做集成验证，但不能把测试依赖带入主代码 API。
-- 传递暴露给使用方的类型使用 `api`；纯实现依赖使用 `implementation`。
-
----
-
-## 3. 接口与实现规范
-
-### 3.1 必须接口化的内容
-
-以下内容必须“接口 + 默认实现”：
-
-- 服务、编解码器、解析器、序列化器
-- 可替换策略、扩展点、注册表
-- 树节点等需要被调用方类型判断的契约
-- 需要多实现或未来会多实现的组件
-
-示例：
+## 2. 项目结构
 
 ```text
-DocumentMapperApi          -> DefaultDocumentMapper
-DocumentMapper             -> JsonMapper / YamlMapper
-Node                       -> DefaultObjectNode 等
-JsonConverter              -> 用户自定义实现
+annotation              格式无关注解
+exception               异常基类
+core                    Node 树、类型引用
+schema                  格式无关 Schema
+serialization           DocumentMapper、Bean 映射、Token
+serialization-kotlin    Kotlin data class 支持
+format-json             JSON / JSONC
+format-yaml             YAML
+format-xml              XML
+format-properties       Properties
+format-toml             TOML
+format-csv              CSV
+format-ion              Ion 文本 + 二进制
+format-cbor             CBOR
+format-smile            Smile
+format-avro             Avro Schema + wire
+format-protobuf         Protobuf Schema + wire
+benchmarks              JMH 基准，不发布
+fuzz                    模糊测试与边界语料，不发布
 ```
 
-### 3.2 不强制接口化的内容
-
-以下内容保留 Kotlin 原生形式，不强行制造无意义的 `XxxApi`：
-
-- `enum class`
-- 注解 `annotation class`
-- 不可变值对象
-- 异常类层次
-- 纯数据 DTO
-- 模块内部的具体实现类（`internal` 或 `private`）
-
-判断标准：
-
-> 如果这个类型没有可替换行为，不要为了“全部接口化”增加空接口。
-
-内部实现类只是实现细节，不需要为了拆分而暴露成 SPI。只有当调用方确实需要替换该行为时，才把它提升为公开接口。
-
-### 3.3 命名
-
-| 类型 | 命名 |
-|---|---|
-| 行为 API | `XxxApi` |
-| 角色接口 | `Xxx`，例如 `Node`、`JsonSerializer` |
-| 默认实现 | `DefaultXxx` |
-| 仅内部实现 | `internal class XxxImpl` 或 `internal class DefaultXxx` |
-| 异常 | `XxxException` |
-| 注解 | `Xxx` |
-| 测试 | `XxxTest` |
-
-禁止：
-
-- `IUserService` 这种匈牙利命名
-- 公共 API 直接出现 `Default` 实现类
-- 没有实际替换价值的 `XxxInterface`
-
-### 3.4 实现类可见性
-
-- 只给内部用的实现类必须是 `internal`。
-- 需要让使用方自行实例化的默认实现才 `public`，并命名为 `DefaultXxx`。
-- 接口方法只暴露接口类型，不返回实现类型。
-- 实现类的构造函数优先 `internal`，通过工厂或 Builder 创建。
-
-### 3.5 默认方法
-
-接口默认方法只用于：
-
-- 稳定的便捷重载
-- 不依赖可变状态的组合逻辑
-
-不要：
-
-- 在接口默认方法里写大量业务逻辑
-- 在接口中持有全局状态
-
-### 3.6 文档树规划
-
-按接口 + 默认实现重构：
+依赖方向：
 
 ```text
-Node
-├── ObjectNode          -> DefaultObjectNode
-├── ArrayNode           -> DefaultArrayNode
-├── NumberNode          -> DefaultNumberNode
-├── StringNode          -> DefaultStringNode
-├── BooleanNode         -> DefaultBooleanNode
-└── NullNode            -> DefaultNullNode
+format-* -> serialization -> core -> exception
+serialization-kotlin -> serialization
+format-avro / format-protobuf -> schema
 ```
 
-工厂统一放在对应接口的伴生对象或 `Nodes` 工具中，调用方不直接 new 实现类。
+`core` 不依赖具体格式。
 
-### 3.7 Mapper 规划
+## 3. 构建与测试
 
-```text
-DocumentMapperApi
-    └── DocumentMapper（serialization 基类）
-          ├── JsonMapper（format-json）
-          ├── YamlMapper（format-yaml）
-          ├── XmlMapper（format-xml）
-          ├── PropertiesMapper（format-properties）
-          ├── TomlMapper（format-toml）
-          ├── CsvMapper（format-csv）
-          ├── IonMapper（format-ion）
-          ├── CborMapper（format-cbor）
-          └── SmileMapper（format-smile）
+```bash
+# 全量：ktlint + 编译 + 测试 + Dokka 文档
+gradle clean ktlintCheck build
+
+# 指定模块
+gradle :format-json:test
+gradle :serialization:test
+gradle :serialization-kotlin:test
+
+# 自动格式化
+gradle ktlintFormat
+
+# 模糊测试
+gradle :fuzz:test
+
+# JMH
+gradle :benchmarks:jmh
 ```
-
-`DocumentMapper` 负责编排与实体映射，内部通过 `private` 方法或 `internal` 具体类组织反射、类型转换和集合处理。
-格式模块只负责提供文本解析/写出函数，并继承 `DocumentMapper`。
-
-规则：
-
-- 不新增内部 SPI 接口，除非确认存在第二个可替换实现；
-- 不引入 Java `ServiceLoader` / `META-INF/services` 自动发现；
-- 内部格式 Codec 不对外暴露；
-- 对外扩展点只保留：`JsonSerializer`、`JsonDeserializer`、`JsonConverter`；
-- 新增格式模块继承 `DocumentMapper`，例如 `XmlMapper`。
-- 跨格式能力通过 `DocumentModule` 注册，使用 `JsonMapper.builder().addModule(...)`。
-
----
-
-## 4. Kotlin 编码规范
-
-### 4.1 显式 API
-
-所有模块启用 Kotlin Explicit API Mode：
-
-- public 声明显式写 `public`
-- public 函数显式写返回类型
-- 不为内部实现补无意义的 `public`
-
-### 4.2 可见性
-
-- 默认使用 `private`。
-- 同模块使用 `internal`。
-- 只有真正对外 API 才 `public`。
-- 不用 `protected` 暴露内部实现。
-
-### 4.3 空安全
-
-- 禁止无说明的 `!!`。
-- 优先使用 `require`、`check`、`requireNotNull`、`checkNotNull`。
-- 公共 API 的 null 语义必须在 KDoc 写清楚。
-- 不使用平台类型直接穿过公共 API。
-
-### 4.4 不可变性
-
-- 默认 `val`。
-- 集合返回只读视图或不可变集合。
-- 公共数据对象优先不可变。
-- 可变状态必须在 KDoc 说明线程安全策略。
-
-### 4.5 异常
-
-- 统一使用 `exception` 模块的异常层次。
-- 不给控制流使用异常；可预期失败优先返回结果或可空值。
-- 不允许吞异常后返回默认值，除非方法名和 KDoc 明确表达。
-- 包装底层异常时必须保留 `cause`。
-- 禁止在公共 API 抛出无信息的 `RuntimeException`。
-
-### 4.6 反射
-
-- 反射只允许出现在 `serialization` 模块。
-- 反射入口必须有缓存。
-- 反射失败必须转换为 `DocumentSerializationException`，不能抛裸 `ReflectiveOperationException`。
-- 反射实现不能进入 `core` 公共 API。
-
----
-
-## 5. Java 实体规范
-
-`serialization` 模块支持 Java Bean：
-
-- 提供 public 无参构造器；
-- 使用 public getter/setter；
-- 字段默认 `private`；
-- 不依赖 Lombok；
-- 不依赖运行时代理；
-- Java 测试实体使用 `src/test/java`；
-- Java 源码保持 Java 8 兼容。
-
----
-
-## 6. KDoc 规范
-
-所有 public API 必须有 KDoc：
-
-- 类、接口：职责、使用场景、限制
-- 函数：`@param`、`@return`、`@throws`
-- 属性：含义、是否可空
-- 泛型：`@param T`
-- 复杂实现：说明为什么这样做
 
 要求：
 
-- 不写“设置 xxx”这种同义反复；
-- 说明边界条件；
-- 说明线程安全；
-- 说明异常条件；
-- 接口和实现不要复制两份互相矛盾的文档。
+- 提交前本地 `clean ktlintCheck build` 必须通过
+- 新增功能必须带测试
+- 修 bug 优先补回归测试
+- 测试不要依赖网络、时钟、机器路径或执行顺序
 
----
+## 4. 代码规范
 
-## 7. 代码格式与静态检查
+### 4.1 显式 API
 
-以 ktlint 为准：
+所有模块启用 `explicitApi()`：
 
-```bash
-gradle ktlintFormat
-gradle ktlintCheck
-```
+- public API 必须显式写 `public`
+- 实现类使用 `internal` 或 `private`
+- 不把内部 Codec 暴露到公共 API
 
-规则：
+### 4.2 单文件单类型
 
-- 4 空格缩进，禁止 Tab；
-- UTF-8；
-- 按 ktlint 自动排序 import；
-- 禁止无意义通配符 import；
-- 不手写与 ktlint 冲突的格式；
-- 格式化改动和逻辑改动分开提交。
+生产代码一个文件一个类/接口/对象（companion 可以存在）。
 
-每个模块都必须应用：
+### 4.3 接口与实现
+
+需要可扩展或跨模块使用的能力必须有接口：
+
+- 格式读写入口使用 Mapper
+- 转换器实现 `JsonSerializer` / `JsonDeserializer`
+- Schema 实现 `DocumentSchema`
+- 自定义实例化实现 `ObjectInstantiator`
+
+实现类保持 internal，通过工厂函数或 Builder 创建。
+
+### 4.4 不可变性
+
+- `Node` 不可变
+- `BinaryNode` 输入/输出复制字节数组
+- 公共集合返回值不要暴露内部可变集合
+
+### 4.5 异常
+
+- 模块专属异常放在该模块的 `.exception` 包
+- 异常继承项目异常体系
+- 错误信息包含字段/路径等可定位信息
+- 不要把 `StackOverflowError`、`OutOfMemoryError` 当正常错误处理
+
+### 4.6 空安全
+
+公共 API 优先使用非空类型；确实可能为空时在 KDoc 中写清楚。
+
+### 4.7 KDoc
+
+public API 必须有 KDoc：
 
 ```kotlin
-id("org.jlleitschuh.gradle.ktlint")
+/**
+ * 将文本解析为目标类型。
+ *
+ * @param source 格式文本
+ * @param targetType 目标类型
+ * @return 解析结果
+ * @throws XxxParseException 格式非法时抛出
+ */
 ```
 
----
+## 5. 新增格式模块
 
-## 8. 测试规范
+新增 `format-xxx` 时至少完成：
 
-- 每个模块独立测试。
-- 使用 `kotlin.test` / JUnit Platform。
-- 接口必须有契约测试。
-- 默认实现必须有行为测试。
-- 反序列化必须有异常路径测试。
-- 不依赖外网、外部数据库、真实文件系统路径。
-- 测试方法名表达“场景 + 预期”。
+- [ ] `settings.gradle.kts` 注册模块
+- [ ] `build.gradle.kts`：JDK 8 toolchain、ktlint、explicitApi
+- [ ] `XxxMapper` / `XxxMapperBuilder`
+- [ ] `XxxReader` / `XxxWriter`
+- [ ] `.exception` 包
+- [ ] Node 映射：对象、数组、标量、null、二进制（如支持）
+- [ ] Bean / 集合 / Map 映射测试
+- [ ] 坏输入与边界测试
+- [ ] README 格式表更新
+- [ ] NOTICE 依赖许可证更新
+- [ ] 若支持 Token，实现 `DocumentTokenReader`
 
-最低验证：
+Mapper 的文本/二进制能力按格式选择：
+
+```text
+文本格式：parse(String) / format
+二进制格式：parse(ByteArray) / formatBytes
+```
+
+## 6. Token 与二进制
+
+### Token Reader
+
+实现 `DocumentTokenReader` 时：
+
+- `currentToken` 与 `nextToken()` 语义一致
+- 标量、对象、数组、字段名、null、二进制值都要覆盖
+- Token 值在 `nextToken()` 后保持到下一次读取
+- 优先避免每个 Token 创建对象；高频路径可直接维护字段
+
+### BinaryNode
+
+- 文本格式无法原生表达二进制时，明确使用 Base64 或格式自带机制
+- 读取时保证二进制字段类型正确
+- 写回时保持 round-trip
+
+## 7. 测试规范
+
+- 单元测试放 `src/test/kotlin`
+- 测试类按模块/对象命名
+- 覆盖正常路径、边界、异常、兼容行为
+- 涉及深度、随机输入、解析器时加超时
+- 新增边界样本可放入 `fuzz/src/test/resources/corpus/<format>/`
+
+性能相关改动：
+
+- 先跑 `:benchmarks:jmh`
+- 记录改动前后同轮数据
+- 不要用单次结果下结论
+
+## 8. 提交规范
+
+使用原子提交：
+
+```text
+feat(format-json): 增加 xxx
+fix(serialization): 修复 xxx
+perf(json): 优化 xxx
+test: 增加 xxx
+docs: 更新 xxx
+build: 调整 xxx
+```
+
+要求：
+
+- 一个提交只做一件事
+- 代码、测试、文档尽量在同一功能提交内
+- 不提交构建产物、IDE 文件、凭据
+- 提交前检查：
 
 ```bash
-gradle ktlintCheck
-gradle build
+git status
+gradle clean ktlintCheck build
 ```
 
-涉及公共 API 的改动，必须同时补测试或说明为什么不需要。
+## 9. 公共 API 兼容
 
----
+- 不随意删除/修改 public API
+- 新增可选能力优先用默认参数、重载或新方法
+- 弃用 API 先标记并写替代方案
+- 修改行为要有迁移说明和测试
 
-## 9. Git 提交规范
+## 10. 文档
 
-### 9.1 提交粒度
+两类文档分工：
 
-**每完成一个可编译的小功能就提交。**
+- `README.md`：面向使用者，只保留安装、示例、能力、限制
+- `CONTRIBUTING.md`：开发规范、构建、测试、发布、评审
 
-禁止把以下内容放在同一个提交：
+修改行为时同步更新：
 
-- 格式化 + 逻辑
-- 模块重构 + 新功能
-- 多个无关模块
-- 测试修复 + 生产代码修复
+- README 示例/能力表
+- KDoc
+- NOTICE（新增依赖）
+- TODO（未完成边界）
 
-一次提交应当能用一句话说清楚。
+## 11. 发布
 
-### 9.2 提交格式
+Maven 坐标：
 
-```text
-<type>(<scope>): <subject>
+- 普通模块：`com.mingliqiye.document:<module>`
+- 格式模块：`com.mingliqiye.document.format:<module>`
 
-<body>
+版本与分组在根 `gradle.properties`：
+
+```properties
+projectVersion=1.0-SNAPSHOT
+projectGroup=com.mingliqiye.document
+formatProjectGroup=com.mingliqiye.document.format
+jvmVersion=8
 ```
 
-type：
+发布：
 
-- `feat`：新增功能
-- `fix`：修复缺陷
-- `refactor`：重构，不改变外部行为
-- `test`：测试
-- `docs`：文档
-- `build`：构建、依赖、Gradle
-- `chore`：杂项
-- `style`：纯格式
-- `perf`：性能
+```bash
+# 本地验证
+gradle publishToMavenLocal
 
-scope：
-
-```text
-annotation
-exception
-core
-format-json
-serialization
-build
-docs
+# 远程
+gradle publish
 ```
 
-示例：
+说明：
 
-```text
-feat(core): 增加 ObjectNode 接口
+- 远程仓库地址和凭据由 Gradle `init.gradle` 提供，不提交到仓库
+- `-SNAPSHOT` 走 snapshot 仓库，正式版本走 release 仓库
+- 发布物包含 jar、pom、Gradle module metadata、javadoc、kotlindoc
+- 发布物使用 GPG 签名；本机需配置可用 GPG key
+- `benchmarks`、`fuzz` 不发布
 
-refactor(core): 使用 DefaultObjectNode 实现 ObjectNode
+## 12. Review 清单
 
-test(core): 覆盖 ObjectNode 类型转换
+- [ ] 设计符合现有模块边界
+- [ ] public API 有 KDoc
+- [ ] 实现类 internal
+- [ ] 有正常/边界/异常测试
+- [ ] `clean ktlintCheck build` 通过
+- [ ] 无无关格式化改动
+- [ ] 文档/许可证同步
+- [ ] 提交信息清晰、原子
 
-docs: 定义贡献与代码规范
+## 13. Definition of Done
 
-build(serialization): 补充 format-json 测试依赖
-```
+一个功能完成需要：
 
-### 9.3 提交前检查
+1. 实现
+2. 单元测试与边界测试
+3. 全量构建通过
+4. README / KDoc 更新
+5. 依赖许可证更新
+6. 原子提交
+7. 工作区干净
 
-- [ ] 只包含本次提交相关文件
-- [ ] 编译通过
-- [ ] ktlint 通过
-- [ ] 测试通过
-- [ ] 没有提交 `build/`、`.gradle/`、IDE 临时文件
-- [ ] 没有密钥、密码、token、私服凭据
+## 14. 当前已知边界
 
-### 9.4 分支与推送
+- XML 混合内容不保留文本/子元素相对顺序
+- CSV 只支持平坦表格
+- TOML 日期时间映射为字符串
+- Ion timestamp/symbol 为字符串，注解忽略
+- Protobuf 不支持 extensions / group / MessageSet
+- Avro OCF 不支持非默认 codec 与 appendTo
+- YAML/XML/Properties/TOML/CSV 的 Token 读取通过 `NodeTokenReader` 适配
 
-- `dev`：日常集成分支
-- `feat/<topic>`：功能分支
-- `fix/<topic>`：修复分支
-- 不直接 force-push 已共享分支
-- 推送前先同步远程
-- tag 使用语义化版本，例如 `1.0.0`
+这些边界在相关 KDoc 和测试中有说明。
 
----
+## 15. 许可证
 
-## 10. 公共 API 变更
+贡献代码即表示同意以项目许可证（Apache License 2.0）发布。
 
-- 新增 API：补 KDoc、测试和对应模块说明。
-- 破坏性变更：必须升级 minor/major 版本并写 CHANGELOG。
-- 废弃 API：先标 `@Deprecated`，说明替代方案。
-- 删除 API：至少跨一个发布周期，或明确说明是实验 API。
+新增第三方依赖必须：
 
----
-
-## 11. Review 清单
-
-每个 PR / 提交审查：
-
-- [ ] 是否先定义接口，再写实现？
-- [ ] 实现类是否被错误暴露到公共 API？
-- [ ] 模块依赖方向是否正确？
-- [ ] 是否有无意义的抽象？
-- [ ] 异常是否保留 cause？
-- [ ] 公共 API 是否有 KDoc？
-- [ ] 是否有契约测试和异常测试？
-- [ ] ktlint / build 是否通过？
-- [ ] 提交粒度是否单一？
-- [ ] 是否更新 CHANGELOG / 文档？
-
----
-
-## 12. Definition of Done
-
-一个任务完成必须同时满足：
-
-- 接口契约已定义；
-- 默认实现已提供；
-- 公共 API 有 KDoc；
-- 正常路径和异常路径有测试；
-- `gradle ktlintCheck` 通过；
-- `gradle build` 通过；
-- 代码已按单一职责拆分；
-- 已提交，提交信息符合规范。
-
----
-
-## 13. 当前待重构清单
-
-- [x] 当前工作区按模块拆成原子提交
-- [x] `core` 树节点改为接口 + Default 实现
-- [x] `DocumentTypeReference` 改为接口 + 默认实现
-- [x] `format-json` 的 parser/writer 收起实现细节
-- [x] `DefaultDocumentMapper` 收起为内部实现
-- [x] `annotation` 模块定义首批注解
-- [x] 所有模块启用 Explicit API Mode
-- [x] 接口契约测试补齐
-- [x] YAML 适配器接入（`format-yaml`）
-- [x] Kotlin data class 实例化模块（`serialization-kotlin`）
-- [x] XML 适配器接入（`format-xml`）
-- [x] Properties 适配器接入（`format-properties`）
-- [x] TOML 适配器接入（`format-toml`）
-- [x] CSV 适配器接入（`format-csv`）
-- [x] Ion 文本适配器接入（`format-ion`）
-- [x] Ion 二进制适配器接入（`format-ion`）
-- [x] CBOR 适配器接入（`format-cbor`）
-- [x] Smile 适配器接入（`format-smile`）
-- [x] Token 直连 Bean 解码（CBOR/Smile/Ion binary）
-- [ ] 补充 CI 门禁
-- [ ] document 私服发布配置
+- 兼容 Apache License 2.0
+- 在 `NOTICE` 补充版权与许可证
+- 不使用 copyleft 依赖
