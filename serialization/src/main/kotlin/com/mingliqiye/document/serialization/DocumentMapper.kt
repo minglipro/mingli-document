@@ -1,5 +1,7 @@
 package com.mingliqiye.document.serialization
 
+import com.mingliqiye.document.annotation.DocumentBuild
+import com.mingliqiye.document.annotation.DocumentBuilder
 import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.annotation.DocumentCreator
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
@@ -25,6 +27,7 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.io.Reader
 import java.io.Writer
+import java.lang.reflect.AnnotatedElement
 import java.lang.reflect.Constructor
 import java.lang.reflect.Field
 import java.lang.reflect.GenericArrayType
@@ -66,10 +69,15 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  *   按构造参数名（[DocumentName] 或 `-parameters` 保留的参数名）从文档取值，
  *   支持泛型、嵌套 Bean、集合、Map、可空与基本类型；构造参数与属性同名时，
  *   参数的 [DocumentName] 同时用于写出，保证读写字段名对称。
+ * - 通过 [com.mingliqiye.document.annotation.DocumentBuilder] 静态工厂 + Builder 模式
+ *   创建的不可变 Bean：没有 [com.mingliqiye.document.annotation.DocumentCreator] 构造器且
+ *   没有无参构造器时，先调用静态工厂方法创建 Builder，按普通 Bean 规则填充 Builder，
+ *   再调用 [com.mingliqiye.document.annotation.DocumentBuild] 标注的构建方法
+ *   （未标注时回退到无参 `build()`）得到目标对象。
  * - 通过配置显式注册的多态基类/接口（字段声明为基类时写入/读取子类型信息）
  *
- * 没有 [com.mingliqiye.document.annotation.DocumentCreator] 标注的实体仍使用无参构造器 + setter；
- * 嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
+ * 优先使用 [com.mingliqiye.document.annotation.DocumentCreator] 构造器；没有标注的实体
+ * 仍使用无参构造器 + setter；嵌套泛型属性需要通过 getter/setter 的泛型信息解析。
  */
 public abstract class DocumentMapper protected constructor(
     /** 格式名称，例如 json、yaml。 */
@@ -105,6 +113,9 @@ public abstract class DocumentMapper protected constructor(
     private val constructorCache = ConcurrentHashMap<Class<*>, Constructor<*>>()
     private val beanCreatorCache = ConcurrentHashMap<Class<*>, Any>()
     private val noBeanCreator = Any()
+    private val beanBuilderCache = ConcurrentHashMap<Class<*>, Any>()
+    private val noBeanBuilder = Any()
+    private val noArgConstructorCache = ConcurrentHashMap<Class<*>, Boolean>()
     private val documentPropertyCache = ConcurrentHashMap<Class<*>, ConcurrentHashMap<String, DocumentProperty>>()
     private val beanMetadataCache = ConcurrentHashMap<Class<*>, BeanMetadata>()
     private val hasSerializers = serializers.isNotEmpty()
@@ -624,6 +635,9 @@ public abstract class DocumentMapper protected constructor(
             if (beanCreator(rawType) != null) {
                 return readBean(reader, rawType, path)
             }
+            if (beanBuilderFor(rawType) != null) {
+                return readBean(reader, rawType, path)
+            }
             if (objectInstantiator?.canInstantiate(rawType) == true) {
                 val streamed = objectInstantiator.instantiate(
                     reader,
@@ -745,6 +759,9 @@ public abstract class DocumentMapper protected constructor(
                 return deserializeValue(TokenTreeReader.readNode(reader), type, path.toString(), property)
             }
             if (beanCreator(rawType) != null) {
+                return readTokenBean(reader, rawType, path)
+            }
+            if (beanBuilderFor(rawType) != null) {
                 return readTokenBean(reader, rawType, path)
             }
             val instantiator = objectInstantiator
@@ -924,7 +941,26 @@ public abstract class DocumentMapper protected constructor(
         if (creator != null) {
             return readTokenBeanWithCreator(reader, type, creator, path)
         }
+        val builder = beanBuilderFor(type)
+        if (builder != null) {
+            return readTokenBeanWithBuilder(reader, type, builder, path)
+        }
         val instance = instantiate(type)
+        readTokenBeanFields(reader, instance, type, path)
+        return instance
+    }
+
+    /**
+     * 从 Token 流读取对象字段并写入已创建的实例。
+     *
+     * 供无参构造 Bean 与 Builder 填充共用：Builder 也用同一套 setter/字段逻辑填充。
+     */
+    private fun readTokenBeanFields(
+        reader: DocumentTokenReader,
+        instance: Any,
+        type: Class<*>,
+        path: DecodePath,
+    ) {
         val metadata = beanMetadata(type)
         val trackSeen = config.missingFieldPolicy != MissingFieldPolicy.KEEP_DEFAULT
         val seen: MutableSet<String>? = if (trackSeen) HashSet() else null
@@ -960,7 +996,20 @@ public abstract class DocumentMapper protected constructor(
         if (trackSeen) {
             applyMissingFields(instance, metadata, seen ?: emptySet(), path.toString())
         }
-        return instance
+    }
+
+    /**
+     * 使用 [com.mingliqiye.document.annotation.DocumentBuilder] 从 Token 流创建实例。
+     */
+    private fun readTokenBeanWithBuilder(
+        reader: DocumentTokenReader,
+        type: Class<*>,
+        builder: BeanBuilderMetadata,
+        path: DecodePath,
+    ): Any {
+        val builderInstance = newBuilderInstance(builder, path.toString())
+        readTokenBeanFields(reader, builderInstance, builder.builderType, path)
+        return buildBean(builder, builderInstance, path.toString())
     }
 
     /**
@@ -1261,7 +1310,26 @@ public abstract class DocumentMapper protected constructor(
         if (creator != null) {
             return readBeanWithCreator(reader, type, creator, path)
         }
+        val builder = beanBuilderFor(type)
+        if (builder != null) {
+            return readBeanWithBuilder(reader, type, builder, path)
+        }
         val instance = instantiate(type)
+        readBeanFields(reader, instance, type, path)
+        return instance
+    }
+
+    /**
+     * 从流式读取器读取对象字段并写入已创建的实例。
+     *
+     * 供无参构造 Bean 与 Builder 填充共用：Builder 也用同一套 setter/字段逻辑填充。
+     */
+    private fun readBeanFields(
+        reader: DocumentValueReader,
+        instance: Any,
+        type: Class<*>,
+        path: String,
+    ) {
         val metadata = beanMetadata(type)
         val seen = HashSet<String>()
         reader.beginObject()
@@ -1283,7 +1351,20 @@ public abstract class DocumentMapper protected constructor(
         }
         reader.endObject()
         applyMissingFields(instance, metadata, seen, path)
-        return instance
+    }
+
+    /**
+     * 使用 [com.mingliqiye.document.annotation.DocumentBuilder] 从流式读取器创建实例。
+     */
+    private fun readBeanWithBuilder(
+        reader: DocumentValueReader,
+        type: Class<*>,
+        builder: BeanBuilderMetadata,
+        path: String,
+    ): Any {
+        val builderInstance = newBuilderInstance(builder, path)
+        readBeanFields(reader, builderInstance, builder.builderType, path)
+        return buildBean(builder, builderInstance, path)
     }
 
     /**
@@ -2117,6 +2198,10 @@ public abstract class DocumentMapper protected constructor(
         if (creator != null) {
             return deserializeBeanWithCreator(objectNode, type, creator, path)
         }
+        val builder = beanBuilderFor(type)
+        if (builder != null) {
+            return deserializeBeanWithBuilder(objectNode, type, builder, path)
+        }
         val customInstance = objectInstantiator?.instantiate(
             type,
             objectNode,
@@ -2131,6 +2216,21 @@ public abstract class DocumentMapper protected constructor(
             return customInstance
         }
         val instance = instantiate(type)
+        fillBeanInstance(instance, type, objectNode, path)
+        return instance
+    }
+
+    /**
+     * 用对象节点填充已创建的实例。
+     *
+     * 供无参构造 Bean 与 Builder 填充共用：Builder 也用同一套 setter/字段逻辑填充。
+     */
+    private fun fillBeanInstance(
+        instance: Any,
+        type: Class<*>,
+        objectNode: ObjectNode,
+        path: String,
+    ) {
         val metadata = beanMetadata(type)
         if (config.failOnUnknownFields) {
             for (key in objectNode.keys) {
@@ -2161,7 +2261,20 @@ public abstract class DocumentMapper protected constructor(
             )
         }
         applyMissingFields(instance, metadata, seen, path)
-        return instance
+    }
+
+    /**
+     * 使用 [com.mingliqiye.document.annotation.DocumentBuilder] 从对象节点创建实例。
+     */
+    private fun deserializeBeanWithBuilder(
+        objectNode: ObjectNode,
+        type: Class<*>,
+        builder: BeanBuilderMetadata,
+        path: String,
+    ): Any {
+        val builderInstance = newBuilderInstance(builder, path)
+        fillBeanInstance(builderInstance, builder.builderType, objectNode, path)
+        return buildBean(builder, builderInstance, path)
     }
 
     /**
@@ -2234,10 +2347,25 @@ public abstract class DocumentMapper protected constructor(
         return LinkedHashMap()
     }
 
-    private fun instantiate(type: Class<*>): Any = try {
-        newInstance(type)
-    } catch (e: Exception) {
-        throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
+    private fun instantiate(type: Class<*>): Any {
+        val constructor = try {
+            constructorCache.computeIfAbsent(type) {
+                type.getDeclaredConstructor().apply { isAccessible = true }
+            }
+        } catch (e: NoSuchMethodException) {
+            throw DocumentSerializationException(
+                "Cannot instantiate ${type.name}: no @DocumentCreator constructor, " +
+                    "no @DocumentBuilder static factory method and no no-arg constructor",
+                e,
+            )
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
+        }
+        return try {
+            constructor.newInstance()
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Cannot instantiate ${type.name}", e)
+        }
     }
 
     /**
@@ -2284,21 +2412,42 @@ public abstract class DocumentMapper protected constructor(
     private fun documentProperty(type: Class<*>, field: Field): DocumentProperty = documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
         .computeIfAbsent(field.name) { createDocumentProperty(type, field) }
 
+    private fun documentProperty(
+        type: Class<*>,
+        name: String,
+        elements: List<AnnotatedElement>,
+        propertyType: Type,
+    ): DocumentProperty = documentPropertyCache.computeIfAbsent(type) { ConcurrentHashMap() }
+        .computeIfAbsent(name) { createDocumentProperty(type, name, elements, propertyType) }
+
     private fun createDocumentProperty(type: Class<*>, property: PropertyDescriptor): DocumentProperty {
         val field = findField(type, property.name)
         val elements = listOfNotNull(property.readMethod, property.writeMethod, field)
         val propertyType = property.readMethod?.genericReturnType
             ?: property.writeMethod?.genericParameterTypes?.firstOrNull()
             ?: property.propertyType
-        return DefaultDocumentProperty(
-            type,
-            property.name,
-            propertyType,
-            elements,
-            propertyMetadataResolver?.resolve(type, property.name).orEmpty(),
-            config.namingStrategy,
-        )
+        return createDocumentProperty(type, property.name, elements, propertyType)
     }
+
+    /**
+     * 构造由任意注解元素（方法/字段）描述的属性元数据。
+     *
+     * 用于 JavaBeans Introspector 不识别、但符合 Builder 流式 setter 约定的属性：
+     * `setXxx(value)` 返回 Builder 自身而不是 `void`。
+     */
+    private fun createDocumentProperty(
+        type: Class<*>,
+        name: String,
+        elements: List<AnnotatedElement>,
+        propertyType: Type,
+    ): DocumentProperty = DefaultDocumentProperty(
+        type,
+        name,
+        propertyType,
+        elements,
+        propertyMetadataResolver?.resolve(type, name).orEmpty(),
+        config.namingStrategy,
+    )
 
     private fun createDocumentProperty(type: Class<*>, field: Field): DocumentProperty = DefaultDocumentProperty(
         type,
@@ -2364,6 +2513,199 @@ public abstract class DocumentMapper protected constructor(
             annotation?.value,
             parameter.parameterizedType,
         )
+    }
+
+    /**
+     * 获取类型上 [com.mingliqiye.document.annotation.DocumentBuilder] 标注的静态工厂
+     * 元数据；没有标注时返回 `null`。
+     *
+     * 结果按类型缓存，同一类型只解析一次反射信息。
+     */
+    private fun beanBuilder(type: Class<*>): BeanBuilderMetadata? {
+        val cached = beanBuilderCache.computeIfAbsent(type) { createBeanBuilder(type) ?: noBeanBuilder }
+        return if (cached === noBeanBuilder) null else cached as BeanBuilderMetadata
+    }
+
+    /**
+     * 判断类型是否适用 Builder 模式反序列化。
+     *
+     * 只有没有 [DocumentCreator] 构造器且没有无参构造器的类型，才回退到
+     * [com.mingliqiye.document.annotation.DocumentBuilder] 静态工厂。
+     */
+    private fun beanBuilderFor(type: Class<*>): BeanBuilderMetadata? {
+        if (beanCreator(type) != null || hasNoArgConstructor(type)) {
+            return null
+        }
+        return beanBuilder(type)
+    }
+
+    private fun hasNoArgConstructor(type: Class<*>): Boolean = noArgConstructorCache.computeIfAbsent(type) {
+        try {
+            type.getDeclaredConstructor()
+            true
+        } catch (_: NoSuchMethodException) {
+            false
+        }
+    }
+
+    private fun createBeanBuilder(type: Class<*>): BeanBuilderMetadata? {
+        var selected: Method? = null
+        for (method in type.declaredMethods) {
+            if (!method.isAnnotationPresent(DocumentBuilder::class.java)) {
+                continue
+            }
+            if (selected != null) {
+                throw DocumentSerializationException(
+                    "Multiple @DocumentBuilder static factory methods on ${type.name}",
+                )
+            }
+            selected = method
+        }
+        val factory = selected ?: return null
+        if (!Modifier.isStatic(factory.modifiers)) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder method ${factory.name} on ${type.name} must be static",
+            )
+        }
+        if (factory.parameterCount != 0) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder method ${factory.name} on ${type.name} must have no parameters",
+            )
+        }
+        val builderType = factory.returnType
+        if (builderType.isPrimitive || builderType.isArray || builderType == Void::class.java) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder method ${factory.name} on ${type.name} must return a builder type",
+            )
+        }
+        try {
+            factory.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException(
+                "Cannot access @DocumentBuilder method ${factory.name} on ${type.name}",
+                e,
+            )
+        }
+        val buildMethod = findBuildMethod(type, builderType)
+        return BeanBuilderMetadata(type, builderType, factory, buildMethod)
+    }
+
+    /**
+     * 查找 Builder 上把 Builder 转换为目标对象的方法。
+     *
+     * 优先使用 [com.mingliqiye.document.annotation.DocumentBuild] 标注的方法；
+     * 没有标注时回退到无参 `build()`。
+     */
+    private fun findBuildMethod(ownerType: Class<*>, builderType: Class<*>): Method {
+        val annotated = builderType.declaredMethods.filter {
+            it.isAnnotationPresent(DocumentBuild::class.java)
+        }
+        if (annotated.size > 1) {
+            throw DocumentSerializationException(
+                "Multiple @DocumentBuild methods on builder ${builderType.name} for ${ownerType.name}",
+            )
+        }
+        val method = annotated.firstOrNull() ?: defaultBuildMethod(builderType)
+            ?: throw DocumentSerializationException(
+                "No build method on builder ${builderType.name} for ${ownerType.name}; " +
+                    "annotate a no-arg method returning ${ownerType.name} with @DocumentBuild " +
+                    "or add a no-arg build() method",
+            )
+        if (Modifier.isStatic(method.modifiers)) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method ${method.name} on builder ${builderType.name} " +
+                    "for ${ownerType.name} must not be static",
+            )
+        }
+        if (method.parameterCount != 0) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method ${method.name} on builder ${builderType.name} " +
+                    "for ${ownerType.name} must have no parameters",
+            )
+        }
+        if (!ownerType.isAssignableFrom(method.returnType)) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method ${method.name} on builder ${builderType.name} " +
+                    "for ${ownerType.name} must return ${ownerType.name} but returns " +
+                    method.returnType.name,
+            )
+        }
+        try {
+            method.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException(
+                "Cannot access @DocumentBuild method ${method.name} on builder ${builderType.name}",
+                e,
+            )
+        }
+        return method
+    }
+
+    private fun defaultBuildMethod(builderType: Class<*>): Method? {
+        var current: Class<*>? = builderType
+        while (current != null && current != Any::class.java) {
+            for (method in current.declaredMethods) {
+                if (method.name != "build" ||
+                    method.isSynthetic ||
+                    method.isBridge ||
+                    Modifier.isStatic(method.modifiers) ||
+                    method.parameterCount != 0
+                ) {
+                    continue
+                }
+                return method
+            }
+            current = current.superclass
+        }
+        return null
+    }
+
+    /**
+     * 调用 [com.mingliqiye.document.annotation.DocumentBuilder] 静态工厂方法创建 Builder 实例。
+     */
+    private fun newBuilderInstance(builder: BeanBuilderMetadata, path: String): Any {
+        val instance = try {
+            builder.factory.invoke(null)
+        } catch (e: InvocationTargetException) {
+            throw DocumentSerializationException(
+                "@DocumentBuilder factory method of ${builder.ownerType.name} threw an exception at $path",
+                e.targetException,
+            )
+        } catch (e: ReflectiveOperationException) {
+            throw DocumentSerializationException(
+                "Cannot invoke @DocumentBuilder factory method of ${builder.ownerType.name} at $path",
+                e,
+            )
+        }
+        return instance ?: throw DocumentSerializationException(
+            "@DocumentBuilder factory method of ${builder.ownerType.name} returned null at $path",
+        )
+    }
+
+    /**
+     * 调用 [com.mingliqiye.document.annotation.DocumentBuild] 方法把 Builder 转换为目标对象。
+     */
+    private fun buildBean(builder: BeanBuilderMetadata, builderInstance: Any, path: String): Any {
+        val result = try {
+            builder.buildMethod.invoke(builderInstance)
+        } catch (e: InvocationTargetException) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method of ${builder.ownerType.name} threw an exception at $path",
+                e.targetException,
+            )
+        } catch (e: ReflectiveOperationException) {
+            throw DocumentSerializationException(
+                "Cannot invoke @DocumentBuild method of ${builder.ownerType.name} at $path",
+                e,
+            )
+        }
+        if (!builder.ownerType.isInstance(result)) {
+            throw DocumentSerializationException(
+                "@DocumentBuild method of ${builder.ownerType.name} returned " +
+                    "${result?.javaClass?.name ?: "null"} at $path",
+            )
+        }
+        return result
     }
 
     /**
@@ -2456,6 +2798,46 @@ public abstract class DocumentMapper protected constructor(
                 setter,
                 field.genericType,
             )
+        }
+
+        // Builder 模式常用 `setXxx` 返回 Builder 自身（流式 setter），JavaBeans
+        // Introspector 只识别返回 void 的 setter，这里补充这类属性的写访问器。
+        for (method in type.methods) {
+            if (Modifier.isStatic(method.modifiers) ||
+                method.isSynthetic ||
+                method.isBridge ||
+                method.parameterCount != 1 ||
+                method.returnType == java.lang.Void.TYPE
+            ) {
+                continue
+            }
+            val name = method.name
+            if (name.length <= 3 || !name.startsWith("set") || !name[3].isUpperCase()) {
+                continue
+            }
+            val propertyName = Introspector.decapitalize(name.substring(3))
+            if (propertyName in handled) {
+                continue
+            }
+            handled.add(propertyName)
+            val field = findField(type, propertyName)
+            val valueType = method.genericParameterTypes[0]
+            val metadata = documentProperty(
+                type,
+                propertyName,
+                listOfNotNull(method, field),
+                valueType,
+            )
+            knownFields.add(metadata.documentName)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            method.isAccessible = true
+            val setter: java.util.function.BiConsumer<Any, Any?> = BeanAccessorFactory.setter(method)
+                ?: java.util.function.BiConsumer<Any, Any?> { bean, value ->
+                    invoke(method, bean, value)
+                }
+            accessors[propertyName] = BeanPropertyAccessor(metadata, null, setter, valueType)
         }
 
         return BeanMetadata(accessors.values.toList(), knownFields)

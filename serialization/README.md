@@ -140,6 +140,42 @@ class User {
 - 缺字段按 `MissingFieldPolicy` 处理
 - 未标注构造器继续走原有无参构造逻辑
 
+## Builder 模式
+
+不可变类也可以通过 Builder 反序列化：
+
+```java
+class User {
+    @DocumentBuilder
+    static UserBuilder builder() {
+        return new UserBuilder();
+    }
+}
+
+class UserBuilder {
+    private String name;
+
+    UserBuilder setName(String name) {
+        this.name = name;
+        return this;
+    }
+
+    @DocumentBuild
+    User build() {
+        return new User(name);
+    }
+}
+```
+
+启用条件：
+
+```text
+没有 @DocumentCreator
+没有无参构造器
+目标类存在 @DocumentBuilder 静态工厂
+Builder 存在 @DocumentBuild 或无参 build()
+```
+
 ## 构建
 
 ```bash
