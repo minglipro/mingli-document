@@ -28,7 +28,7 @@
 | 当前版本 | `2.3.0`（根 `gradle.properties` 的 `projectVersion`） |
 | 目标字节码 | JDK 8（`jvmVersion=8`） |
 | 构建 Kotlin | 2.3.0（根 `build.gradle.kts`） |
-| KSP | `2.3.0-1.0.21`（仅 `codegen` 与使用方需要） |
+| KSP | `2.0.0-1.0.21`（仅 `codegen` 与使用方需要） |
 | 构建工具 | Gradle 8.x（仓库自带 wrapper） |
 | 许可证 | Apache License 2.0 |
 | 仓库 | `https://github.com/minglipro/mingli-document` |
@@ -60,6 +60,15 @@
 | [`codegen`](./codegen.md) | `com.mingliqiye.document:codegen` | KSP 编译期代码生成（枚举转换器 + `DocumentModule`） | KSP `symbol-processing-api`（实现依赖） |
 | [`openapi`](./openapi.md) | `com.mingliqiye.document:openapi` | 由 `DocumentSchema` 生成 OpenAPI 3.0 文档 | `schema`、`core`、`exception` |
 | [`bom`](./bom.md) | `com.mingliqiye.document:mingli-document-bom` | Maven BOM，统一依赖版本 | 无（`java-platform`） |
+
+### 扩展模块
+
+| 模块 | Maven 坐标 | 职责 | 公开依赖 |
+|---|---|---|---|
+| [`schema-registry`](./schema-registry.md) | `com.mingliqiye.document:schema-registry` | Schema 注册、版本、兼容性策略、远程 SPI | `schema`、`core`、`exception` |
+| [`validation`](./validation.md) | `com.mingliqiye.document:validation` | Jakarta Bean Validation 集成 | `serialization`、`jakarta.validation-api` |
+| [`jdbc`](./jdbc.md) | `com.mingliqiye.document:jdbc` | JDBC ResultSet / PreparedStatement 集成 | `core`、`serialization` |
+| [`jpa`](./jpa.md) | `com.mingliqiye.document:jpa` | JPA / Hibernate 实体注解映射 | `core`、`serialization`、`jakarta.persistence-api` |
 
 ### 格式模块
 

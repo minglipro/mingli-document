@@ -8,7 +8,7 @@
 - 源码基线：`dev` 分支（文档编写时的仓库状态；`gradle.properties` 中
   `projectVersion=2.3.0`）
 - 目标平台：JDK 8+（Java record 支持需要 JDK 16+ 运行时）
-- 语言：Kotlin 2.3.0、Java 8+
+- 语言：Kotlin 2.0.0、Java 8+
 
 ## 页面索引
 

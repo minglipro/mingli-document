@@ -102,12 +102,13 @@
 ## 阶段 5：Schema 与生态
 
 - [x] JSON Schema（常用 draft-07 子集）
-- [ ] Schema Registry 适配
+- [x] Schema Registry 适配
 - [x] OpenAPI 3.0 生成
-- [ ] Bean Validation 集成
-- [ ] 数据库 / ORM 集成
+- [x] Bean Validation 集成
+- [x] JPA 实体注解映射（`jpa` 模块）
+- [ ] Hibernate Session / EntityManager 运行期集成
 
-> 未完成项：Schema Registry、Bean Validation、数据库/ORM。
+> 已完成：Schema Registry、Bean Validation、JPA 注解映射；Hibernate 运行期会话集成仍待定。
 
 ## 阶段 6：构建与发布
 
@@ -123,9 +124,9 @@
 - [x] JPMS `module-info`（Multi-Release jar：`annotation` / `exception` / `core` /
   `schema` / `schema-registry`；其余模块待上游依赖修复模块名，见
   [JPMS 指南](../guide/jpms.md)）
-- [ ] GraalVM Native Image
+- [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
-> 未完成项：Gitea CI、其余模块的 JPMS `module-info`、GraalVM Native Image。
+> 未完成项：Gitea CI、其余模块的 JPMS `module-info`、Maven Central 实际发布。
 
 ## 批次计划
 
@@ -240,17 +241,13 @@
 
 仍延后：
 
-- TOML 注释保留
-- 大文件流式 Bean 映射
-- 对象池 / 零拷贝
-- Schema Registry 适配
-- Bean Validation 集成
-- 数据库 / ORM 集成
-- JPMS `module-info`
-- GraalVM Native Image
-- Maven Central 实际发布（配置已就绪，需要凭据/GPG）
+- Hibernate Session / EntityManager 运行期集成
+- serialization / format-* / jdbc / validation / jpa 的显式 `module-info`
+  （`alias-for` 模块名是 Java 关键字，阻塞中）
+- Maven Central 实际发布（配置已就绪，需要额度/凭据）
+- Gitea CI
 
-## 当前状态（2.0.0）
+## 当前状态（2.3.0）
 
 ### 已完成的核心目标
 
@@ -261,28 +258,26 @@
 | 高级绑定（多态、构造器、Builder、record、只读、merge） | ✅ |
 | Kotlin 类型（data class、value class、sealed） | ✅ |
 | 代码生成（KSP + 运行期） | ✅ |
-| 原生 Token + 流式写出 | ✅（流式写出仍在补齐） |
-| 安全边界（深度/节点数/字符串/输入大小） | ✅ 大多数格式 |
-| fuzz（Jazzer / JQF / continuous） | ✅ |
-| OpenAPI 3.0 生成 | ✅ |
-| Maven Central 发布配置 / SBOM / 校验和 | ✅（实际发布待凭据） |
+| 原生 Token + 流式写出 | ✅ |
+| 大文件流式 Bean 映射 | ✅ |
+| 对象池 / 零拷贝 | ✅ |
+| Schema Registry / Bean Validation | ✅ |
+| JDBC / JPA 注解映射 | ✅ |
+| JPMS 自动模块名 + 5 个显式 MR-JAR 模块 | ✅ |
+| GraalVM Native Image | ✅ 实测 |
+| 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
+| Maven Central 实际发布 | ⏳ 等额度/凭据 |
 
-### 待办清单（合并 ROADMAP 未完成项与 2.0.0 延后项）
+### 待办清单（2.3.0 之后）
 
 | 序号 | 待办 | 阶段 |
 |---|---|---|
-| 1 | Avro 完整 logical type | 阶段 2 |
-| 2 | TOML 注释保留 | 阶段 2 |
-| 3 | 大文件流式 Bean 映射 | 阶段 3 |
-| 4 | 对象池 / 零拷贝 | 阶段 3 |
-| 5 | XML / Properties / TOML / CSV `maxDepth`（ROADMAP 未勾选项） | 阶段 4 |
-| 6 | Schema Registry 适配 | 阶段 5 |
-| 7 | Bean Validation 集成 | 阶段 5 |
-| 8 | 数据库 / ORM 集成 | 阶段 5 |
-| 9 | Gitea CI | 阶段 6 |
-| 10 | 其余模块的 JPMS `module-info`（5 个基础模块已完成 Multi-Release 显式模块，见 [JPMS 指南](../guide/jpms.md)） | 阶段 6 |
-| 11 | GraalVM Native Image | 阶段 6 |
-| 12 | Maven Central 实际发布（需凭据/GPG） | 阶段 6 |
+| 1 | Hibernate Session / EntityManager 运行期集成 | 阶段 5 |
+| 2 | serialization / format-* / jdbc / validation / jpa 的显式 module-info（alias-for 模块名阻塞） | 阶段 6 |
+| 3 | Maven Central 实际发布（需额度/凭据） | 阶段 6 |
+| 4 | Avro 完整 logical type | 阶段 2 |
+| 5 | XML / Properties / TOML / CSV `maxDepth` | 阶段 4 |
+| 6 | Gitea CI | 阶段 6 |
 
 > 仓库根的 `TODO.md` 记录了更细粒度的待办项，本表只列路线图级目标。
 

@@ -1,13 +1,16 @@
 # 变更记录
 
 本页是 `CHANGELOG.md` 的站点版，记录 `mingli-document` 各版本的公开能力变化。
-当前文档对应 `2.0.0`；最新条目之后的 `dev` 分支提交见文末
+当前文档对应 `2.3.0`；最新条目之后的 `dev` 分支提交见文末
 [未发布的 dev 变更](#未发布的-dev-变更)。
 
 ## 版本速览
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
+| `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
+| `2.2.0` | 数据库与扩展 | `jdbc`、`schema-registry`、`validation`、TOML 注释保留、JPMS 自动模块名 |
+| `2.1.0` | 流式与安全 | JSON Lines/数组、CSV 流式、`ByteArrayPool`、零拷贝、流式写出 |
 | `2.0.0` | 代码生成与类型系统 | KSP/运行期代码生成、Java record、只读属性、merge、Kotlin value/sealed、CBOR sequence、Smile 多消息、CSV 嵌套、Protobuf 高级语义、OpenAPI、安全基线 |
 | `1.5.0` | fuzz 工具链 | 11 个 Jazzer 目标、`fuzzJazzer`、`fuzzContinuous` |
 | `1.4.0` | 原生 Token + 性能 | CSV/Properties/TOML/YAML/XML 原生 Token Reader、Schubfach Double、YAML `maxAliases` |
@@ -16,7 +19,42 @@
 | `1.1.0` | 高级数据绑定 | 文件/流 API、命名策略、多态、构造器注入、Builder、`$ref`、JSON Schema、安全限制 |
 | `1.0.0` | 初始发布 | core/annotation/exception/schema/serialization/serialization-kotlin + 11 格式 + BOM |
 
-发布标签：`1.0.0`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v2.0.0`。
+发布标签：`1.0.0`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v2.0.0`、`v2.1.0`、`v2.2.0`、`v2.3.0`。
+
+## 2.3.0
+
+### 新增
+
+- `jpa` 模块：JPA / Hibernate 实体注解映射（`JpaDocumentMapper`、`JpaConfig`）
+- `annotation` / `exception` / `core` / `schema` / `schema-registry` 的显式 `module-info` + Multi-Release JAR
+- GraalVM Native Image 配置与实测（GraalVM JDK 21 + VS BuildTools + Windows SDK）
+
+### 验证
+
+- 1342 tests
+- JDK 17 / JDK 11 module path smoke
+- JDK 8 classpath 兼容
+- native-smoke 输出 `SMOKE OK`
+
+## 2.2.0
+
+### 新增
+
+- `jdbc` 模块：ResultSet / PreparedStatement / 命名参数 / RowMapper
+- TOML 注释保留：`TomlCommentedDocument`
+- JPMS `Automatic-Module-Name`（全部可发布 jar）
+- GraalVM Native Image 配置模板与 JVM smoke
+
+## 2.1.0
+
+### 新增
+
+- 大文件流式 Bean 映射：JSON Lines / NDJSON、JSON 顶层数组、CSV 逐行
+- `ByteArrayPool` 缓冲池与 `BinaryNode.ofShared` 零拷贝
+- CBOR 可配置缓冲池
+- `schema-registry` 模块
+- `validation` 模块：Jakarta Bean Validation 集成
+- `DocumentBeanValidator` 扩展点
 
 ## 2.0.0
 
