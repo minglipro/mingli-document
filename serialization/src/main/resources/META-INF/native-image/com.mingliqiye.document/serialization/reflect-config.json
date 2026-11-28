@@ -1,0 +1,75 @@
+[
+  {
+    "name": "java.lang.Class",
+    "methods": [
+      {
+        "name": "isRecord",
+        "parameterTypes": []
+      },
+      {
+        "name": "getRecordComponents",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.reflect.RecordComponent",
+    "allPublicMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentBuild",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentBuilder",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentConverter",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentCreator",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentDateTimeFormat",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentDeserializer",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentEnumCodec",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentIgnore",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentName",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentNumberFormat",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentRootName",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentSerializer",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentTypeInfo",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.mingliqiye.document.annotation.DocumentTypeName",
+    "allDeclaredMethods": true
+  }
+]

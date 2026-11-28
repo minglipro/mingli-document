@@ -1,0 +1,70 @@
+[
+  {
+    "name": "java.lang.Class",
+    "methods": [
+      {
+        "name": "isRecord",
+        "parameterTypes": []
+      },
+      {
+        "name": "getRecordComponents",
+        "parameterTypes": []
+      }
+    ]
+  },
+  {
+    "name": "java.lang.reflect.RecordComponent",
+    "allPublicMethods": true
+  },
+  {
+    "name": "java.lang.Deprecated",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.example.annotation.MyBeanAnnotation",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.example.model.User",
+    "allDeclaredFields": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true
+  },
+  {
+    "name": "com.example.model.ImmutableUser",
+    "allDeclaredFields": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true
+  },
+  {
+    "name": "com.example.model.User$Builder",
+    "allDeclaredFields": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true
+  },
+  {
+    "name": "com.example.model.Point",
+    "allDeclaredFields": true,
+    "allPublicFields": true,
+    "allDeclaredMethods": true,
+    "allPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "allPublicConstructors": true,
+    "allRecordComponents": true
+  },
+  {
+    "name": "com.example.converter.MoneyConverter",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  }
+]

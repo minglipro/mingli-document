@@ -57,7 +57,10 @@ export default defineUserConfig({
           children: [
             '/guide/codegen.md',
             '/guide/fuzz-security.md',
+            '/guide/jpms.md',
+            '/guide/graalvm.md',
             '/guide/migration.md',
+            '/guide/jpms.md',
             '/guide/faq.md',
           ],
         },
@@ -95,6 +98,7 @@ export default defineUserConfig({
             '/modules/schema.md',
             '/modules/schema-registry.md',
             '/modules/validation.md',
+            '/modules/jdbc.md',
           ],
         },
         {

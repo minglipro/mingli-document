@@ -27,6 +27,26 @@ allprojects {
         return@allprojects
     }
 
+    // JPMS 自动模块名（Automatic-Module-Name）。
+    //
+    // 本库字节码目标是 JDK 8，无法在源码中编译 module-info.java（module-info.class 需要
+    // class file 53 / JDK 9+，且要放进 Multi-Release jar 的 META-INF/versions/9 才能同时
+    // 兼容 JDK 8）。因此先给所有可发布 jar 写入稳定的自动模块名，供 JDK 9+ 以「自动模块」
+    // 方式放到 module path 上使用；后续再补真正的 Multi-Release module-info。
+    //
+    // 规则：
+    //   format-*       -> com.mingliqiye.document.format.<name>
+    //   其他可发布模块  -> com.mingliqiye.document.<name>（短横线转点，模块名不允许 '-'）
+    //
+    // 根项目只是聚合构建，benchmarks / fuzz 是非发布模块（见 publishableProjects），
+    // 都不写自动模块名；bom 是 java-platform，没有 jar，已在上方提前返回。
+    val automaticModuleName = when {
+        project == rootProject || name == "benchmarks" || name == "fuzz" -> null
+        name.startsWith("format-") ->
+            "com.mingliqiye.document.format." + name.removePrefix("format-").replace('-', '.')
+        else -> "com.mingliqiye.document." + name.replace('-', '.')
+    }
+
     plugins.apply("idea")
     plugins.apply("java")
     plugins.apply("maven-publish")
@@ -145,6 +165,15 @@ allprojects {
         }
         named("build") {
             dependsOn("javaDocJar", "kotlinDocJar")
+        }
+
+        if (automaticModuleName != null) {
+            // 只有模块主 jar 需要自动模块名；javadoc / kotlindoc 等 classifier jar 不参与模块路径。
+            named<Jar>("jar") {
+                manifest {
+                    attributes(mapOf("Automatic-Module-Name" to automaticModuleName))
+                }
+            }
         }
 
         withType<org.gradle.jvm.tasks.Jar> {

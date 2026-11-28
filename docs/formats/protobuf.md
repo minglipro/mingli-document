@@ -12,14 +12,14 @@ description: format-protobuf 模块：ProtobufMapper、ProtobufSchema/Descriptor
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:protobuf:2.1.0")
+implementation("com.mingliqiye.document.format:protobuf:2.2.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `protobuf` |
-| 版本 | `2.1.0` |
+| 版本 | `2.2.0` |
 | 传递依赖 | `schema`、`core`、`exception`、`serialization` |
 | 第三方依赖 | `com.google.protobuf:protobuf-java:3.25.5` |
 | 字节码 | JDK 8 |

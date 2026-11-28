@@ -5,7 +5,7 @@ title: 安装与依赖
 # 安装与依赖
 
 > 本页说明运行环境、Maven 坐标、BOM、发布仓库、传递依赖，以及从源码构建与发布的方式。
-> 所有坐标都以仓库内 `gradle.properties` 的 `projectVersion` 为准，当前为 `2.1.0`。
+> 所有坐标都以仓库内 `gradle.properties` 的 `projectVersion` 为准，当前为 `2.2.0`。
 
 ## 目录
 
@@ -27,12 +27,12 @@ title: 安装与依赖
 |---|---|---|
 | JDK 运行 | **JDK 8+** | 所有模块字节码目标为 JDK 8（`gradle.properties` 的 `jvmVersion=8`） |
 | Java record 映射 | **JDK 16+ 运行时** | 反射 `Class.isRecord()` / `RecordComponent` 从 JDK 16 开始提供；运行在 JDK 8 时自动跳过该分支 |
-| Kotlin | `serialization-kotlin` 需要 **Kotlin 2.0**（本库用 Kotlin 2.1.0 编译） | 只用 Java 模块时 Kotlin 版本无关 |
+| Kotlin | `serialization-kotlin` 需要 **Kotlin 2.0**（本库用 Kotlin 2.2.0 编译） | 只用 Java 模块时 Kotlin 版本无关 |
 | Gradle | **Gradle 8.x** | 仅构建源码时需要；项目使用 `foojay-resolver-convention` 解析 JDK 工具链 |
-| KSP | `2.1.0-1.0.21` | 仅使用 `codegen`（`@DocumentEnumCodec`）时需要，版本必须与 Kotlin 2.1.0 匹配 |
+| KSP | `2.2.0-1.0.21` | 仅使用 `codegen`（`@DocumentEnumCodec`）时需要，版本必须与 Kotlin 2.2.0 匹配 |
 
 ::: warning 关于 Kotlin 版本
-`serialization-kotlin` 使用 Kotlin 2.1.0 编译，其 Kotlin 元数据版本为 2.0。
+`serialization-kotlin` 使用 Kotlin 2.2.0 编译，其 Kotlin 元数据版本为 2.0。
 Kotlin 1.x 编译器可能无法读取。若你的项目仍是 Kotlin 1.9 或更早，请只使用 Java 侧
 模块（`core` / `serialization` / `format-*`），或先升级到 Kotlin 2.0。
 :::
@@ -81,7 +81,7 @@ Maven：
 
 ```kotlin
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") version "2.2.0"
 }
 
 repositories {
@@ -92,7 +92,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.1.0")
+    implementation("com.mingliqiye.document.format:json:2.2.0")
 }
 ```
 
@@ -103,12 +103,12 @@ dependencies {
 ```kotlin
 dependencies {
     // 格式
-    implementation("com.mingliqiye.document.format:json:2.1.0")
-    implementation("com.mingliqiye.document.format:yaml:2.1.0")
-    implementation("com.mingliqiye.document.format:cbor:2.1.0")
+    implementation("com.mingliqiye.document.format:json:2.2.0")
+    implementation("com.mingliqiye.document.format:yaml:2.2.0")
+    implementation("com.mingliqiye.document.format:cbor:2.2.0")
 
     // Kotlin data class 支持
-    implementation("com.mingliqiye.document:serialization-kotlin:2.1.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:2.2.0")
 }
 ```
 
@@ -116,8 +116,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'com.mingliqiye.document.format:json:2.1.0'
-    implementation 'com.mingliqiye.document:serialization-kotlin:2.1.0'
+    implementation 'com.mingliqiye.document.format:json:2.2.0'
+    implementation 'com.mingliqiye.document:serialization-kotlin:2.2.0'
 }
 ```
 
@@ -128,12 +128,12 @@ dependencies {
     <dependency>
         <groupId>com.mingliqiye.document.format</groupId>
         <artifactId>json</artifactId>
-        <version>2.1.0</version>
+        <version>2.2.0</version>
     </dependency>
     <dependency>
         <groupId>com.mingliqiye.document</groupId>
         <artifactId>serialization-kotlin</artifactId>
-        <version>2.1.0</version>
+        <version>2.2.0</version>
     </dependency>
 </dependencies>
 ```
@@ -143,14 +143,14 @@ dependencies {
 BOM 的坐标为：
 
 ```text
-com.mingliqiye.document:mingli-document-bom:2.1.0
+com.mingliqiye.document:mingli-document-bom:2.2.0
 ```
 
 ### Gradle
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0"))
 
     // 之后所有模块都不写版本
     implementation("com.mingliqiye.document:core")
@@ -164,7 +164,7 @@ Groovy：
 
 ```groovy
 dependencies {
-    implementation platform('com.mingliqiye.document:mingli-document-bom:2.1.0')
+    implementation platform('com.mingliqiye.document:mingli-document-bom:2.2.0')
     implementation 'com.mingliqiye.document.format:json'
 }
 ```
@@ -177,7 +177,7 @@ dependencies {
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>2.1.0</version>
+            <version>2.2.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -295,16 +295,16 @@ gradle ktlintFormat
 gradle publishToMavenLocal
 ```
 
-然后在业务项目里用 `mavenLocal()` 获取 `2.1.0`。
+然后在业务项目里用 `mavenLocal()` 获取 `2.2.0`。
 
 ### 使用 codegen 时的构建配置
 
-根工程声明 KSP 插件（版本必须与 Kotlin 2.1.0 匹配）：
+根工程声明 KSP 插件（版本必须与 Kotlin 2.2.0 匹配）：
 
 ```kotlin
 plugins {
-    kotlin("jvm") version "2.1.0" apply false
-    id("com.google.devtools.ksp") version "2.1.0-1.0.21" apply false
+    kotlin("jvm") version "2.2.0" apply false
+    id("com.google.devtools.ksp") version "2.2.0-1.0.21" apply false
 }
 ```
 
@@ -352,9 +352,9 @@ gradle publish
 | 找不到 `com.mingliqiye.document:json` | 格式模块 group 不同 | 用 `com.mingliqiye.document.format:json` |
 | 找不到 `format-json` artifact | artifactId 去掉了 `format-` 前缀 | 用 `format:json` |
 | 解析不到版本 | 只配置了 Maven Central，而版本在自建仓库 | 加 `repository.mingliqiye.com` 仓库 |
-| `Failed to resolve: ...2.1.0` 但本地明明有 | 业务项目用了 `mavenLocal()` 但仓库顺序/缓存问题 | `gradle --refresh-dependencies` |
+| `Failed to resolve: ...2.2.0` 但本地明明有 | 业务项目用了 `mavenLocal()` 但仓库顺序/缓存问题 | `gradle --refresh-dependencies` |
 | Kotlin 编译报元数据版本不兼容 | 业务 Kotlin < 2.0，同时依赖了 `serialization-kotlin` | 升级 Kotlin 到 2.0，或仅依赖 Java 模块 |
-| KSP 报 “ksp version mismatch” | KSP 版本与 Kotlin 版本不匹配 | 使用 `2.1.0-1.0.21` |
+| KSP 报 “ksp version mismatch” | KSP 版本与 Kotlin 版本不匹配 | 使用 `2.2.0-1.0.21` |
 | record 反序列化失败 / 走了无参构造 | 运行在 JDK 8~15 | 需要 JDK 16+ 运行时 |
 | 构建源码时 `signing` 失败 | 本地没有 GPG | 用 `publishToMavenLocal`，或配置 GPG（发布才需要） |
 
@@ -368,7 +368,7 @@ import com.mingliqiye.document.format.json.JsonMapper
 
 fun main() {
     val mapper = JsonMapper()
-    val node: Node = mapper.parse("""{"ok":true,"version":"2.1.0"}""", Node::class.java)
+    val node: Node = mapper.parse("""{"ok":true,"version":"2.2.0"}""", Node::class.java)
     check(node.asObject()["ok"]?.asBoolean() == true)
     println("mingli-document ${node.asObject()["version"]?.asString()} is ready")
 }

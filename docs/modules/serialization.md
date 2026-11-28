@@ -5,7 +5,7 @@
 多态、构造器/Builder 实例化、合并、`$ref`、Token 与流式读写、安全限制等能力。
 
 - 坐标：`com.mingliqiye.document:serialization`
-- 当前版本：`2.1.0`
+- 当前版本：`2.2.0`
 - 包名：`com.mingliqiye.document.serialization`
 - 目标字节码：JDK 8
 - 公开依赖：`core`、`exception`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3`
@@ -386,8 +386,8 @@ println(mapper.fromNode(node, User::class.java).userName) // 小于
 ## 坐标与构建
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization:2.1.0")
-implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0")) // 或使用 BOM
+implementation("com.mingliqiye.document:serialization:2.2.0")
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0")) // 或使用 BOM
 ```
 
 ```bash

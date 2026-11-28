@@ -5,10 +5,10 @@
 转换器的 `DocumentModule`。
 
 - 坐标：`com.mingliqiye.document:codegen`
-- 当前版本：`2.1.0`
+- 当前版本：`2.2.0`
 - 包名：`com.mingliqiye.document.codegen`
 - 目标字节码：JDK 8
-- 实现依赖：`com.google.devtools.ksp:symbol-processing-api:2.1.0-1.0.21`
+- 实现依赖：`com.google.devtools.ksp:symbol-processing-api:2.2.0-1.0.21`
 - 使用方式：作为 KSP 处理器依赖（`ksp(...)`），**不进入运行时类路径**
 
 > 注意区分：`serialization` 模块内也有三个「代码生成」辅助类
@@ -33,7 +33,7 @@
 ## 依赖关系
 
 ```text
-KSP symbol-processing-api 2.1.0-1.0.21（implementation）
+KSP symbol-processing-api 2.2.0-1.0.21（implementation）
                  ▲
                  │
              codegen ──（仅 KSP 处理阶段使用）
@@ -54,8 +54,8 @@ KSP symbol-processing-api 2.1.0-1.0.21（implementation）
 
 | 组件 | 版本 | 说明 |
 |---|---|---|
-| Kotlin | 2.1.0 | 根 `build.gradle.kts` 固定 |
-| KSP | `2.1.0-1.0.21` | **必须与 Kotlin 版本匹配** |
+| Kotlin | 2.2.0 | 根 `build.gradle.kts` 固定 |
+| KSP | `2.2.0-1.0.21` | **必须与 Kotlin 版本匹配** |
 | JDK | 8+ | 与库一致 |
 | Gradle | 8.x | 使用 KSP Gradle 插件 |
 
@@ -66,8 +66,8 @@ KSP symbol-processing-api 2.1.0-1.0.21（implementation）
 ```kotlin
 // 根 build.gradle.kts
 plugins {
-    kotlin("jvm") version "2.1.0" apply false
-    id("com.google.devtools.ksp") version "2.1.0-1.0.21" apply false
+    kotlin("jvm") version "2.2.0" apply false
+    id("com.google.devtools.ksp") version "2.2.0-1.0.21" apply false
 }
 ```
 
@@ -91,9 +91,9 @@ dependencies {
 
 ```kotlin
 dependencies {
-    implementation("com.mingliqiye.document:annotation:2.1.0")
-    implementation("com.mingliqiye.document:serialization:2.1.0")
-    ksp("com.mingliqiye.document:codegen:2.1.0")
+    implementation("com.mingliqiye.document:annotation:2.2.0")
+    implementation("com.mingliqiye.document:serialization:2.2.0")
+    ksp("com.mingliqiye.document:codegen:2.2.0")
 }
 ```
 
@@ -363,11 +363,11 @@ gradle :codegen-test:test
 
 ```kotlin
 // 作为 KSP 处理器
-ksp("com.mingliqiye.document:codegen:2.1.0")
+ksp("com.mingliqiye.document:codegen:2.2.0")
 
 // 使用 BOM 统一版本
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0"))
     ksp("com.mingliqiye.document:codegen")
     api("com.mingliqiye.document:annotation")
     api("com.mingliqiye.document:serialization")

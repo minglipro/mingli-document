@@ -5,7 +5,7 @@
 多态类型、实例化方式、日期/数字格式等行为。
 
 - 坐标：`com.mingliqiye.document:annotation`
-- 当前版本：`2.1.0`
+- 当前版本：`2.2.0`
 - 包名：`com.mingliqiye.document.annotation`
 - 目标字节码：JDK 8
 - 保留策略：除 `@DocumentEnumCodec` 外全部为 `RUNTIME`

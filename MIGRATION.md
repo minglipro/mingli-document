@@ -1,4 +1,17 @@
-# 从 1.x 迁移到 2.1.0
+# 从 1.x 迁移到 2.2.0
+
+## 2.2.0
+
+2.2.0 在 2.1.0 基础上新增：
+
+```text
+jdbc 模块
+TOML 注释保留 API
+JPMS Automatic-Module-Name
+GraalVM Native Image 配置
+```
+
+API 向后兼容；Maven Central 发布暂缓。
 
 ## 2.1.0
 

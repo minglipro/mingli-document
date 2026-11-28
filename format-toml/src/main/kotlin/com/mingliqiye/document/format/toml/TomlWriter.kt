@@ -73,6 +73,26 @@ internal class TomlWriter {
         writeObjectFields(root)
     }
 
+    /**
+     * 把单个值写成 TOML 字面量文本（不输出键与换行）。
+     *
+     * 供保留注释的写出器复用，行为与 [write] 中的值写出完全一致。
+     */
+    fun formatValueText(node: Node): String {
+        val builder = StringBuilder()
+        val previous = out
+        out = builder
+        try {
+            writeValue(node)
+        } finally {
+            out = previous
+        }
+        return builder.toString()
+    }
+
+    /** 把 key 写成合法的 TOML key（裸 key 或双引号字符串）。 */
+    fun formatKeyText(key: String): String = formatKey(key)
+
     private fun writeObjectFields(node: ObjectNode) {
         for ((key, value) in node.asMap()) {
             if (value is NullNode) {

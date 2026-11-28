@@ -5,7 +5,7 @@
 这棵树，`serialization` 在这棵树与实体之间双向映射。
 
 - 坐标：`com.mingliqiye.document:core`
-- 当前版本：`2.1.0`
+- 当前版本：`2.2.0`
 - 包名：`com.mingliqiye.document.core`
 - 目标字节码：JDK 8
 - 公开依赖：`com.mingliqiye.document:exception`（`api`）
@@ -307,10 +307,10 @@ for (user in users) {
 
 ```kotlin
 // Gradle
-implementation("com.mingliqiye.document:core:2.1.0")
+implementation("com.mingliqiye.document:core:2.2.0")
 
 // 或使用 BOM
-implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0"))
 implementation("com.mingliqiye.document:core")
 ```
 

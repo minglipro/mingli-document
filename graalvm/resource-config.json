@@ -1,0 +1,11 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": "\\QMETA-INF/services/\\E.*"
+      }
+    ],
+    "excludes": []
+  },
+  "bundles": []
+}

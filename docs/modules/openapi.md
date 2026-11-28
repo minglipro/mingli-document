@@ -5,7 +5,7 @@
 模块内部 writer 生成的 OpenAPI JSON 文本。
 
 - 坐标：`com.mingliqiye.document:openapi`
-- 当前版本：`2.1.0`
+- 当前版本：`2.2.0`
 - 包名：`com.mingliqiye.document.openapi`
 - 目标字节码：JDK 8
 - 公开依赖：`schema`、`core`、`exception`
@@ -377,10 +377,10 @@ val config = OpenApiConfig.builder("Demo API", "1.0.0")
 ## 坐标与构建
 
 ```kotlin
-implementation("com.mingliqiye.document:openapi:2.1.0")
+implementation("com.mingliqiye.document:openapi:2.2.0")
 
 // 使用 BOM
-implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0"))
 implementation("com.mingliqiye.document:openapi")
 ```
 

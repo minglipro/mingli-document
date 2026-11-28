@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.0
+
+### 新增
+
+- `jdbc` 模块：ResultSet / PreparedStatement / 命名参数 / RowMapper
+- `schema-registry` 模块
+- `validation` 模块：Jakarta Bean Validation 集成
+- TOML 注释保留：`TomlCommentedDocument` / 注释读写
+- JPMS `Automatic-Module-Name`（全部可发布 jar）
+- GraalVM Native Image 配置模板与 JVM smoke
+
+### 说明
+
+- Maven Central 实际发布暂缓（额度原因）
+- GraalVM Native Image 构建需要 GraalVM JDK 17+
+
 ## 2.1.0
 
 ### 新增

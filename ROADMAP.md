@@ -44,7 +44,7 @@
 - [x] CBOR：可选 tag 保真
 - [x] Ion：timestamp / symbol / clob / blob 类型保真
 - [x] YAML：自定义 tag（跨文档 anchor 规范不支持）
-- [ ] TOML：注释保留
+- [x] TOML：注释保留（独立注释模型）
 - [x] CSV：嵌套结构 / 多级 Schema
 - [x] Smile：多消息流
 
@@ -86,7 +86,8 @@
 - [x] Schema Registry 适配
 - [x] OpenAPI 3.0 生成
 - [x] Bean Validation 集成
-- [ ] 数据库 / ORM 集成
+- [x] JDBC 数据库集成
+- [ ] JPA / ORM 集成
 
 ---
 
@@ -99,8 +100,9 @@
 - [x] Maven Central 发布配置
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
-- [ ] JPMS module-info
-- [ ] GraalVM Native Image
+- [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
+- [ ] JPMS `module-info`（Multi-Release jar，见 docs/guide/jpms.md）
+- [x] GraalVM Native Image 配置与 JVM smoke（native 构建需 GraalVM JDK17+）
 
 ---
 
@@ -236,3 +238,12 @@
 - 新增 schema-registry / validation 模块
 - P1 全部完成：流式 Bean、缓冲池/零拷贝、Schema Registry、Bean Validation
 - 文档站同步新增页面
+---
+
+## 2.2.0 交付状态
+
+- master / v2.2.0 发布
+- 私服 2.2.0 全模块发布
+- P2 完成：JDBC、TOML 注释保留、JPMS Automatic-Module-Name、GraalVM 配置
+- Maven Central 实际发布暂缓（额度原因）
+- 显式 module-info / native-image 构建仍需后续 CI 验证

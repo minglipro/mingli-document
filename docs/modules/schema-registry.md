@@ -3,7 +3,7 @@
 ## 坐标
 
 ```kotlin
-implementation("com.mingliqiye.document:schema-registry:2.1.0")
+implementation("com.mingliqiye.document:schema-registry:2.2.0")
 ```
 
 ## 能力

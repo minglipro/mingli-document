@@ -53,10 +53,10 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.1.0")
+    implementation("com.mingliqiye.document.format:json:2.2.0")
 
     // 需要 Kotlin data class 时
-    implementation("com.mingliqiye.document:serialization-kotlin:2.1.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:2.2.0")
 }
 ```
 
@@ -82,7 +82,7 @@ protobuf
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0"))
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")
@@ -99,13 +99,34 @@ Maven：
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>2.1.0</version>
+            <version>2.2.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
     </dependencies>
 </dependencyManagement>
 ```
+
+### JPMS 模块名
+
+所有可发布 jar 的 `META-INF/MANIFEST.MF` 都带有固定的 `Automatic-Module-Name`，在 JDK 9+
+上可以作为自动模块放到 module path 使用（JDK 8 会忽略该属性，使用方式不变）：
+
+| 模块 | Automatic-Module-Name |
+|---|---|
+| `annotation` / `exception` / `core` / `schema` / `serialization` … | `com.mingliqiye.document.<模块名>` |
+| `format-*` | `com.mingliqiye.document.format.<格式名>` |
+
+```java
+module my.app {
+    requires com.mingliqiye.document.serialization;
+    requires com.mingliqiye.document.format.json;
+}
+```
+
+当前字节码目标仍是 JDK 8，因此 jar 内**没有** `module-info.class`，先以自动模块名提供 JPMS
+支持；后续再以 Multi-Release jar 形式补充真正的 `module-info`。完整模块名清单、module path
+用法与限制见 [docs/guide/jpms.md](docs/guide/jpms.md)（文档站 `/guide/jpms.html`）。
 
 ## 快速开始
 
@@ -443,6 +464,7 @@ gradle :benchmarks:jmh
 | `schema` | 格式无关 Schema |
 | `schema-registry` | Schema Registry 适配 |
 | `validation` | Jakarta Bean Validation 集成 |
+| `jdbc` | JDBC / ResultSet / PreparedStatement 集成 |
 | `format-*` | 各格式 Mapper |
 | `bom` | Maven BOM：`mingli-document-bom` |
 | `benchmarks` | JMH 性能基准（不发布） |
@@ -456,6 +478,7 @@ gradle :benchmarks:jmh
 [schema](schema/README.md) ·
 [schema-registry](schema-registry/README.md) ·
 [validation](validation/README.md) ·
+[jdbc](jdbc/README.md) ·
 [serialization](serialization/README.md) ·
 [serialization-kotlin](serialization-kotlin/README.md) ·
 [codegen](codegen/README.md) ·
@@ -516,6 +539,8 @@ gradle publish
 ## 兼容性说明
 
 - 目标字节码：JDK 8
+- JPMS：所有可发布 jar 带 `Automatic-Module-Name`（自动模块），暂未提供 `module-info.class`，
+  因而不能用于 `jlink`；详见 [docs/guide/jpms.md](docs/guide/jpms.md)
 - 文本 Token Reader：YAML/XML/Properties/TOML/CSV 通过 `NodeTokenReader` 适配
 - CSV 只支持平坦表格
 - TOML 日期时间映射为字符串
@@ -533,7 +558,7 @@ Apache License, Version 2.0。
 ## 变更记录
 
 - [CHANGELOG.md](CHANGELOG.md)
-- [1.0.0 -> 2.1.0 迁移指南](MIGRATION.md)
+- [1.0.0 -> 2.2.0 迁移指南](MIGRATION.md)
 
 ## 贡献
 
