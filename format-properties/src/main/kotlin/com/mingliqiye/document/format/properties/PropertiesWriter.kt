@@ -21,13 +21,27 @@ internal class PropertiesWriter {
     private val lines = ArrayList<String>()
 
     fun write(node: Node): String {
+        val text = StringBuilder()
+        writeTo(node, text)
+        return text.toString()
+    }
+
+    /**
+     * 直接写出到 [Appendable]，不先构造完整 String。
+     */
+    fun writeTo(node: Node, out: Appendable) {
         lines.clear()
         when (node) {
             is ObjectNode -> flattenObject(node, null)
             is ArrayNode -> flattenArray(node, null)
             else -> throw PropertiesException("Properties root must be an object or array")
         }
-        return lines.joinToString("\n")
+        for ((index, line) in lines.withIndex()) {
+            if (index > 0) {
+                out.append('\n')
+            }
+            out.append(line)
+        }
     }
 
     private fun flattenObject(node: ObjectNode, parent: String?) {

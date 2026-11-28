@@ -43,6 +43,15 @@ internal class CsvWriter(
      * @throws CsvException 根节点类型错误、嵌套列冲突或单元格不是标量时抛出
      */
     fun write(node: Node): String {
+        val text = StringWriter()
+        write(node, text)
+        return text.toString()
+    }
+
+    /**
+     * 直接写出到字符流，不先构造完整 String。
+     */
+    fun write(node: Node, out: Appendable) {
         val rows = rowsOf(node)
         val flatRows = if (nestedMode == CsvNestedMode.COLUMNS) {
             rows.map { flattenRow(it) }
@@ -51,38 +60,36 @@ internal class CsvWriter(
         }
         val columns = if (flatRows == null) columnsOf(rows) else flatColumnsOf(flatRows)
         if (columns.isEmpty()) {
-            return ""
+            return
         }
-        val text = StringWriter()
         try {
             val format = CSVFormat.DEFAULT.builder()
                 .setDelimiter(delimiter)
                 .setRecordSeparator("\n")
                 .build()
-            CSVPrinter(text, format).use { printer ->
-                if (header) {
-                    printer.printRecord(columns)
-                }
-                for (index in rows.indices) {
-                    val values = ArrayList<String>(columns.size)
-                    if (flatRows == null) {
-                        for (column in columns) {
-                            values.add(cell(rows[index][column]))
-                        }
-                    } else {
-                        for (column in columns) {
-                            values.add(cell(flatRows[index][column]))
-                        }
-                    }
-                    printer.printRecord(values)
-                }
+            val printer = CSVPrinter(out, format)
+            if (header) {
+                printer.printRecord(columns)
             }
+            for (index in rows.indices) {
+                val values = ArrayList<String>(columns.size)
+                if (flatRows == null) {
+                    for (column in columns) {
+                        values.add(cell(rows[index][column]))
+                    }
+                } else {
+                    for (column in columns) {
+                        values.add(cell(flatRows[index][column]))
+                    }
+                }
+                printer.printRecord(values)
+            }
+            printer.flush()
         } catch (e: CsvException) {
             throw e
         } catch (e: Exception) {
             throw CsvException("Cannot write CSV: ${e.message}", e)
         }
-        return text.toString()
     }
 
     private fun rowsOf(node: Node): List<ObjectNode> = when (node) {

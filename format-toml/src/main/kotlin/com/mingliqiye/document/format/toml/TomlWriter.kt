@@ -50,7 +50,7 @@ private val longMax = BigInteger.valueOf(Long.MAX_VALUE)
  */
 internal class TomlWriter {
 
-    private val builder = StringBuilder()
+    private var out: Appendable = StringBuilder()
 
     /**
      * 写出节点并返回 TOML 文本。
@@ -58,11 +58,19 @@ internal class TomlWriter {
      * @throws TomlException 根不是对象、数字无法写成合法 TOML 或数组元素为 null 时抛出
      */
     fun write(node: Node): String {
+        val builder = StringBuilder()
+        writeTo(node, builder)
+        return builder.toString()
+    }
+
+    /**
+     * 直接写出到 [Appendable]，不先构造完整 String。
+     */
+    fun writeTo(node: Node, target: Appendable) {
         val root = node as? ObjectNode
             ?: throw TomlException("TOML root must be an object but was ${node.type}")
-        builder.setLength(0)
+        this.out = target
         writeObjectFields(root)
-        return builder.toString()
     }
 
     private fun writeObjectFields(node: ObjectNode) {
@@ -70,9 +78,9 @@ internal class TomlWriter {
             if (value is NullNode) {
                 continue
             }
-            builder.append(formatKey(key)).append(" = ")
+            out.append(formatKey(key)).append(" = ")
             writeValue(value)
-            builder.append('\n')
+            out.append('\n')
         }
     }
 
@@ -80,10 +88,10 @@ internal class TomlWriter {
         when (node) {
             is ObjectNode -> writeInlineTable(node)
             is ArrayNode -> writeInlineArray(node)
-            is StringNode -> builder.append(formatString(node.value))
-            is NumberNode -> builder.append(formatNumber(node))
-            is BooleanNode -> builder.append(node.value)
-            is BinaryNode -> builder.append(formatString(Base64.getEncoder().encodeToString(node.value)))
+            is StringNode -> out.append(formatString(node.value))
+            is NumberNode -> out.append(formatNumber(node))
+            is BooleanNode -> out.append(node.value.toString())
+            is BinaryNode -> out.append(formatString(Base64.getEncoder().encodeToString(node.value)))
             is NullNode -> throw TomlException("TOML does not support null values")
         }
     }
@@ -91,33 +99,33 @@ internal class TomlWriter {
     private fun writeInlineTable(node: ObjectNode) {
         val fields = node.asMap().entries.filter { it.value !is NullNode }
         if (fields.isEmpty()) {
-            builder.append("{}")
+            out.append("{}")
             return
         }
-        builder.append("{ ")
+        out.append("{ ")
         fields.forEachIndexed { index, entry ->
             if (index > 0) {
-                builder.append(", ")
+                out.append(", ")
             }
-            builder.append(formatKey(entry.key)).append(" = ")
+            out.append(formatKey(entry.key)).append(" = ")
             writeValue(entry.value)
         }
-        builder.append(" }")
+        out.append(" }")
     }
 
     private fun writeInlineArray(node: ArrayNode) {
         if (node.size == 0) {
-            builder.append("[]")
+            out.append("[]")
             return
         }
-        builder.append("[ ")
+        out.append("[ ")
         for (index in 0 until node.size) {
             if (index > 0) {
-                builder.append(", ")
+                out.append(", ")
             }
             writeValue(node[index])
         }
-        builder.append(" ]")
+        out.append(" ]")
     }
 
     private fun formatKey(key: String): String = if (bareKey.matches(key)) key else formatString(key)
