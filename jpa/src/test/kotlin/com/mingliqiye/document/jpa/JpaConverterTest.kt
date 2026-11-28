@@ -227,9 +227,9 @@ class JpaConverterTest {
     }
 
     @Test
-    fun rejectsConvertOnRelationshipAttribute() {
+    fun rejectsRelationshipConverterTypeMismatch() {
         val exception = assertFailsWith<JpaConfigException> { mapper.toNode(BadConvertedAssociationEntity()) }
-        assertTrue(exception.message!!.contains("relationship attribute"), "message was ${exception.message}")
+        assertTrue(exception.message!!.contains("relationship property"), "message was ${exception.message}")
     }
 
     @Test

@@ -163,6 +163,18 @@ val restored = mapper.fromNode(detachedNode, Employee::class.java)
   抛 `JpaMappingException`；关联值的声明类型是父类时同样按 discriminator 选择子类。
   Hibernate 感知映射的关联遍历会使用实例的**实际实体类型**，因此子类新增的关联也
   会被读取。
+- **关系属性上的显式 `@Convert`**：jpa 模块把整个关联值按基本属性写出/读入
+  （不展开关联）；Hibernate 感知映射识别这类属性并跳过关联遍历，不会用关联展开
+  覆盖转换后的标量值。数据库持久化仍需 `SessionFactory` 注册该转换器。
+- **`@MapKeyJoinColumn` 实体 Map 键**：文档键为键实体标识符文本（复用 jpa 模块
+  规则与复合主键文本格式）；写出时先把代理/懒加载键还原再取标识符；读入时由
+  `JpaDocumentMapper.entityKeyFromText` 重建 detach 键，再通过 `EntityManager.find`
+  解析为持久化上下文中的受管实例（找不到时回退 detach 实例）。复合主键
+  （`@EmbeddedId`/`@IdClass`）标识符对象由 `identifierValue` 构造后传给 `find`。
+- **关联引用解析（`fromNode`）**：只含标识符的关联节点除单基本主键外，现在支持
+  `@EmbeddedId`（例如 `{"key": {"orderNo": "A-1", "region": "EU"}}`）与 `@IdClass`
+  （例如 `{"shelf": 1, "slot": 2}`）复合主键；`EntityManager.find` 使用对应复合 id
+  对象解析为受管实例，找不到时退化为 detach 实例。单主键行为不变。
 
 ```kotlin
 val mapper = HibernateDocumentMapper(
@@ -273,6 +285,8 @@ gradle :jpa-hibernate:ktlintFormat :jpa-hibernate:test
 `@Embedded`、枚举、懒加载 `@ElementCollection`、关联深度、双向/自引用循环、
 `EntityManager` 与 `Session` 两种入口、`fromNode` 引用解析与 `findAsNode`/`getAsNode`，
 以及 `@Convert`/autoApply 转换器、Map 关联（`@MapKey`/`@MapKeyColumn`，与纯 jpa
-映射的键格式一致性）、`@Inheritance` 多态的写出与按 discriminator 读入。
+映射的键格式一致性）、`@Inheritance` 多态的写出与按 discriminator 读入，还有关系
+属性 `@Convert`、`@MapKeyJoinColumn` 实体 Map 键（受管实例解析）、`@EmbeddedId` /
+`@IdClass` 复合主键关联引用解析。
 
 文档：[根 README](../README.md) · [jpa](../jpa/README.md) · [core](../core/README.md) · [贡献指南](../CONTRIBUTING.md)

@@ -24,7 +24,8 @@ implementation("com.mingliqiye.document:jpa:2.4.0")
 ```text
 JpaDocumentMapper       实体 ⇄ ObjectNode（toNode / fromNode / toNodes / fromNodes）
                         额外查询 API：isEntity / entityName / tableName /
-                        discriminatorValue / discriminatorFieldName
+                        discriminatorValue / discriminatorFieldName；
+                        实体 Map 键文本：entityKeyText / entityKeyFromText
 JpaConfig               命名策略、transient、关联深度、null 策略、未知属性策略、访问策略、
                         autoApply 转换器注册、多态子类注册
 JpaConfigBuilder        配置构建器
@@ -165,19 +166,19 @@ val mapper = JpaDocumentMapper(config)
 | `@Transient` | 默认忽略；`includeTransient(true)` 时按普通值读写 |
 | `@Enumerated` | `STRING` 写名称、`ORDINAL` 写序号；JPA 默认 `ORDINAL` |
 | `@Temporal` | `DATE` / `TIME` / `TIMESTAMP`，详见下方类型映射 |
-| `@Convert` / `@Converts` | 属性级 `AttributeConverter`，文档中为**数据库列值**；null 也会传入转换器（见下文） |
+| `@Convert` / `@Converts` | 属性级 `AttributeConverter`，文档中为**数据库列值**；null 也会传入转换器；`attributeName` 支持 `@Embedded`/`@EmbeddedId` 内部点分路径；关系属性上的显式 `@Convert` 表示整个关联值按基本属性转换 |
 | autoApply `AttributeConverter` | 通过 `JpaConfig.builder().autoApplyConverter(...)` 注册后按属性类型匹配 |
 | `@OneToOne` / `@ManyToOne` | 单值关联，生成嵌套对象；读取 `optional` 决定 null 校验 |
 | `@OneToMany` / `@ManyToMany` | 集合关联生成数组；`Map<K, V>` 关联生成对象（见“Map 关联”） |
 | `@ElementCollection` | 标量/嵌入对象/Map 元素集合，生成数组或对象 |
 | `@MapKey` / `@MapKeyClass` / `@MapKeyColumn` | Map 关联的键语义/键类型；`@MapKeyEnumerated`、`@MapKeyTemporal` 控制键文本 |
+| `@MapKeyJoinColumn` / `@MapKeyJoinColumns` | Map 键为实体引用：文档键为键实体标识符文本（见“Map 关联”）；支持 `@EmbeddedId`/`@IdClass` 复合主键 |
 | `@Inheritance` / `@DiscriminatorColumn` / `@DiscriminatorValue` | discriminator 字段写出与多态读入（见“继承与多态”） |
 | `@Access` | 类级访问策略 |
 
 不支持（会被忽略或按普通值处理）：`@JoinColumn` 的列名语义（关联节点使用属性名）、
-`@AttributeOverride`、`@Convert(attributeName = ...)`（嵌入对象内部的属性覆盖写法；
-请直接标注在嵌入类的基本属性上）、`@MapKeyJoinColumn`（实体作为 Map 键）、
-`@OrderBy`、`@Version` 的乐观锁语义、`@Formula` 等。
+`@AttributeOverride`、`@OrderBy`、`@Version` 的乐观锁语义、`@Formula`、
+`@Convert(attributeName = ...)` 指向关联/嵌入对象内部非基本属性等写法。
 
 ## 类型映射
 
@@ -291,7 +292,8 @@ class Team {
   - 枚举默认 `ORDINAL`（`@MapKeyEnumerated` 可改为 `STRING`）；
   - `Date`/`Calendar` 按 `@MapKeyTemporal`（未标注按目标类型的自然精度），
     `java.time` 类型为 ISO-8601，`UUID` 为 `toString()`；
-  - `byte[]`、嵌入对象和实体作为 Map 键不支持（抛 `JpaConfigException`）。
+  - `byte[]`、嵌入对象作为 Map 键不支持（抛 `JpaConfigException`）；
+  - 实体作为 Map 键使用 `@MapKeyJoinColumn`/`@MapKeyJoinColumns`（见下文）。
 - 键类型解析顺序：`Map<K, V>` 的泛型 `K` → `@MapKeyClass` → `@MapKey`（且泛型键为
   `Object`/`Any`）时按目标实体的 `@Id` 或 `@MapKey(name)` 指定的属性类型；
   仍无法确定时抛 `JpaConfigException`。
@@ -304,6 +306,47 @@ class Team {
   不消耗关联深度。
 - `@MapKey(name = "...")` 指定的目标实体属性仍按普通属性写在值对象中；读入时
   **不会**根据 Map 键回填值对象里缺失的该属性（文档值对象自身内容优先）。
+
+### 实体作为 Map 键（@MapKeyJoinColumn）
+
+`Map<K, V>` 的 `K` 是实体时（JPA 用 `@MapKeyJoinColumn`/`@MapKeyJoinColumns` 映射
+连接列），文档字段名是**键实体的标识符文本**，读入时按文本重建 detach 键实体：
+
+```kotlin
+@Entity
+class Workload {
+    @Id
+    var id: Long? = null
+
+    // 单主键实体键：文档键 "5"、"6" 即成员主键
+    @ManyToMany
+    @MapKeyJoinColumn(name = "member_id")
+    var projectByMember: MutableMap<Member, Project> = mutableMapOf()
+
+    // @EmbeddedId 复合主键实体键：文档键 "orderNo=A-1&region=EU"
+    @ManyToMany
+    @MapKeyJoinColumns(
+        value = [
+            MapKeyJoinColumn(name = "order_no", referencedColumnName = "order_no"),
+            MapKeyJoinColumn(name = "region_code", referencedColumnName = "region_code"),
+        ],
+    )
+    var projectByOrder: MutableMap<Order, Project> = mutableMapOf()
+}
+```
+
+- 单基本主键：字段名就是该主键值的 `JpaMapKeys` 文本（String 原样、数字精确十进制、
+  UUID/日期时间 ISO 等）；
+- `@EmbeddedId`/`@IdClass` 复合主键：字段名为 `属性名=转义值` 以 `&` 连接的规范文本，
+  按主键属性的声明顺序输出；值中的 `%`、`&`、`=` 分别转义为 `%25`、`%26`、`%3D`；
+- 读入时只还原标识符属性（detach 键实体），不读取其他字段；复合键组件必须齐全，
+  未知/重复/缺失组件或键文本无法解析时抛 `JpaMappingException`；
+- 读入后的键按键文本的**规范形式**查重（例如 `"01"` 与 `"1"` 都规范为 `"1"` 时抛
+  键冲突）；
+- 键实体类型必须有 `@Id`/`@EmbeddedId`、可实例化的无参构造器，主键属性可写；
+  键实体为抽象类/接口或复合主键组件不是基本属性时抛 `JpaConfigException`；
+- 实体键文本互转也作为公共 API 暴露：`mapper.entityKeyText(keyEntity, keyType)` /
+  `mapper.entityKeyFromText(text, keyType)`（供 `jpa-hibernate` 等扩展复用）。
 
 ## 属性转换器（@Convert / autoApply）
 
@@ -361,8 +404,123 @@ val mapper = JpaDocumentMapper(
 - 转换器运行时抛出的异常包装为 `JpaMappingException`（cause 保留）；
   转换器返回 null 时写出 `NullNode`；null 值在两个方向都会传入转换器；
 - 数据库类型 Y 上的 `@Enumerated`/`@Temporal` 仍生效（例如转换器输出枚举/日期）。
-- 不支持 `@Convert(attributeName = ...)`（嵌入对象内部属性覆盖）与关系属性上的
-  `@Convert`：请把转换器标注在嵌入类的基本属性上。
+
+### 嵌套属性路径：@Convert(attributeName = "...")
+
+`@Embedded`/`@EmbeddedId` 属性内部的**基本属性**可用点分路径覆盖转换器：
+
+```kotlin
+@Embeddable
+class Address {
+    var city: String? = null
+
+    var zipCode: String? = null
+}
+
+@Entity
+class Customer {
+    @Id
+    var id: Long? = null
+
+    @Embedded
+    @Convert(attributeName = "zipCode", converter = ZipConverter::class)   // 相对该 @Embedded
+    var address: Address? = null
+}
+
+@Entity
+@Convert(attributeName = "address.city", converter = CityConverter::class)  // 类级：相对实体根
+class ClassLevelCustomer {
+    @Id
+    var id: Long? = null
+
+    @Embedded
+    var address: Address? = null
+}
+```
+
+- 路径每段是 Java/Kotlin **属性名**（不是列名/节点名）；中间段必须是 `@Embedded`，
+  最后一段必须是基本属性（不能是关联/嵌入对象本身）；
+- 支持多级点分路径，例如 `@Convert(attributeName = "geo.lat", ...)` 标注在 `@Embedded`
+  属性上，或类级 `@Convert(attributeName = "address.geo.lat", ...)`；
+- 优先级（高 → 低）：路径覆盖 > 嵌入类属性自身的 `@Convert` > autoApply；
+  外层路径覆盖优先于嵌入类自身的类级/属性级转换器声明；
+- `@Convert(attributeName = "...", disableConversion = true)` 可对指定路径关闭转换
+  （包括嵌入类属性自身的转换器与 autoApply）；
+- null 语义与普通转换器一致：转换器收到 null、可返回 null（写出 `NullNode`）；
+- 失效路径/中间段不是 `@Embedded`/末段不是基本属性/转换器类型与目标属性不匹配
+  都会在元数据解析时抛 `JpaConfigException`；
+- 暂不支持指向 `@ElementCollection` 元素内部、关联对象内部的 `attributeName` 路径
+  （会抛 `JpaConfigException`；请把转换器标注在嵌入类/元素类的基本属性上）。
+
+### 关系属性上的 @Convert
+
+显式 `@Convert` 标注在关系属性（`@ManyToOne`/`@OneToOne`/`@OneToMany`/`@ManyToMany`）
+上时，语义是：**整个关联值按基本属性转换，不展开关联**（显式转换优先于关联展开）：
+
+```kotlin
+class EmployeeRefConverter : AttributeConverter<Employee, Long> {
+    override fun convertToDatabaseColumn(attribute: Employee?): Long? = attribute?.id
+
+    override fun convertToEntityAttribute(dbData: Long?): Employee? =
+        dbData?.let { Employee().apply { id = it } }
+}
+
+@Entity
+class Review {
+    @Id
+    var id: Long? = null
+
+    @ManyToOne
+    @Convert(converter = EmployeeRefConverter::class)
+    var reviewer: Employee? = null        // 文档节点：{"reviewer": 5}（数字，而不是嵌套对象）
+}
+```
+
+- 写出时 `convertToDatabaseColumn` 的结果按数据库类型写为标量节点；读入时反向转换后
+  赋给关联属性（通常是只带标识符的 detach 引用，由调用方按需加载）；
+- 转换器泛型 `AttributeConverter<关联属性声明类型, Y>` 必须与属性声明类型一致，否则
+  抛 `JpaConfigException`；
+- 关系转换不受 `associationDepth` 限制（它不展开关联）；null 关联同样会传入转换器；
+- autoApply 不作用于关系属性（JPA 规范），只认显式 `@Convert`；
+- 集合/Map 关系属性上的显式 `@Convert` 同样把整个集合/Map 值作为一个基本值转换
+  （转换器的实体属性类型需与集合/Map 的声明类型一致），不会逐个元素展开；
+- 关系转换**只影响文档树表示**：JPA 规范不转换关系属性，数据库侧仍由 JPA 提供者按
+  普通关联/外键映射处理，因此持久化时转换器的数据库类型需与关联列兼容。
+
+## 为什么不做 classpath 扫描
+
+**本模块不做任何 classpath/package 扫描**：autoApply 转换器与多态子类始终通过
+`JpaConfig.builder().autoApplyConverter(...)` / `.entityType(...)` 显式注册。这是
+刻意选择，原因：
+
+1. 零第三方依赖 + JDK 8 主字节码：`ClassLoader.getResources("pkg")` 只返回
+   目录/jar 根 URL，需要自行处理目录列举、jar 条目、`jar:`/`file:` 等 URL 协议、
+   fat jar / 自定义 ClassLoader；JDK 8 没有模块系统 API 可枚举模块内类。
+2. JPMS：本模块有显式 `module-info`；module path 上 `ClassLoader#getResources`
+   不保证能看到命名模块内的类，需要 JDK 9+ 的 `ModuleReader`，与 JDK 8 兼容目标冲突。
+3. 确定性与成本：扫描需要额外定义类初始化副作用、重复类、fail-fast/容错、启动耗时
+   等策略；而 Hibernate/JPA 提供者在引导期已有自己的 `@Converter(autoApply=true)`
+   / `@Entity` 发现机制，本模块再扫描一遍容易与提供者不一致。
+4. 线程安全/关闭语义：注册配置当前是构造期不可变快照；若引入延迟扫描，需要处理
+   类可见性、URLClassLoader 关闭后缓存失效、并发注册等额外状态。
+
+推荐在应用/框架侧完成扫描后显式注册（本模块无需新增依赖）：
+
+```kotlin
+// 示例：用 Spring 的类路径扫描收集转换器，再交给 JpaConfig
+val scanner = ClassPathScanningCandidateComponentProvider(false)
+scanner.addIncludeFilter(AssignableTypeFilter(AttributeConverter::class.java))
+val converters = scanner.findCandidateComponents("com.example")
+    .mapNotNull { it.beanClassName }
+    .map { Class.forName(it) }
+val config = JpaConfig.builder()
+    .apply { converters.forEach { autoApplyConverter(it) } }
+    .build()
+```
+
+ClassGraph、Reflections 或框架自己的扫描结果同理；扫描职责由调用方承担，本模块
+保持确定性与 JDK 8/JPMS 兼容。持久化到数据库时，Hibernate `SessionFactory` 仍需
+注册同一批转换器（`MetadataBuilder.applyAttributeConverter`），扫描无法替代持久化提供方的注册。
 
 ## 继承与多态（@Inheritance）
 
@@ -475,12 +633,14 @@ try {
 
 - 单向/双向关联不会自动保持一致，也不做级联加载：写出的是当前内存中的对象图；
 - 不处理数据库表结构/级联/懒加载等数据库细节，只映射 JPA 注解描述的 Java 属性值；
-- 多态读入只识别 `JpaConfig.entityTypes` 中注册的子类（不做 classpath 扫描）；
-  discriminator 重复值/INTEGER 缺省值会抛配置异常；
-- autoApply 转换器必须显式注册；`@Convert(attributeName = ...)`、关系属性上的
-  `@Convert`、`@MapKeyJoinColumn`（实体作为 Map 键）不支持；
-- Map 键只支持基本类型，键文本冲突/无法解析会抛异常；`@MapKey(name)` 指定属性
-  不会根据键回填；
+- autoApply 转换器、多态子类必须显式注册（模块不做 classpath 扫描，见“为什么不做
+  classpath 扫描”）；discriminator 重复值/INTEGER 缺省值会抛配置异常；
+- `@Convert(attributeName = ...)` 只支持 `@Embedded`/`@EmbeddedId` 内部基本属性的
+  点分路径；不支持指向关联对象/`@ElementCollection` 元素内部的路径（抛
+  `JpaConfigException`）；关系属性上的显式 `@Convert` 表示整个关联值按基本属性转换；
+- Map 键支持基本类型与 `@MapKeyJoinColumn` 实体键；键文本冲突/无法解析会抛异常；
+  `@MapKey(name)` 指定属性不会根据键回填；实体键类型必须是可实例化的具体实体，
+  复合主键组件必须是基本属性；
 - `@ElementCollection` 元素类型为标量或普通对象；
 - 不支持 `@Temporal` 之外的日期格式化（如 `@JsonFormat` 等），需要自定义格式请先用
   serialization 模块的 `DocumentDateTimeFormat` 或先转换成字符串；

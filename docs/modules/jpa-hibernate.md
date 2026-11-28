@@ -81,9 +81,13 @@ val mapper = HibernateDocumentMapper(
 ```
 
 - 非关联属性（含转换器）由 jpa 模块按元数据映射；
-- `MapAttribute` 关联展开为对象节点，键格式与 `JpaMapKeys` 一致；
+- `MapAttribute` 关联展开为对象节点，键格式与 `JpaMapKeys` 一致；实体 Map 键
+  （`@MapKeyJoinColumn`）写出标识符文本，读入经 `EntityManager.find` 解析为受管实例；
+- 关系属性上的显式 `@Convert` 按基本属性写/读，Hibernate 关联遍历自动跳过；
 - 写出按实际实体类型写 discriminator；读入按 discriminator 实例化并在关联遍历中
   使用实例的实际实体类型；
+- `fromNode` 关联引用节点支持单主键、`@EmbeddedId` 与 `@IdClass` 复合主键
+  （`EntityManager.find` 使用复合 id 对象）；
 - 持久化到数据库时 Hibernate `SessionFactory` 也需注册同一转换器。
 
 ## 限制
@@ -91,7 +95,8 @@ val mapper = HibernateDocumentMapper(
 ```text
 不管理 Session / EntityManager / 事务 / 持久化
 不识别非 Hibernate 提供者代理
-复合主键不做引用解析
+复合主键关联引用已支持（@EmbeddedId / @IdClass）
+实体 Map 键类型须可实例化、复合主键组件须为基本属性
 autoApply 转换器与多态子类需通过 JpaConfig 注册
 字节码增强的单属性懒加载可能无法强制初始化
 ```

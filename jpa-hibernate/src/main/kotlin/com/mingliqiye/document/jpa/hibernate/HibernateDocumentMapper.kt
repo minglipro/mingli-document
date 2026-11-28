@@ -11,11 +11,16 @@ import com.mingliqiye.document.jpa.hibernate.exception.HibernateJpaMappingExcept
 import com.mingliqiye.document.jpa.hibernate.internal.HibernateRuntime
 import com.mingliqiye.document.jpa.hibernate.internal.associationTargetClass
 import com.mingliqiye.document.jpa.hibernate.internal.columnNameOf
+import com.mingliqiye.document.jpa.hibernate.internal.hasExplicitConvertedAssociation
+import com.mingliqiye.document.jpa.hibernate.internal.idClassAttributesOf
+import com.mingliqiye.document.jpa.hibernate.internal.identifierValue
+import com.mingliqiye.document.jpa.hibernate.internal.mapKeyEntityClass
 import com.mingliqiye.document.jpa.hibernate.internal.mapKeyFieldName
 import com.mingliqiye.document.jpa.hibernate.internal.mapKeyValue
 import com.mingliqiye.document.jpa.hibernate.internal.newCollectionInstance
 import com.mingliqiye.document.jpa.hibernate.internal.newMapInstance
 import com.mingliqiye.document.jpa.hibernate.internal.readAttributeValue
+import com.mingliqiye.document.jpa.hibernate.internal.singleIdAttribute
 import com.mingliqiye.document.jpa.hibernate.internal.writeAttributeValue
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceException
@@ -242,7 +247,8 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
             fields.putAll(baseMapper.toNode(entity).asMap())
             if (depth < jpaConfig.associationDepth) {
                 for (attribute in entityType.attributes) {
-                    if (!attribute.isAssociation) {
+                    if (!attribute.isAssociation || hasExplicitConvertedAssociation(attribute)) {
+                        // 显式 @Convert 的关系属性已由 jpa 元数据映射为基本值。
                         continue
                     }
                     writeAssociation(entity, attribute, runtime, depth, path, stack, fields)
@@ -329,7 +335,32 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
         path: String,
         stack: IdentityHashMap<Any, String>,
     ): ObjectNode {
+        val keyEntityClass = mapKeyEntityClass(attribute)
         val fields = LinkedHashMap<String, Node>(value.size)
+        if (keyEntityClass != null) {
+            for ((key, element) in value) {
+                if (key == null) {
+                    throw HibernateJpaMappingException("Map key must not be null at $path")
+                }
+                // 懒加载代理键先还原，实体键文本按标识符生成（与 jpa 模块规则一致）。
+                val resolvedKey = runtime.resolveEntity(key, "$path.<key>")
+                val keyText = baseMapper.entityKeyText(resolvedKey, keyEntityClass)
+                if (fields.containsKey(keyText)) {
+                    throw HibernateJpaMappingException(
+                        "Map key collision at $path: multiple keys of '${attribute.name}' " +
+                            "are serialized as '$keyText'",
+                    )
+                }
+                if (element == null) {
+                    fields[keyText] = NullNode.INSTANCE
+                } else {
+                    writeAssociationEntity(element, runtime, childDepth, "$path[$keyText]", stack)?.let {
+                        fields[keyText] = it
+                    }
+                }
+            }
+            return ObjectNode.from(fields)
+        }
         for ((key, element) in value) {
             val keyText = mapKeyFieldName(attribute, key, path)
             if (fields.containsKey(keyText)) {
@@ -400,7 +431,8 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
         val actualEntityType = runtime.entityTypeOf(instance.javaClass)
         if (depth < jpaConfig.associationDepth) {
             for (attribute in actualEntityType.attributes) {
-                if (!attribute.isAssociation) {
+                if (!attribute.isAssociation || hasExplicitConvertedAssociation(attribute)) {
+                    // 显式 @Convert 的关系属性已由 jpa 元数据映射为基本值。
                     continue
                 }
                 readAssociation(objectNode, attribute, instance, runtime, depth, path)
@@ -478,6 +510,28 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
                 "Expected object node for Map association '${attribute.name}' at $path but was ${node.type}",
             )
         val map = newMapInstance(attribute.javaType, path)
+        val keyEntityClass = mapKeyEntityClass(attribute)
+        if (keyEntityClass != null) {
+            val canonicalKeys = HashSet<String>()
+            for ((keyText, child) in objectNode.asMap()) {
+                val detachKey = baseMapper.entityKeyFromText(keyText, keyEntityClass)
+                val canonical = baseMapper.entityKeyText(detachKey, keyEntityClass)
+                if (!canonicalKeys.add(canonical)) {
+                    throw HibernateJpaMappingException(
+                        "Map key collision at $path: multiple document keys of '${attribute.name}' " +
+                            "resolve to the same key",
+                    )
+                }
+                val key = resolveEntityKeyReference(detachKey, keyEntityClass, runtime, "$path.$keyText")
+                val elementPath = "$path[$keyText]"
+                map[key] = if (child.isNull) {
+                    null
+                } else {
+                    readAssociationTarget(child, targetType, runtime, depth, elementPath)
+                }
+            }
+            return map
+        }
         for ((keyText, child) in objectNode.asMap()) {
             val key = mapKeyValue(attribute, keyText, "$path.$keyText")
             if (map.containsKey(key)) {
@@ -495,6 +549,33 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
         return map
     }
 
+    /**
+     * 实体 Map 键（`@MapKeyJoinColumn`）：detach 键实体 → 持久化上下文中的受管实例。
+     *
+     * 找不到时回退为只带标识符的 detach 实例（与关联引用解析语义一致）。
+     */
+    private fun resolveEntityKeyReference(
+        detachKey: Any,
+        keyType: Class<*>,
+        runtime: HibernateRuntime,
+        path: String,
+    ): Any {
+        val entityType = runtime.entityTypeOf(keyType)
+        val id = identifierValue(detachKey, entityType, path) ?: return detachKey
+        return try {
+            runtime.entityManager.find(keyType, id) ?: detachKey
+        } catch (e: PersistenceException) {
+            throw HibernateJpaMappingException("Cannot resolve Map key reference at $path", e)
+        } catch (e: IllegalArgumentException) {
+            throw HibernateJpaMappingException("Cannot resolve Map key reference at $path", e)
+        } catch (e: IllegalStateException) {
+            throw HibernateJpaMappingException(
+                "Cannot resolve Map key reference at $path: the EntityManager is closed",
+                e,
+            )
+        }
+    }
+
     private fun readAssociationTarget(
         node: Node,
         targetType: Class<*>,
@@ -506,6 +587,11 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
     /**
      * 尝试把只含标识符的关联节点解析为持久化上下文中的受管实例。
      *
+     * 支持：
+     * - 单基本类型主键：`{"id": 5}`（行为与旧版本一致）；
+     * - `@EmbeddedId` 复合主键：`{"key": {"orderNo": "A-1", "region": "EU"}}`；
+     * - `@IdClass` 复合主键：`{"idA": 1, "idB": 2}`（节点键均为 id 属性别名）。
+     *
      * @return 解析结果；节点不是标识符引用时返回 `null`
      */
     private fun referenceTarget(
@@ -515,16 +601,12 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
         path: String,
     ): Any? {
         val objectNode = node.asObjectOrNull() ?: return null
-        if (objectNode.size != 1) {
-            return null
-        }
         val entityMetadata = runtime.entityTypeOf(targetType)
-        val idAttribute = singleBasicId(entityMetadata) ?: return null
-        if (objectNode.keys.first() !in idAliases(idAttribute)) {
+        if (!isReferenceNode(objectNode, entityMetadata)) {
             return null
         }
         val detached = baseMapper.fromNode(objectNode, targetType)
-        val id = readAttributeValue(detached, idAttribute, path) ?: return detached
+        val id = identifierValue(detached, entityMetadata, path) ?: return detached
         return try {
             runtime.entityManager.find(targetType, id) ?: detached
         } catch (e: PersistenceException) {
@@ -539,21 +621,27 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
         }
     }
 
-    private fun singleBasicId(entityType: EntityType<*>): SingularAttribute<*, *>? {
-        if (!entityType.hasSingleIdAttribute()) {
-            return null
+    /**
+     * 判断对象节点是否只由目标实体的标识符属性组成（单主键/`@EmbeddedId`/`@IdClass`）。
+     */
+    private fun isReferenceNode(objectNode: ObjectNode, entityType: EntityType<*>): Boolean {
+        val singleId = singleIdAttribute(entityType)
+        if (singleId != null) {
+            return objectNode.size == 1 && objectNode.keys.first() in idAliases(singleId)
         }
-        @Suppress("UNCHECKED_CAST")
-        val idClass = entityType.idType.javaType as Class<Any>
-        val attribute = try {
-            entityType.getId(idClass)
-        } catch (_: IllegalArgumentException) {
-            return null
+        val idClassAttributes = idClassAttributesOf(entityType)
+        if (idClassAttributes.isEmpty()) {
+            return false
         }
-        if (attribute.persistentAttributeType != Attribute.PersistentAttributeType.BASIC) {
-            return null
+        val aliasGroups = idClassAttributes.map { idAliases(it) }
+        val keys = objectNode.keys
+        if (keys.isEmpty()) {
+            return false
         }
-        return attribute
+        if (keys.any { key -> aliasGroups.none { key in it } }) {
+            return false
+        }
+        return aliasGroups.all { aliases -> keys.any { it in aliases } }
     }
 
     private fun idAliases(attribute: SingularAttribute<*, *>): Set<String> {

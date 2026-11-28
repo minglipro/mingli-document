@@ -8,7 +8,7 @@
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
-| `2.5.0`（未发布） | record 支持独立模块 | `record-support` 模块、`JavaRecordSupport` SPI / `JavaRecordComponentInfo`、record 测试迁移到 JDK 17 |
+| `2.5.0`（未发布） | record 支持独立模块、JPA 剩余映射细节 | `record-support` 模块、`JavaRecordSupport` SPI、record 测试迁移、JPA `@Convert(attributeName)`/关系转换/实体 Map 键、Hibernate 复合主键引用解析 |
 | `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info、对象映射便捷 API |
 | `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
 | `2.2.0` | 数据库与扩展 | `jdbc`、`schema-registry`、`validation`、TOML 注释保留、JPMS 自动模块名 |
@@ -37,6 +37,17 @@
   （`ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`
 - `format-json` 的 `Double` 写出改用 JDK `Double.toString`，移除 jackson-core 内部包依赖
+- `jpa`：`@Convert(attributeName = "...")` 支持 `@Embedded`/`@EmbeddedId` 内部基本
+  属性的点分路径覆盖（类级/属性级、`disableConversion`、外层路径优先于嵌入类自身
+  转换器与 autoApply；失效路径/类型不匹配抛 `JpaConfigException`）
+- `jpa`：关系属性（`@ManyToOne`/`@OneToOne`/`@OneToMany`/`@ManyToMany`）上的显式
+  `@Convert`：整个关联值按基本属性写/读（不展开关联、不受 `associationDepth` 限制）
+- `jpa`：`@MapKeyJoinColumn`/`@MapKeyJoinColumns` 实体 Map 键（单主键与
+  `@EmbeddedId`/`@IdClass` 复合主键标识符文本、转义与键冲突检测），公共 API
+  `JpaDocumentMapper.entityKeyText` / `entityKeyFromText`
+- `jpa-hibernate`：关系 `@Convert`、实体 Map 键解析为受管实例；`fromNode` 关联引用
+  解析支持 `@EmbeddedId`/`@IdClass` 复合主键
+- 评估结论：`jpa` 不引入 classpath/package 扫描，autoApply 转换器与多态子类保持显式注册
 
 ### 变更
 
@@ -46,6 +57,7 @@
 - `serialization` 的 `module-info` 增加
   `uses com.mingliqiye.document.serialization.JavaRecordSupport`
 - GraalVM 运行期初始化参数改为 `JavaRecordSupportLoader`
+- `jpa` 元数据缓存改为可重入同步缓存，支持构建期嵌套解析（嵌入类/实体 Map 键）
 
 ### 移除
 

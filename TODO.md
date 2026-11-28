@@ -26,14 +26,18 @@
 - 26 个显式 MR-JAR module-info：补齐 `serialization-kotlin` / `record-support` / `codegen` /
   `codegen-test` / `openapi`；`record-support` 提供 `provides JavaRecordSupport`，
   `codegen` 提供 KSP `provides SymbolProcessorProvider`
+- JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
+  `@MapKeyJoinColumn` 实体 Map 键（含复合主键标识符文本）、jpa-hibernate
+  `fromNode` 关联引用解析支持 `@EmbeddedId`/`@IdClass` 复合主键
 
 ## 已放弃
 
 - Gitea CI
 - Maven Central 发布
+- classpath 扫描（autoApply 转换器 / 多态子类自动发现）：保持显式注册，原因见
+  `jpa/README.md` 的“为什么不做 classpath 扫描”
 
 ## 保留待办
 
-- [ ] Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn`
 - [ ] `jlink` 支持
 - [ ] native-image 构建接入 CI

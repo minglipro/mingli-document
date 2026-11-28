@@ -29,6 +29,13 @@ internal object HibernateTestDb {
         HibernateTestAnimal::class.java,
         HibernateTestCat::class.java,
         HibernateTestDog::class.java,
+        HibernateTestConvertedLink::class.java,
+        HibernateTestProject::class.java,
+        HibernateTestWorkload::class.java,
+        HibernateTestCompositeOrder::class.java,
+        HibernateTestCompositeOrderLink::class.java,
+        HibernateTestIdClassBook::class.java,
+        HibernateTestBookLink::class.java,
     )
 
     val sessionFactory: SessionFactory by lazy {
@@ -49,6 +56,7 @@ internal object HibernateTestDb {
         val metadataBuilder = sources.metadataBuilder
         metadataBuilder.applyAttributeConverter(HibernateTestMoneyConverter())
         metadataBuilder.applyAttributeConverter(HibernateTestEmailConverter(), true)
+        metadataBuilder.applyAttributeConverter(HibernateTestEmployeeRefConverter())
         metadataBuilder.build().buildSessionFactory()
     }
 

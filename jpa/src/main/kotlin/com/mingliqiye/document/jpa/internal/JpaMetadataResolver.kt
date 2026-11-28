@@ -25,6 +25,8 @@ import jakarta.persistence.MapKey
 import jakarta.persistence.MapKeyClass
 import jakarta.persistence.MapKeyColumn
 import jakarta.persistence.MapKeyEnumerated
+import jakarta.persistence.MapKeyJoinColumn
+import jakarta.persistence.MapKeyJoinColumns
 import jakarta.persistence.MapKeyTemporal
 import jakarta.persistence.MappedSuperclass
 import jakarta.persistence.OneToMany
@@ -72,9 +74,21 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
     /**
      * 解析并缓存指定类的映射元数据。
      *
+     * 元数据构建期间会递归解析嵌入类/Map 键实体类，因此这里使用可重入的
+     * `synchronized` 两段式缓存，而不是 `ConcurrentHashMap.computeIfAbsent`
+     * （后者在嵌套解析不同 key 且哈希桶冲突时会抛 `Recursive update`）。
+     *
      * @param type 实体类或嵌入类；Hibernate 代理类会解析到其 `@Entity` 父类
      */
-    fun resolve(type: Class<*>): JpaEntityMetadata = cache.computeIfAbsent(type) { build(it) }
+    fun resolve(type: Class<*>): JpaEntityMetadata {
+        cache[type]?.let { return it }
+        synchronized(cache) {
+            cache[type]?.let { return it }
+            val metadata = build(type)
+            cache[type] = metadata
+            return metadata
+        }
+    }
 
     /**
      * 在类层次中查找 `@Entity` 注解所在的类。
@@ -152,7 +166,157 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
             properties = properties,
             aliases = aliases,
             inheritance = inheritanceOf(entityClass),
+            convertOverrides = buildConvertOverrides(entityClass, properties),
+            identifier = buildIdentifier(entityClass, properties),
         )
+    }
+
+    // ------------------------------------------------------------------
+    // @Convert(attributeName = ...) 覆盖规则
+    // ------------------------------------------------------------------
+
+    /**
+     * 构建当前类的嵌套属性路径转换器覆盖表（键为相对本类的点分属性路径）。
+     *
+     * 来源与优先级（后者覆盖前者）：
+     * 1. 类层次上（父类在前）类级 `@Convert(attributeName = "...")`；
+     * 2. 属性级 `@Convert(attributeName = "...")`（相对该属性，做前缀展开）。
+     */
+    private fun buildConvertOverrides(
+        entityClass: Class<*>,
+        properties: List<JpaProperty>,
+    ): Map<String, JpaConvertOverride> {
+        val overrides = LinkedHashMap<String, JpaConvertOverride>()
+        for (klass in hierarchy(entityClass)) {
+            for (annotation in klass.getAnnotationsByType(Convert::class.java)) {
+                val owner = "${klass.name} (class-level @Convert)"
+                val path = normalizeConvertPath(annotation.attributeName, owner)
+                val override = convertOverrideOf(annotation, owner)
+                if (overrides.put(path, override) != null) {
+                    throw JpaConfigException(
+                        "Duplicate @Convert(attributeName = '$path') in ${entityClass.name}",
+                    )
+                }
+            }
+        }
+        for (property in properties) {
+            property.nestedConvertOverrides.forEach { (relativePath, override) ->
+                val path = normalizeConvertPath("${property.name}.$relativePath", property.name)
+                overrides[path] = override
+            }
+        }
+        validateConvertOverrides(entityClass, properties, overrides)
+        return overrides
+    }
+
+    private fun normalizeConvertPath(attributeName: String, owner: String): String {
+        val trimmed = attributeName.trim()
+        if (trimmed.isEmpty()) {
+            throw JpaConfigException("@Convert on $owner must specify attributeName")
+        }
+        val segments = trimmed.split('.').map { it.trim() }
+        if (segments.any { it.isEmpty() }) {
+            throw JpaConfigException("@Convert(attributeName = '$attributeName') on $owner contains an empty path segment")
+        }
+        return segments.joinToString(".")
+    }
+
+    private fun convertOverrideOf(annotation: Convert, owner: String): JpaConvertOverride {
+        if (annotation.disableConversion) {
+            if (annotation.converter.java != java.lang.Void.TYPE) {
+                throw JpaConfigException(
+                    "@Convert on $owner must not specify converter together with disableConversion = true",
+                )
+            }
+            return JpaConvertOverride(null)
+        }
+        if (annotation.converter.java == java.lang.Void.TYPE) {
+            throw JpaConfigException(
+                "@Convert on $owner must specify a converter class or disableConversion = true",
+            )
+        }
+        return JpaConvertOverride(converterFor(annotation.converter.java))
+    }
+
+    /**
+     * 校验嵌套属性路径：每段必须是当前类的属性名；中间段必须是 `@Embedded`，
+     * 最后一段必须是基本属性，且覆盖转换器的属性类型必须匹配。
+     */
+    private fun validateConvertOverrides(
+        entityClass: Class<*>,
+        properties: List<JpaProperty>,
+        overrides: Map<String, JpaConvertOverride>,
+    ) {
+        for ((path, override) in overrides) {
+            var currentProperties = properties
+            var currentClass: Class<*> = entityClass
+            val segments = path.split('.')
+            for (index in segments.indices) {
+                val segment = segments[index]
+                val property = currentProperties.firstOrNull { it.name == segment }
+                    ?: throw JpaConfigException(
+                        "Invalid @Convert(attributeName = '$path') on ${entityClass.name}: " +
+                            "${currentClass.name} has no property '$segment'",
+                    )
+                if (index != segments.lastIndex) {
+                    if (property.kind != JpaPropertyKind.EMBEDDED) {
+                        throw JpaConfigException(
+                            "Invalid @Convert(attributeName = '$path') on ${entityClass.name}: " +
+                                "'${property.name}' is not an @Embedded property",
+                        )
+                    }
+                    val nested = resolve(property.declaredType)
+                    currentProperties = nested.properties
+                    currentClass = nested.entityClass
+                    continue
+                }
+                if (property.kind != JpaPropertyKind.SCALAR) {
+                    throw JpaConfigException(
+                        "Invalid @Convert(attributeName = '$path') on ${entityClass.name}: " +
+                            "'${property.name}' is not a basic attribute",
+                    )
+                }
+                val converter = override.converter ?: continue
+                if (!converter.appliesTo(property.declaredType)) {
+                    throw JpaConfigException(
+                        "Attribute converter ${converter.converterClass.name} converts " +
+                            "${converter.entityType.name} but '${currentClass.name}.${property.name}' " +
+                            "is declared as ${property.declaredType.name}",
+                    )
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 主键元数据
+    // ------------------------------------------------------------------
+
+    private fun buildIdentifier(entityClass: Class<*>, properties: List<JpaProperty>): JpaIdentifierMetadata? {
+        val ids = properties.filter { it.id }
+        if (ids.isEmpty()) {
+            return null
+        }
+        val embeddedIds = ids.filter { it.embeddedId || it.kind == JpaPropertyKind.EMBEDDED }
+        if (embeddedIds.isNotEmpty()) {
+            if (ids.size != 1) {
+                throw JpaConfigException(
+                    "Entity ${entityClass.name} mixes @EmbeddedId with other @Id attributes",
+                )
+            }
+            return JpaIdentifierMetadata(JpaIdentifierKind.EMBEDDED, embeddedIds, embeddedIds[0].declaredType)
+        }
+        if (ids.size == 1) {
+            return JpaIdentifierMetadata(JpaIdentifierKind.SIMPLE, ids)
+        }
+        for (property in ids) {
+            if (property.kind != JpaPropertyKind.SCALAR) {
+                throw JpaConfigException(
+                    "@IdClass identifier property ${entityClass.name}.${property.name} must be a basic attribute",
+                )
+            }
+        }
+        return JpaIdentifierMetadata(JpaIdentifierKind.ID_CLASS, ids)
     }
 
     // ------------------------------------------------------------------
@@ -389,12 +553,7 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
                         "with association annotations",
                 )
             }
-            if (hasConvertAnnotation(source)) {
-                throw JpaConfigException(
-                    "@Convert on embedded property '${ownerClass.name}.$propertyName' is not supported; " +
-                        "annotate the converter on the embeddable's basic attributes instead",
-                )
-            }
+            val nestedConvertOverrides = nestedConvertOverridesOf(source, ownerClass, propertyName)
             return JpaProperty(
                 name = propertyName,
                 nodeName = config.namingStrategy.translate(propertyName),
@@ -413,6 +572,7 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
                 associationKind = null,
                 elementType = null,
                 transientProperty = false,
+                nestedConvertOverrides = nestedConvertOverrides,
             )
         }
 
@@ -501,11 +661,16 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
         id: Boolean,
         transientProperty: Boolean,
     ): JpaProperty {
-        if (hasConvertAnnotation(source) && associationKind != null) {
-            throw JpaConfigException(
-                "@Convert on relationship attribute '${ownerClass.name}.$propertyName' is not supported; " +
-                    "converters apply to basic attributes and element collections of basic type only",
-            )
+        // 关系属性/集合属性上的 @Convert(attributeName = ...) 不支持；显式 @Convert（无 attributeName）
+        // 对关系属性表示“整个关联值按基本属性转换”，对 @ElementCollection 表示元素值转换。
+        for (annotation in source.annotations(Convert::class.java)) {
+            if (annotation.attributeName.isNotEmpty()) {
+                throw JpaConfigException(
+                    "@Convert(attributeName = '${annotation.attributeName}') on " +
+                        "'${ownerClass.name}.$propertyName' is not supported; attributeName 只用于 " +
+                        "@Embedded/@EmbeddedId 属性内部的点分属性路径",
+                )
+            }
         }
         if (declaredType.isArray) {
             throw JpaConfigException("Array association property '${ownerClass.name}.$propertyName' is not supported")
@@ -546,6 +711,8 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
         val mapKey = source.annotation(MapKey::class.java)
         val mapKeyClass = source.annotation(MapKeyClass::class.java)
         val mapKeyColumn = source.annotation(MapKeyColumn::class.java)
+        val mapKeyJoinColumn = source.annotation(MapKeyJoinColumn::class.java)
+        val mapKeyJoinColumns = source.annotation(MapKeyJoinColumns::class.java)
         val mapKeyEnumerated = source.annotation(MapKeyEnumerated::class.java)?.value
         val mapKeyTemporal = source.annotation(MapKeyTemporal::class.java)?.value
         if (!map &&
@@ -553,6 +720,8 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
                 mapKey != null ||
                     mapKeyClass != null ||
                     mapKeyColumn != null ||
+                    mapKeyJoinColumn != null ||
+                    mapKeyJoinColumns != null ||
                     mapKeyEnumerated != null ||
                     mapKeyTemporal != null
                 )
@@ -572,6 +741,43 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
             resolveMapKeyType(propertyName, genericType, mapKey, mapKeyClass, ownerClass)
         } else {
             null
+        }
+        val mapKeyEntity = mapKeyType != null && findEntityClass(mapKeyType) != null
+        if (mapKeyType != null) {
+            if (mapKeyEntity) {
+                if (elementCollection != null) {
+                    throw JpaConfigException(
+                        "Entity Map key type ${mapKeyType.name} on '${ownerClass.name}.$propertyName' " +
+                            "is not supported for @ElementCollection; entity keys require a relationship Map",
+                    )
+                }
+                if (mapKey != null) {
+                    throw JpaConfigException(
+                        "@MapKey cannot be combined with an entity Map key type " +
+                            "on '${ownerClass.name}.$propertyName' (entity keys use @MapKeyJoinColumn)",
+                    )
+                }
+                if (mapKeyColumn != null || mapKeyEnumerated != null || mapKeyTemporal != null) {
+                    throw JpaConfigException(
+                        "Entity Map key on '${ownerClass.name}.$propertyName' only supports " +
+                            "@MapKeyJoinColumn/@MapKeyJoinColumns",
+                    )
+                }
+                if (resolve(mapKeyType).identifier == null) {
+                    throw JpaConfigException(
+                        "Entity Map key type ${mapKeyType.name} on '${ownerClass.name}.$propertyName' " +
+                            "must declare an @Id/@EmbeddedId",
+                    )
+                }
+            } else {
+                if (mapKeyJoinColumn != null || mapKeyJoinColumns != null) {
+                    throw JpaConfigException(
+                        "@MapKeyJoinColumn on '${ownerClass.name}.$propertyName' requires an entity Map " +
+                            "key type but the key type is ${mapKeyType.name}",
+                    )
+                }
+                validateMapKeyType(propertyName, mapKeyType, ownerClass)
+            }
         }
         val optional = when {
             manyToOne != null -> manyToOne.optional
@@ -593,6 +799,11 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
         } else {
             null
         }
+        val associationConverter = if (associationKind != null) {
+            resolveAssociationConverter(source, declaredType, ownerClass, propertyName)
+        } else {
+            null
+        }
         return JpaProperty(
             name = propertyName,
             nodeName = config.namingStrategy.translate(propertyName),
@@ -611,13 +822,57 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
             associationKind = associationKind,
             elementType = valueType,
             transientProperty = transientProperty,
-            converter = elementConverter,
+            converter = associationConverter ?: elementConverter,
             map = map,
             mapKeyType = mapKeyType,
             mapKeyEnumerated = mapKeyEnumerated,
             mapKeyTemporal = mapKeyTemporal,
             mapKeyPropertyName = mapKey?.name,
+            mapKeyEntity = mapKeyEntity,
         )
+    }
+
+    /**
+     * 解析关系属性上的显式 `@Convert`（无 attributeName）。
+     *
+     * 语义：整个关联值按基本属性处理——写出时 `convertToDatabaseColumn` 的结果作为
+     * 文档节点值，读入时 `convertToEntityAttribute` 的结果写回关联属性；不展开关联。
+     * 显式 `@Convert` 优先于关联展开；autoApply 不作用于关系属性。
+     */
+    private fun resolveAssociationConverter(
+        source: JpaAnnotationSource,
+        attributeType: Class<*>,
+        ownerClass: Class<*>,
+        propertyName: String,
+    ): JpaAttributeConverter? {
+        val forward = source.annotations(Convert::class.java).filter { it.attributeName.isEmpty() }
+        if (forward.isEmpty()) {
+            return null
+        }
+        if (forward.size > 1) {
+            throw JpaConfigException(
+                "Relationship property '${ownerClass.name}.$propertyName' declares multiple @Convert annotations",
+            )
+        }
+        val convert = forward[0]
+        if (convert.disableConversion) {
+            return null
+        }
+        if (convert.converter.java == java.lang.Void.TYPE) {
+            throw JpaConfigException(
+                "@Convert on relationship property '${ownerClass.name}.$propertyName' must specify " +
+                    "a converter class or disableConversion = true",
+            )
+        }
+        val converter = converterFor(convert.converter.java)
+        if (!converter.appliesTo(attributeType)) {
+            throw JpaConfigException(
+                "Attribute converter ${converter.converterClass.name} converts " +
+                    "${converter.entityType.name} but relationship property " +
+                    "'${ownerClass.name}.$propertyName' is declared as ${attributeType.name}",
+            )
+        }
+        return converter
     }
 
     // ------------------------------------------------------------------
@@ -702,14 +957,12 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
     ): Class<*>? {
         val declaredKeyClass = mapKeyClass?.value?.java
         if (declaredKeyClass != null && declaredKeyClass != java.lang.Void.TYPE) {
-            validateMapKeyType(propertyName, declaredKeyClass, ownerClass)
             return declaredKeyClass
         }
         val parameterizedType = genericType as? ParameterizedType
         val argument = parameterizedType?.actualTypeArguments?.getOrNull(0)
         val keyType = rawClassOf(argument)
         if (keyType != null && keyType != Any::class.java) {
-            validateMapKeyType(propertyName, keyType, ownerClass)
             return keyType
         }
         if (mapKey != null) {
@@ -731,7 +984,8 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
         if (!supported) {
             throw JpaConfigException(
                 "Unsupported Map key type ${keyType.name} for '${ownerClass.name}.$propertyName'; " +
-                    "map keys must be basic types (String/number/boolean/char/enum/date-time/UUID)",
+                    "map keys must be basic types (String/number/boolean/char/enum/date-time/UUID) " +
+                    "or entity types via @MapKeyJoinColumn",
             )
         }
     }
@@ -776,7 +1030,40 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
         JpaAttributeConverter.of(it, "autoApply converter")
     }
 
-    private fun hasConvertAnnotation(source: JpaAnnotationSource): Boolean = source.annotations(Convert::class.java).isNotEmpty()
+    /**
+     * 收集 `@Embedded`/`@EmbeddedId` 属性上的 `@Convert(attributeName = ...)`：
+     * 路径相对该属性（可点分），返回给外层元数据做前缀展开。
+     */
+    private fun nestedConvertOverridesOf(
+        source: JpaAnnotationSource,
+        ownerClass: Class<*>,
+        propertyName: String,
+    ): Map<String, JpaConvertOverride> {
+        val annotations = source.annotations(Convert::class.java)
+        if (annotations.isEmpty()) {
+            return emptyMap()
+        }
+        val overrides = LinkedHashMap<String, JpaConvertOverride>()
+        for (annotation in annotations) {
+            if (annotation.attributeName.isEmpty()) {
+                throw JpaConfigException(
+                    "@Convert on embedded property '${ownerClass.name}.$propertyName' requires " +
+                        "attributeName (use @Convert(attributeName = \"...\") or annotate the " +
+                        "embeddable's basic attributes directly)",
+                )
+            }
+            val owner = "${ownerClass.name}.$propertyName"
+            val path = normalizeConvertPath(annotation.attributeName, owner)
+            val override = convertOverrideOf(annotation, owner)
+            if (overrides.put(path, override) != null) {
+                throw JpaConfigException(
+                    "Duplicate @Convert(attributeName = '${annotation.attributeName}') on " +
+                        "'${ownerClass.name}.$propertyName'",
+                )
+            }
+        }
+        return overrides
+    }
 
     private fun resolveAttributeConverter(
         source: JpaAnnotationSource,
@@ -819,8 +1106,8 @@ internal class JpaMetadataResolver(private val config: JpaConfig) {
         if (unsupportedOverride != null) {
             throw JpaConfigException(
                 "@Convert(attributeName='${unsupportedOverride.attributeName}') on " +
-                    "'${ownerClass.name}.$propertyName' is not supported; annotate the embedded type's " +
-                    "basic attributes instead",
+                    "'${ownerClass.name}.$propertyName' is not supported; attributeName 只能用于 " +
+                    "@Embedded/@EmbeddedId 属性内部的基本属性路径",
             )
         }
         if (id || enumType != null || temporalType != null || source.isPresent(Version::class.java)) {

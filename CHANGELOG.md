@@ -15,7 +15,20 @@
 - `format-json` 不再依赖 jackson-core 内部包：`Double` 写出改用 JDK
   `Double.toString`，module path 上不再需要 `--add-exports`
 - JPMS：26 个可发布模块全部为显式 MR-JAR module-info（补齐
-  serialization-kotlin / ecord-support / codegen / codegen-test / openapi）
+  serialization-kotlin / record-support / codegen / codegen-test / openapi）
+- `jpa`：`@Convert(attributeName = "...")` 支持 `@Embedded`/`@EmbeddedId` 内部基本
+  属性的点分路径覆盖（类级/属性级标注、`disableConversion` 覆盖、外层路径优先于
+  嵌入类自身转换器与 autoApply；失效路径/类型不匹配抛 `JpaConfigException`）
+- `jpa`：关系属性（`@ManyToOne`/`@OneToOne`/`@OneToMany`/`@ManyToMany`）上的显式
+  `@Convert`：整个关联值按基本属性写/读（不展开关联、不受 `associationDepth` 限制）
+- `jpa`：`@MapKeyJoinColumn`/`@MapKeyJoinColumns` 实体 Map 键：单主键与
+  `@EmbeddedId`/`@IdClass` 复合主键的标识符文本（转义与规范文本、键冲突检测），
+  公共 API `JpaDocumentMapper.entityKeyText` / `entityKeyFromText`
+- `jpa-hibernate`：关系 `@Convert`、实体 Map 键解析为受管实例（`EntityManager.find`，
+  找不到回退 detach）；`fromNode` 关联引用解析支持 `@EmbeddedId`/`@IdClass` 复合主键
+  （`EntityManager.find` 使用复合 id 对象，单主键行为不变）
+- 评估结论：`jpa` 不引入 classpath/package 扫描：autoApply 转换器与多态子类保持显式
+  注册；README 说明原因（JDK 8/JPMS/确定性）与 Spring/ClassGraph 等替代接入方式
 
 ### 变更
 
@@ -26,6 +39,8 @@
   `uses com.mingliqiye.document.serialization.JavaRecordSupport`
 - `serialization` 的 GraalVM 运行期初始化参数改为
   `JavaRecordSupportLoader`，并移除不再需要的 JDK record 反射条目
+- `jpa` 元数据缓存由 `ConcurrentHashMap.computeIfAbsent` 改为可重入同步缓存，支持
+  元数据构建期间的嵌套解析（嵌入类/实体 Map 键），避免 `Recursive update`
 
 ### 移除
 

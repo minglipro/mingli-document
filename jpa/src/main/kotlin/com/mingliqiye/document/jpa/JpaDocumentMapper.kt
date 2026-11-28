@@ -9,7 +9,10 @@ import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.jpa.exception.JpaConfigException
 import com.mingliqiye.document.jpa.exception.JpaMappingException
 import com.mingliqiye.document.jpa.internal.JpaAssociationKind
+import com.mingliqiye.document.jpa.internal.JpaAttributeConverter
+import com.mingliqiye.document.jpa.internal.JpaConvertOverride
 import com.mingliqiye.document.jpa.internal.JpaEntityMetadata
+import com.mingliqiye.document.jpa.internal.JpaIdentifierKind
 import com.mingliqiye.document.jpa.internal.JpaInheritanceMetadata
 import com.mingliqiye.document.jpa.internal.JpaMetadataResolver
 import com.mingliqiye.document.jpa.internal.JpaProperty
@@ -36,10 +39,15 @@ import java.util.LinkedHashMap
  *
  * 高级特性：
  * - `@Convert`/autoApply `AttributeConverter`：文档中出现的是数据库列值（转换器
- *   `convertToDatabaseColumn` 的结果），读入时反向转换；null 属性不经过转换器；
+ *   `convertToDatabaseColumn` 的结果），读入时反向转换；null 也会传入转换器
+ *   （与 JPA 提供者一致）；
+ * - `@Convert(attributeName = "...")`：`@Embedded`/`@EmbeddedId` 属性内部基本属性的
+ *   点分路径覆盖转换器（类级或属性级标注），覆盖嵌入类自身的转换器/autoApply；
+ * - 关系属性上的显式 `@Convert`：整个关联值按基本属性转换（不展开关联），显式转换
+ *   优先于关联展开；
  * - Map 关联（`@OneToMany`/`@ManyToMany` 的 `Map<K, V>`）与 Map `@ElementCollection`：
  *   文档中为对象节点，键为字符串化的 Map 键（`@MapKey`/`@MapKeyColumn`/键类型语义见
- *   `JpaConfig` 文档）；
+ *   `JpaConfig` 文档）；`@MapKeyJoinColumn` 的实体键写出键实体标识符文本；
  * - `@Inheritance`/`@DiscriminatorColumn`/`@DiscriminatorValue`：继承层次的对象额外
  *   写出 discriminator 字段；读入时按 discriminator 选择已注册的子类，未知值抛异常。
  *
@@ -79,7 +87,7 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             )
         }
         val fields = LinkedHashMap<String, Node>(metadata.properties.size + 1)
-        writeObject(entity, metadata, 0, "$", IdentityHashMap(), fields)
+        writeObject(entity, metadata, 0, "$", IdentityHashMap(), fields, metadata.convertOverrides)
         return ObjectNode.from(fields)
     }
 
@@ -125,7 +133,7 @@ public class JpaDocumentMapper @JvmOverloads constructor(
                 "Expected object node for entity ${metadata.entityName} at $ but was ${node.type}",
             )
         @Suppress("UNCHECKED_CAST")
-        return readObject(objectNode, metadata, 0, "$") as T
+        return readObject(objectNode, metadata, 0, "$", metadata.convertOverrides) as T
     }
 
     /**
@@ -143,7 +151,15 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         for (index in 0 until arrayNode.size) {
             val element = arrayNode[index]
             @Suppress("UNCHECKED_CAST")
-            result.add(readObject(requireObject(element, "$[$index]"), metadata, 0, "$[$index]") as T)
+            result.add(
+                readObject(
+                    requireObject(element, "$[$index]"),
+                    metadata,
+                    0,
+                    "$[$index]",
+                    metadata.convertOverrides,
+                ) as T,
+            )
         }
         return result
     }
@@ -188,6 +204,37 @@ public class JpaDocumentMapper @JvmOverloads constructor(
      */
     public fun discriminatorFieldName(entityType: Class<*>): String? = resolver.resolve(entityType).inheritance?.discriminatorNodeName
 
+    /**
+     * 实体作为 Map 键（`@MapKeyJoinColumn`）时的标识符文本。
+     *
+     * 用于文档对象字段名：单个基本 `@Id` 输出标识符值文本；`@EmbeddedId`/`@IdClass`
+     * 复合主键输出 `属性名=转义值` 以 `&` 连接的规范文本（`%`、`&`、`=` 会百分号转义）。
+     *
+     * 与 [JpaDocumentMapper] 内部的 Map 实体键映射规则一致；公开给需要复用 jpa 元数据的
+     * 扩展模块（例如 `jpa-hibernate` 在 Hibernate 感知映射中处理实体 Map 键）。
+     *
+     * @param keyEntity Map 键实体实例（标识符属性必须已赋值）
+     * @param keyType Map 键实体类型
+     * @return 标识符文本
+     * @throws JpaMappingException 标识符属性为 null 或不受支持时抛出
+     * @throws JpaConfigException 类型没有主键/复合主键包含非基本属性时抛出
+     */
+    public fun entityKeyText(keyEntity: Any, keyType: Class<*>): String = entityKeyTextInternal(keyEntity, keyType, "$")
+
+    /**
+     * 标识符文本 → detach 键实体实例，是 [entityKeyText] 的逆操作。
+     *
+     * 只还原标识符属性（不读取其他字段），适合作为 Map 的 detach 键；
+     * Hibernate 集成可在拿到实例后再按标识符解析为受管实例。
+     *
+     * @param text 标识符文本（文档对象字段名）
+     * @param keyType Map 键实体类型（必须有无参构造器）
+     * @return detach 键实体实例
+     * @throws JpaMappingException 文本无法解析为标识符时抛出
+     * @throws JpaConfigException 类型没有主键或标识符属性不可写时抛出
+     */
+    public fun entityKeyFromText(text: String, keyType: Class<*>): Any = entityKeyFromTextInternal(text, keyType, "$")
+
     // ------------------------------------------------------------------
     // 实体 -> Node
     // ------------------------------------------------------------------
@@ -199,6 +246,7 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         path: String,
         stack: IdentityHashMap<Any, String>,
         fields: MutableMap<String, Node>,
+        overrides: Map<String, JpaConvertOverride>,
     ) {
         val previous = stack.put(instance, path)
         if (previous != null) {
@@ -217,7 +265,16 @@ public class JpaDocumentMapper @JvmOverloads constructor(
                             "discriminator field '$discriminatorKey'",
                     )
                 }
-                writeProperty(instance, property, depth, "$path.${property.nodeName}", stack, fields)
+                writeProperty(
+                    instance,
+                    property,
+                    depth,
+                    "$path.${property.nodeName}",
+                    stack,
+                    fields,
+                    overrides[property.name],
+                    nestedConvertOverrides(overrides, property.name),
+                )
             }
         } finally {
             stack.remove(instance)
@@ -256,14 +313,19 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         path: String,
         stack: IdentityHashMap<Any, String>,
         fields: MutableMap<String, Node>,
+        propertyOverride: JpaConvertOverride?,
+        nestedOverrides: Map<String, JpaConvertOverride>,
     ) {
-        if (property.kind == JpaPropertyKind.ASSOCIATION && depth >= config.associationDepth) {
+        val converter = effectiveConverter(property, propertyOverride)
+        if (property.kind == JpaPropertyKind.ASSOCIATION &&
+            converter == null &&
+            depth >= config.associationDepth
+        ) {
             return
         }
         val value = property.read(instance, path)
         if (value == null) {
-            val converter = property.converter
-            if (converter != null && property.kind == JpaPropertyKind.SCALAR) {
+            if (converter != null) {
                 // 与 JPA 提供者一致：null 也会传入转换器，转换器可返回非 null 的数据库值。
                 val node = values.writeConverted(null, converter, property.enumType, property.temporalType, path)
                 if (!node.isNull || config.nullPolicy == JpaNullPolicy.INCLUDE) {
@@ -277,22 +339,38 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             return
         }
         fields[property.nodeName] = when (property.kind) {
-            JpaPropertyKind.SCALAR -> writeScalar(value, property, path)
-            JpaPropertyKind.EMBEDDED -> writeEmbedded(value, property, depth, path, stack)
-            JpaPropertyKind.ASSOCIATION -> writeAssociation(value, property, depth, path, stack)
+            JpaPropertyKind.SCALAR -> writeScalar(value, property, converter, path)
+            JpaPropertyKind.EMBEDDED -> writeEmbedded(value, property, depth, path, stack, nestedOverrides)
+            JpaPropertyKind.ASSOCIATION -> if (converter != null) {
+                // 显式 @Convert 的关系属性：整个关联值按基本属性转换，不展开关联。
+                values.writeConverted(value, converter, property.enumType, property.temporalType, path)
+            } else {
+                writeAssociation(value, property, depth, path, stack)
+            }
+
             JpaPropertyKind.ELEMENT_COLLECTION -> writeElementCollection(value, property, depth, path, stack)
         }
     }
 
-    private fun writeScalar(value: Any, property: JpaProperty, path: String): Node {
-        val converter = property.converter
-        return if (converter != null) {
-            values.writeConverted(value, converter, property.enumType, property.temporalType, path)
-        } else if (property.transientProperty) {
-            values.writeTransient(value, property, path)
-        } else {
-            values.writeProperty(value, property, path)
-        }
+    /**
+     * 计算属性最终生效的转换器：嵌套路径覆盖 > 属性自身转换器。
+     *
+     * `@Convert(attributeName = ...)` 显式覆盖优先；`disableConversion` 覆盖表现为
+     * 存在覆盖但转换器为 `null`，此时不使用属性自身的转换器/autoApply。
+     */
+    private fun effectiveConverter(property: JpaProperty, override: JpaConvertOverride?): JpaAttributeConverter? = if (override != null) override.converter else property.converter
+
+    private fun writeScalar(
+        value: Any,
+        property: JpaProperty,
+        converter: JpaAttributeConverter?,
+        path: String,
+    ): Node = if (converter != null) {
+        values.writeConverted(value, converter, property.enumType, property.temporalType, path)
+    } else if (property.transientProperty) {
+        values.writeTransient(value, property, path)
+    } else {
+        values.writeProperty(value, property, path)
     }
 
     private fun writeEmbedded(
@@ -301,10 +379,12 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         depth: Int,
         path: String,
         stack: IdentityHashMap<Any, String>,
+        nestedOverrides: Map<String, JpaConvertOverride>,
     ): ObjectNode {
         val metadata = resolver.resolve(property.declaredType)
+        val effectiveOverrides = mergedConvertOverrides(metadata.convertOverrides, nestedOverrides)
         val fields = LinkedHashMap<String, Node>(metadata.properties.size)
-        writeObject(value, metadata, depth, path, stack, fields)
+        writeObject(value, metadata, depth, path, stack, fields, effectiveOverrides)
         return ObjectNode.from(fields)
     }
 
@@ -353,8 +433,29 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         path: String,
         stack: IdentityHashMap<Any, String>,
     ): ObjectNode {
-        val keyType = mapKeyTypeOf(property)
         val fields = LinkedHashMap<String, Node>(value.size)
+        if (property.mapKeyEntity) {
+            val keyType = mapKeyTypeOf(property)
+            for ((key, element) in value) {
+                if (key == null) {
+                    throw JpaMappingException("Map key must not be null at $path")
+                }
+                val keyText = entityKeyTextInternal(key, keyType, path)
+                if (fields.containsKey(keyText)) {
+                    throw JpaMappingException(
+                        "Map key collision at $path: multiple keys of '${property.name}' " +
+                            "are serialized as '$keyText'",
+                    )
+                }
+                fields[keyText] = if (element == null) {
+                    NullNode.INSTANCE
+                } else {
+                    writeEntity(element, depth + 1, "$path[$keyText]", stack)
+                }
+            }
+            return ObjectNode.from(fields)
+        }
+        val keyType = mapKeyTypeOf(property)
         for ((key, element) in value) {
             val keyText = values.writeMapKey(key, keyType, property.mapKeyEnumerated, property.mapKeyTemporal, path)
             if (fields.containsKey(keyText)) {
@@ -379,7 +480,7 @@ public class JpaDocumentMapper @JvmOverloads constructor(
     ): ObjectNode {
         val metadata = resolver.resolve(value.javaClass)
         val fields = LinkedHashMap<String, Node>(metadata.properties.size + 1)
-        writeObject(value, metadata, depth, path, stack, fields)
+        writeObject(value, metadata, depth, path, stack, fields, metadata.convertOverrides)
         return ObjectNode.from(fields)
     }
 
@@ -463,8 +564,10 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         metadata: JpaEntityMetadata,
         depth: Int,
         path: String,
+        overrides: Map<String, JpaConvertOverride>,
     ): Any {
         val effective = resolveReadMetadata(node, metadata, path)
+        val effectiveOverrides = mergedConvertOverrides(effective.convertOverrides, overrides)
         val instance = instantiate(effective.entityClass, path)
         val assigned = HashSet<String>()
         val inheritance = effective.inheritance
@@ -493,13 +596,29 @@ public class JpaDocumentMapper @JvmOverloads constructor(
                         "(通过别名重复出现: '$key')",
                 )
             }
-            if (property.kind == JpaPropertyKind.ASSOCIATION && depth >= config.associationDepth) {
+            val propertyOverride = effectiveOverrides[property.name]
+            val converter = effectiveConverter(property, propertyOverride)
+            if (property.kind == JpaPropertyKind.ASSOCIATION &&
+                converter == null &&
+                depth >= config.associationDepth
+            ) {
                 continue
             }
             if (!property.canWrite) {
                 continue
             }
-            property.write(instance, readProperty(child, property, depth, "$path.$key"), path)
+            property.write(
+                instance,
+                readProperty(
+                    child,
+                    property,
+                    depth,
+                    "$path.$key",
+                    propertyOverride,
+                    nestedConvertOverrides(effectiveOverrides, property.name),
+                ),
+                path,
+            )
         }
         return instance
     }
@@ -591,8 +710,16 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         "; no concrete subtypes are registered, use JpaConfig.builder().entityType(...) to register them"
     }
 
-    private fun readProperty(node: Node, property: JpaProperty, depth: Int, path: String): Any? {
-        if (node.isNull && property.converter == null) {
+    private fun readProperty(
+        node: Node,
+        property: JpaProperty,
+        depth: Int,
+        path: String,
+        propertyOverride: JpaConvertOverride?,
+        nestedOverrides: Map<String, JpaConvertOverride>,
+    ): Any? {
+        val converter = effectiveConverter(property, propertyOverride)
+        if (node.isNull && converter == null) {
             if (property.primitive) {
                 throw JpaMappingException(
                     "Cannot assign null to primitive property '${property.name}' at $path",
@@ -606,27 +733,47 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             return null
         }
         return when (property.kind) {
-            JpaPropertyKind.SCALAR -> readScalar(node, property, path)
-            JpaPropertyKind.EMBEDDED -> readEmbedded(node, property, depth, path)
-            JpaPropertyKind.ASSOCIATION -> readAssociation(node, property, depth, path)
+            JpaPropertyKind.SCALAR -> readScalar(node, property, converter, path)
+            JpaPropertyKind.EMBEDDED -> readEmbedded(node, property, depth, path, nestedOverrides)
+            JpaPropertyKind.ASSOCIATION -> if (converter != null) {
+                values.readConverted(node, converter, property.enumType, property.temporalType, path)
+            } else {
+                readAssociation(node, property, depth, path)
+            }
+
             JpaPropertyKind.ELEMENT_COLLECTION -> readElementCollection(node, property, depth, path)
         }
     }
 
-    private fun readScalar(node: Node, property: JpaProperty, path: String): Any? {
-        val converter = property.converter
-        return if (converter != null) {
-            values.readConverted(node, converter, property.enumType, property.temporalType, path)
-        } else if (property.transientProperty) {
-            values.readTransient(node, property, path)
-        } else {
-            values.readProperty(node, property, path)
-        }
+    private fun readScalar(
+        node: Node,
+        property: JpaProperty,
+        converter: JpaAttributeConverter?,
+        path: String,
+    ): Any? = if (converter != null) {
+        values.readConverted(node, converter, property.enumType, property.temporalType, path)
+    } else if (property.transientProperty) {
+        values.readTransient(node, property, path)
+    } else {
+        values.readProperty(node, property, path)
     }
 
-    private fun readEmbedded(node: Node, property: JpaProperty, depth: Int, path: String): Any {
+    private fun readEmbedded(
+        node: Node,
+        property: JpaProperty,
+        depth: Int,
+        path: String,
+        nestedOverrides: Map<String, JpaConvertOverride>,
+    ): Any {
         val metadata = resolver.resolve(property.declaredType)
-        return readObject(requireObject(node, path, property), metadata, depth, path)
+        val effectiveOverrides = mergedConvertOverrides(metadata.convertOverrides, nestedOverrides)
+        return readObject(
+            requireObject(node, path, property),
+            metadata,
+            depth,
+            path,
+            effectiveOverrides,
+        )
     }
 
     private fun readAssociation(node: Node, property: JpaProperty, depth: Int, path: String): Any {
@@ -635,7 +782,13 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         val targetType = property.elementType ?: property.declaredType
         val targetMetadata = resolver.resolve(targetType)
         if (associationKind == JpaAssociationKind.ONE_TO_ONE || associationKind == JpaAssociationKind.MANY_TO_ONE) {
-            return readObject(requireObject(node, path, property), targetMetadata, depth + 1, path)
+            return readObject(
+                requireObject(node, path, property),
+                targetMetadata,
+                depth + 1,
+                path,
+                targetMetadata.convertOverrides,
+            )
         }
         if (property.map) {
             return readAssociationMap(node, property, targetMetadata, depth, path)
@@ -652,7 +805,15 @@ public class JpaDocumentMapper @JvmOverloads constructor(
                 collection.add(null)
                 continue
             }
-            collection.add(readObject(requireObject(element, elementPath), targetMetadata, depth + 1, elementPath))
+            collection.add(
+                readObject(
+                    requireObject(element, elementPath),
+                    targetMetadata,
+                    depth + 1,
+                    elementPath,
+                    targetMetadata.convertOverrides,
+                ),
+            )
         }
         return collection
     }
@@ -668,8 +829,35 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             ?: throw JpaMappingException(
                 "Expected object node for Map association '${property.name}' at $path but was ${node.type}",
             )
-        val keyType = mapKeyTypeOf(property)
         val map = newMapInstance(property.declaredType, path)
+        if (property.mapKeyEntity) {
+            val keyType = mapKeyTypeOf(property)
+            val canonicalKeys = HashSet<String>()
+            for ((keyText, child) in objectNode.asMap()) {
+                val key = entityKeyFromTextInternal(keyText, keyType, "$path.$keyText")
+                val canonical = entityKeyTextInternal(key, keyType, "$path.$keyText")
+                if (!canonicalKeys.add(canonical) || map.containsKey(key)) {
+                    throw JpaMappingException(
+                        "Map key collision at $path: multiple document keys of '${property.name}' " +
+                            "resolve to the same key",
+                    )
+                }
+                val elementPath = "$path[$keyText]"
+                map[key] = if (child.isNull) {
+                    null
+                } else {
+                    readObject(
+                        requireObject(child, elementPath),
+                        targetMetadata,
+                        depth + 1,
+                        elementPath,
+                        targetMetadata.convertOverrides,
+                    )
+                }
+            }
+            return map
+        }
+        val keyType = mapKeyTypeOf(property)
         for ((keyText, child) in objectNode.asMap()) {
             val key = values.readMapKey(keyText, keyType, property.mapKeyEnumerated, property.mapKeyTemporal, "$path.$keyText")
             if (map.containsKey(key)) {
@@ -682,7 +870,13 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             map[key] = if (child.isNull) {
                 null
             } else {
-                readObject(requireObject(child, elementPath), targetMetadata, depth + 1, elementPath)
+                readObject(
+                    requireObject(child, elementPath),
+                    targetMetadata,
+                    depth + 1,
+                    elementPath,
+                    targetMetadata.convertOverrides,
+                )
             }
         }
         return map
@@ -752,7 +946,10 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             converter != null -> values.readConverted(node, converter, property.enumType, null, path)
             node.isNull -> null
             isScalarValueType(elementType) -> values.readElement(node, elementType, property.enumType, path)
-            else -> readObject(requireObject(node, path), resolver.resolve(elementType), depth, path)
+            else -> {
+                val metadata = resolver.resolve(elementType)
+                readObject(requireObject(node, path), metadata, depth, path, metadata.convertOverrides)
+            }
         }
     }
 
@@ -787,6 +984,225 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         }
         return keyProperty.declaredType
     }
+
+    // ------------------------------------------------------------------
+    // @Convert(attributeName) 覆盖规则
+    // ------------------------------------------------------------------
+
+    /** 合并嵌套属性覆盖：后者（父级路径）优先于前者（嵌入类自身声明）。 */
+    private fun mergedConvertOverrides(
+        base: Map<String, JpaConvertOverride>,
+        overrides: Map<String, JpaConvertOverride>,
+    ): Map<String, JpaConvertOverride> {
+        if (overrides.isEmpty()) {
+            return base
+        }
+        if (base.isEmpty()) {
+            return overrides
+        }
+        val merged = LinkedHashMap<String, JpaConvertOverride>(base.size + overrides.size)
+        merged.putAll(base)
+        merged.putAll(overrides)
+        return merged
+    }
+
+    /** 取相对某个属性的子路径覆盖（去掉 `属性名.` 前缀）。 */
+    private fun nestedConvertOverrides(
+        overrides: Map<String, JpaConvertOverride>,
+        propertyName: String,
+    ): Map<String, JpaConvertOverride> {
+        val prefix = "$propertyName."
+        val nested = LinkedHashMap<String, JpaConvertOverride>()
+        for ((path, override) in overrides) {
+            if (path.length > prefix.length && path.startsWith(prefix)) {
+                nested[path.substring(prefix.length)] = override
+            }
+        }
+        return nested
+    }
+
+    // ------------------------------------------------------------------
+    // 实体作为 Map 键（@MapKeyJoinColumn）
+    // ------------------------------------------------------------------
+
+    private fun entityKeyTextInternal(keyEntity: Any, keyType: Class<*>, path: String): String {
+        val metadata = resolver.resolve(keyType)
+        val identifier = metadata.identifier
+            ?: throw JpaConfigException(
+                "Entity ${keyType.name} used as Map key at $path must declare an @Id/@EmbeddedId",
+            )
+        return when (identifier.kind) {
+            JpaIdentifierKind.SIMPLE -> idComponentText(identifier.properties[0], keyEntity, path)
+            JpaIdentifierKind.EMBEDDED -> {
+                val idProperty = identifier.properties[0]
+                val idValue = idProperty.read(keyEntity, "$path.${idProperty.name}")
+                    ?: throw JpaMappingException(
+                        "@EmbeddedId property '${idProperty.name}' must not be null at $path",
+                    )
+                val idMetadata = resolver.resolve(identifier.embeddedIdType ?: idProperty.declaredType)
+                compositeIdText(idMetadata.properties, idValue, "$path.${idProperty.name}")
+            }
+
+            JpaIdentifierKind.ID_CLASS -> compositeIdText(identifier.properties, keyEntity, path)
+        }
+    }
+
+    private fun entityKeyFromTextInternal(text: String, keyType: Class<*>, path: String): Any {
+        val metadata = resolver.resolve(keyType)
+        val identifier = metadata.identifier
+            ?: throw JpaConfigException(
+                "Entity ${keyType.name} used as Map key at $path must declare an @Id/@EmbeddedId",
+            )
+        return when (identifier.kind) {
+            JpaIdentifierKind.SIMPLE -> {
+                val idProperty = writableIdentifierProperty(identifier.properties[0], path)
+                val value = idComponentValue(idProperty, text, path)
+                val entity = instantiate(keyType, path)
+                idProperty.write(entity, value, path)
+                entity
+            }
+
+            JpaIdentifierKind.EMBEDDED -> {
+                val idProperty = writableIdentifierProperty(identifier.properties[0], path)
+                val idType = identifier.embeddedIdType ?: idProperty.declaredType
+                val idMetadata = resolver.resolve(idType)
+                val values = parseCompositeId(text, idMetadata.properties, path)
+                val idInstance = instantiate(idType, path)
+                for (property in idMetadata.properties) {
+                    if (!property.canRead) {
+                        continue
+                    }
+                    val componentText = values[property.name]
+                        ?: throw JpaMappingException(
+                            "Composite identifier text at $path is missing component '${property.name}'",
+                        )
+                    writableIdentifierProperty(property, path)
+                        .write(idInstance, idComponentValue(property, componentText, path), path)
+                }
+                val entity = instantiate(keyType, path)
+                idProperty.write(entity, idInstance, path)
+                entity
+            }
+
+            JpaIdentifierKind.ID_CLASS -> {
+                val components = parseCompositeId(text, identifier.properties, path)
+                val entity = instantiate(keyType, path)
+                for (property in identifier.properties) {
+                    val componentText = components[property.name]
+                        ?: throw JpaMappingException(
+                            "Composite identifier text at $path is missing component '${property.name}'",
+                        )
+                    writableIdentifierProperty(property, path)
+                        .write(entity, idComponentValue(property, componentText, path), path)
+                }
+                entity
+            }
+        }
+    }
+
+    private fun writableIdentifierProperty(property: JpaProperty, path: String): JpaProperty {
+        if (!property.canWrite) {
+            throw JpaConfigException(
+                "Identifier property '${property.name}' is not writable; it cannot be reconstructed " +
+                    "from a Map key at $path",
+            )
+        }
+        return property
+    }
+
+    private fun idComponentText(property: JpaProperty, holder: Any, path: String): String {
+        val componentPath = "$path.${property.name}"
+        val value = property.read(holder, componentPath)
+            ?: throw JpaMappingException(
+                "Identifier property '${property.name}' must not be null at $path",
+            )
+        val converter = property.converter
+        return if (converter != null) {
+            values.writeConvertedMapKey(value, converter, property.enumType, property.temporalType, componentPath)
+        } else {
+            values.writeMapKey(value, property.declaredType, property.enumType, property.temporalType, componentPath)
+        }
+    }
+
+    private fun idComponentValue(property: JpaProperty, text: String, path: String): Any {
+        val componentPath = "$path.${property.name}"
+        val converter = property.converter
+        return if (converter != null) {
+            values.readConvertedMapKey(text, converter, property.enumType, property.temporalType, componentPath)
+        } else {
+            values.readMapKey(text, property.declaredType, property.enumType, property.temporalType, componentPath)
+        }
+    }
+
+    private fun compositeIdText(
+        properties: List<JpaProperty>,
+        holder: Any,
+        path: String,
+    ): String {
+        val components = properties.filter { it.canRead }
+        if (components.isEmpty()) {
+            throw JpaConfigException("Composite identifier type at $path has no readable identifier properties")
+        }
+        for (property in components) {
+            if (property.kind != JpaPropertyKind.SCALAR) {
+                throw JpaConfigException(
+                    "Composite identifier property '${property.name}' at $path is not a basic attribute; " +
+                        "nested embedded/composite components are not supported as Map key text",
+                )
+            }
+        }
+        return components.joinToString("&") { property ->
+            "${property.name}=${escapeKeyComponent(idComponentText(property, holder, path))}"
+        }
+    }
+
+    private fun parseCompositeId(
+        text: String,
+        properties: List<JpaProperty>,
+        path: String,
+    ): Map<String, String> {
+        val expected = properties.filter { it.canRead }.map { it.name }.toSet()
+        val result = LinkedHashMap<String, String>(expected.size)
+        if (text.isEmpty()) {
+            throw JpaMappingException("Composite identifier text must not be empty at $path")
+        }
+        for (part in text.split('&')) {
+            val separator = part.indexOf('=')
+            if (separator <= 0) {
+                throw JpaMappingException(
+                    "Invalid composite identifier text '$text' at $path: expected 'name=value' components",
+                )
+            }
+            val name = part.substring(0, separator)
+            if (!expected.contains(name)) {
+                throw JpaMappingException(
+                    "Invalid composite identifier text '$text' at $path: unknown component '$name'",
+                )
+            }
+            if (result.put(name, unescapeKeyComponent(part.substring(separator + 1))) != null) {
+                throw JpaMappingException(
+                    "Invalid composite identifier text '$text' at $path: duplicate component '$name'",
+                )
+            }
+        }
+        if (result.size != expected.size) {
+            throw JpaMappingException(
+                "Invalid composite identifier text '$text' at $path: missing components " +
+                    "${expected - result.keys}",
+            )
+        }
+        return result
+    }
+
+    private fun escapeKeyComponent(text: String): String = text
+        .replace("%", "%25")
+        .replace("&", "%26")
+        .replace("=", "%3D")
+
+    private fun unescapeKeyComponent(text: String): String = text
+        .replace("%3D", "=")
+        .replace("%26", "&")
+        .replace("%25", "%")
 
     private fun requireObject(
         node: Node,

@@ -7,9 +7,20 @@ import jakarta.persistence.MapKeyEnumerated
 import jakarta.persistence.MapKeyTemporal
 import jakarta.persistence.TemporalType
 import jakarta.persistence.metamodel.Attribute
+import jakarta.persistence.metamodel.EntityType
 import java.lang.reflect.AnnotatedElement
 import java.util.LinkedHashMap
 import java.util.TreeMap
+
+/**
+ * 读取 Map 关联属性的实体键类型（`@MapKeyJoinColumn`）。
+ *
+ * @return 键实体类；键不是实体引用时返回 `null`
+ */
+internal fun mapKeyEntityClass(attribute: Attribute<*, *>): Class<*>? {
+    val map = attribute as? jakarta.persistence.metamodel.MapAttribute<*, *, *> ?: return null
+    return (map.keyType as? EntityType<*>)?.javaType
+}
 
 /**
  * 读取 Map 关联属性上的 `@MapKeyEnumerated`。

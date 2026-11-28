@@ -314,3 +314,6 @@
 - BOM 纳入 `record-support`；GraalVM 运行期初始化参数改指 `JavaRecordSupportLoader`
 - 已验证：`:serialization:ktlintFormat :serialization:test :record-support:ktlintFormat
   :record-support:test` 通过；全量构建 1588 tests 通过
+- JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
+  `@MapKeyJoinColumn` 实体 Map 键（含 `@EmbeddedId`/`@IdClass` 复合主键文本）、
+  jpa-hibernate 复合主键关联引用解析；classpath 扫描评估为不实现（保持显式注册）

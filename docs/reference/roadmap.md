@@ -273,8 +273,7 @@
 
 | 序号 | 待办 | 阶段 |
 |---|---|---|
-| 2 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
-| 3 | `jlink` 支持（当前仅 `annotation` 可 jlink，受第三方自动模块限制） | 阶段 6 |
+| 2 | `jlink` 支持（当前仅 `annotation` 可 jlink，受第三方自动模块限制） | 阶段 6 |
 
 > 2.4.0 已发布；`2.5.0` 开发中。
 
@@ -293,8 +292,11 @@
 - **JPMS 全部 26 个可发布模块显式化**：补齐 `serialization-kotlin` / `record-support` /
   `codegen` / `codegen-test` / `openapi` 的 Multi-Release `module-info`；`record-support`
   提供 `provides JavaRecordSupport`，`codegen` 提供 KSP `provides SymbolProcessorProvider`
+- JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
+  `@MapKeyJoinColumn` 实体 Map 键（`@EmbeddedId`/`@IdClass` 复合主键文本）、
+  jpa-hibernate 复合主键关联引用解析；classpath 扫描评估为不实现（保持显式注册）
 - 已验证：`:serialization:ktlintFormat :serialization:test :record-support:ktlintFormat
-  :record-support:test` 通过
+  :record-support:test` 通过；`:jpa:build :jpa-hibernate:build` 通过
 
 ## 状态说明
 

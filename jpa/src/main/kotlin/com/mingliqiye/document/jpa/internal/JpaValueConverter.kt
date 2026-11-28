@@ -175,16 +175,33 @@ internal class JpaValueConverter {
             throw JpaMappingException("Map key must not be null at $path")
         }
         val node = writeValue(key, boxedType(keyType), enumType, temporalType, EnumType.ORDINAL, path)
-        return when (node) {
-            is StringNode -> node.value
-            is NumberNode -> node.raw
-            is BooleanNode -> if (node.value) "true" else "false"
-            is BinaryNode -> throw JpaMappingException(
-                "Binary map keys are not supported (type ${keyType.name}) at $path",
-            )
+        return nodeToKeyText(node, keyType, path)
+    }
 
-            else -> throw JpaMappingException("Unsupported map key value ${node.type} (type ${keyType.name}) at $path")
+    /**
+     * 带属性转换器的 Map 键 → 文档对象字段名：先 `convertToDatabaseColumn`，再按数据库值
+     * 标量化。
+     *
+     * 用于实体作为 Map 键时复合主键组件上的显式 `@Convert`。
+     *
+     * @param key Map 键（主键组件值），不能为 `null`
+     * @param converter 组件属性上的转换器
+     * @param enumType 数据库值若为枚举时的策略
+     * @param temporalType 数据库值若为日期时的策略
+     * @param path 当前文档路径
+     */
+    fun writeConvertedMapKey(
+        key: Any?,
+        converter: JpaAttributeConverter,
+        enumType: EnumType?,
+        temporalType: TemporalType?,
+        path: String,
+    ): String {
+        if (key == null) {
+            throw JpaMappingException("Identifier component must not be null at $path")
         }
+        val node = writeConverted(key, converter, enumType, temporalType, path)
+        return nodeToKeyText(node, converter.entityType, path)
     }
 
     /**
@@ -212,6 +229,40 @@ internal class JpaValueConverter {
         } catch (e: NumberFormatException) {
             throw JpaMappingException("Map key '$text' is not a valid ${keyType.name} at $path", e)
         }
+    }
+
+    /**
+     * 文档对象字段名 → 带属性转换器的 Map 键，是 [writeConvertedMapKey] 的逆操作。
+     *
+     * 用于实体作为 Map 键时复合主键组件上的显式 `@Convert`。
+     *
+     * @param text 文档对象字段名
+     * @param converter 组件属性上的转换器
+     * @param enumType 数据库值若为枚举时的策略
+     * @param temporalType 数据库值若为日期时的策略
+     * @param path 当前文档路径
+     */
+    fun readConvertedMapKey(
+        text: String,
+        converter: JpaAttributeConverter,
+        enumType: EnumType?,
+        temporalType: TemporalType?,
+        path: String,
+    ): Any {
+        val node = mapKeyNode(text, boxedType(converter.databaseType), enumType, path)
+        return readConverted(node, converter, enumType, temporalType, path)
+            ?: throw JpaMappingException("Identifier component '$text' must not be null at $path")
+    }
+
+    private fun nodeToKeyText(node: Node, keyType: Class<*>, path: String): String = when (node) {
+        is StringNode -> node.value
+        is NumberNode -> node.raw
+        is BooleanNode -> if (node.value) "true" else "false"
+        is BinaryNode -> throw JpaMappingException(
+            "Binary map keys are not supported (type ${keyType.name}) at $path",
+        )
+
+        else -> throw JpaMappingException("Unsupported map key value ${node.type} (type ${keyType.name}) at $path")
     }
 
     private fun mapKeyNode(

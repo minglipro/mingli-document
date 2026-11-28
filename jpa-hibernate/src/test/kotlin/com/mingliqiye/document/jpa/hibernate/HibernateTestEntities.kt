@@ -11,19 +11,23 @@ import jakarta.persistence.DiscriminatorValue
 import jakarta.persistence.ElementCollection
 import jakarta.persistence.Embeddable
 import jakarta.persistence.Embedded
+import jakarta.persistence.EmbeddedId
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.FetchType
 import jakarta.persistence.Id
+import jakarta.persistence.IdClass
 import jakarta.persistence.Inheritance
 import jakarta.persistence.InheritanceType
 import jakarta.persistence.JoinColumn
+import jakarta.persistence.JoinColumns
 import jakarta.persistence.JoinTable
 import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.MapKey
 import jakarta.persistence.MapKeyColumn
+import jakarta.persistence.MapKeyJoinColumn
 import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import java.math.BigDecimal
@@ -272,4 +276,139 @@ internal open class HibernateTestCat : HibernateTestAnimal() {
 internal open class HibernateTestDog : HibernateTestAnimal() {
     @Column(name = "bark_volume")
     open var barkVolume: Int = 0
+}
+
+// ----------------------------------------------------------------------
+// 剩余映射细节测试模型：关系 @Convert / 实体 Map 键 / 复合主键引用
+// ----------------------------------------------------------------------
+
+/** 关系属性上的显式 @Convert：实体关联 -> 数据库标识符（Long）。 */
+@Converter
+internal class HibernateTestEmployeeRefConverter : AttributeConverter<HibernateTestEmployee, Long> {
+    override fun convertToDatabaseColumn(attribute: HibernateTestEmployee?): Long? = attribute?.id
+
+    override fun convertToEntityAttribute(dbData: Long?): HibernateTestEmployee? = dbData?.let {
+        HibernateTestEmployee().apply { id = it }
+    }
+}
+
+/** 关系属性 @Convert 实体。 */
+@Entity
+@Table(name = "hb_converted_links")
+internal open class HibernateTestConvertedLink {
+    @Id
+    open var id: Long? = null
+
+    @ManyToOne
+    @JoinColumn(name = "employee_id")
+    @Convert(converter = HibernateTestEmployeeRefConverter::class)
+    open var employee: HibernateTestEmployee? = null
+}
+
+/** 项目实体：作为实体 Map 键 Map 的值。 */
+@Entity
+@Table(name = "hb_projects")
+internal open class HibernateTestProject {
+    @Id
+    open var id: Long? = null
+
+    @Column(name = "project_name")
+    open var name: String? = null
+}
+
+/** Map 键为实体引用（`@MapKeyJoinColumn`）。 */
+@Entity
+@Table(name = "hb_workloads")
+internal open class HibernateTestWorkload {
+    @Id
+    open var id: Long? = null
+
+    @ManyToMany(cascade = [CascadeType.ALL], fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "hb_workload_projects",
+        joinColumns = [JoinColumn(name = "workload_id")],
+        inverseJoinColumns = [JoinColumn(name = "project_id")],
+    )
+    @MapKeyJoinColumn(name = "member_id")
+    open var projectByMember: MutableMap<HibernateTestMember, HibernateTestProject> = mutableMapOf()
+}
+
+/** `@EmbeddedId` 复合主键。 */
+@Embeddable
+internal open class HibernateTestOrderKey {
+    @Column(name = "order_no")
+    open var orderNo: String? = null
+
+    @Column(name = "region_code")
+    open var region: String? = null
+}
+
+/** `@EmbeddedId` 复合主键实体。 */
+@Entity
+@Table(name = "hb_composite_orders")
+internal open class HibernateTestCompositeOrder {
+    @EmbeddedId
+    open var key: HibernateTestOrderKey? = null
+
+    @Column(name = "order_amount")
+    open var amount: String? = null
+}
+
+/** 指向 `@EmbeddedId` 实体的关联。 */
+@Entity
+@Table(name = "hb_composite_order_links")
+internal open class HibernateTestCompositeOrderLink {
+    @Id
+    open var id: Long? = null
+
+    @ManyToOne
+    @JoinColumns(
+        value = [
+            JoinColumn(name = "order_no", referencedColumnName = "order_no"),
+            JoinColumn(name = "region_code", referencedColumnName = "region_code"),
+        ],
+    )
+    open var order: HibernateTestCompositeOrder? = null
+}
+
+/** `@IdClass` 复合主键类（实现 equals/hashCode 以支持 Hibernate 一级缓存查找）。 */
+internal class HibernateTestBookKey {
+    var shelf: Int? = null
+    var slot: Int? = null
+
+    override fun equals(other: Any?): Boolean = other is HibernateTestBookKey && shelf == other.shelf && slot == other.slot
+
+    override fun hashCode(): Int = 31 * (shelf ?: 0) + (slot ?: 0)
+}
+
+/** `@IdClass` 复合主键实体。 */
+@Entity
+@Table(name = "hb_books")
+@IdClass(HibernateTestBookKey::class)
+internal open class HibernateTestIdClassBook {
+    @Id
+    open var shelf: Int? = null
+
+    @Id
+    open var slot: Int? = null
+
+    @Column(name = "book_title")
+    open var title: String? = null
+}
+
+/** 指向 `@IdClass` 实体的关联。 */
+@Entity
+@Table(name = "hb_book_links")
+internal open class HibernateTestBookLink {
+    @Id
+    open var id: Long? = null
+
+    @ManyToOne
+    @JoinColumns(
+        value = [
+            JoinColumn(name = "shelf", referencedColumnName = "shelf"),
+            JoinColumn(name = "slot", referencedColumnName = "slot"),
+        ],
+    )
+    open var book: HibernateTestIdClassBook? = null
 }

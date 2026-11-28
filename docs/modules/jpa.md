@@ -77,7 +77,8 @@ JpaDocumentMapper(
 | `@OneToMany` / `@ManyToMany` | 数组；`Map<K, V>` 为对象（字符串化键） |
 | `@ElementCollection` | 数组；Map 形式为对象 |
 | `@MapKey` / `@MapKeyColumn` / `@MapKeyEnumerated` / `@MapKeyTemporal` | Map 键语义/键文本 |
-| `@Convert` / `@Converts` / autoApply `AttributeConverter` | 文档为数据库列值 |
+| `@Convert` / `@Converts` / autoApply `AttributeConverter` | 文档为数据库列值；`attributeName` 支持嵌入对象内部点分路径；关系属性显式 `@Convert` 按基本属性转换 |
+| `@MapKeyJoinColumn` / `@MapKeyJoinColumns` | 实体 Map 键：文档键为标识符文本（含复合主键） |
 | `@Inheritance` / `@DiscriminatorColumn` / `@DiscriminatorValue` | discriminator + 多态读入 |
 | `@Access` | FIELD / PROPERTY |
 | `@MappedSuperclass` | 是 |
@@ -104,16 +105,22 @@ val mapper = JpaDocumentMapper(
 ```
 
 - `@Convert`：文档中出现数据库列值；null 也会传入转换器（与 Hibernate 一致）；
+  `@Convert(attributeName = "address.zipCode")` 支持 `@Embedded`/`@EmbeddedId` 内部
+  基本属性的点分路径（类级/属性级），路径覆盖优先于嵌入类自身转换器与 autoApply；
+- 关系属性上的显式 `@Convert`：整个关联值按基本属性写/读，不展开关联、不受
+  `associationDepth` 限制；
 - Map 关联：文档中为对象，键规则由 `JpaMapKeys` 统一（枚举/数字/日期等）；
+  `@MapKeyJoinColumn` 实体键写出标识符文本（`@EmbeddedId`/`@IdClass` 为
+  `属性名=转义值&...` 规范文本），读入重建 detach 键实体；
 - 多态：写出实际子类字段 + discriminator；读入按 discriminator 选择已注册子类，
   未知值抛异常、无 discriminator 时回退声明类型（抽象类报错）。
 
 ## 限制
 
 ```text
-不扫描 classpath：autoApply 转换器与多态子类需注册
-@Convert(attributeName=...) / 关系属性上的 @Convert 不支持
-@MapKeyJoinColumn（实体作为 Map 键）不支持
+不扫描 classpath：autoApply 转换器与多态子类需注册（原因见 jpa/README）
+@Convert(attributeName) 仅支持 @Embedded/@EmbeddedId 内部基本属性路径
+实体 Map 键类型必须可实例化；复合主键组件必须是基本属性
 @JoinColumn 列名不参与节点键
 循环引用抛异常而非 $ref
 日期时间输出 ISO 字符串

@@ -16,6 +16,13 @@ internal class JpaEntityMetadata(
     val aliases: Map<String, JpaProperty>,
     /** 继承 discriminator 元数据；不在 `@Inheritance`/`@DiscriminatorColumn` 层次中时为 `null`。 */
     val inheritance: JpaInheritanceMetadata? = null,
+    /**
+     * `@Convert(attributeName = ...)` 覆盖规则：键为相对本类的点分属性路径
+     * （例如 `address.zipCode`），值为覆盖转换器/禁用转换标记。
+     */
+    val convertOverrides: Map<String, JpaConvertOverride> = emptyMap(),
+    /** 主键元数据；没有 `@Id`/`@EmbeddedId` 的类（如普通 `@Embeddable`）为 `null`。 */
+    val identifier: JpaIdentifierMetadata? = null,
 ) {
 
     /** 按节点键查找属性。 */

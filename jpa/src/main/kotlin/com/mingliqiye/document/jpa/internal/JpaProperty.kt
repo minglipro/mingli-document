@@ -86,11 +86,22 @@ internal class JpaProperty(
     val mapKeyTemporal: TemporalType? = null,
     /** `@MapKey` 指定的目标实体属性名；空字符串表示使用目标实体的主键。 */
     val mapKeyPropertyName: String? = null,
+    /** Map 键是否为实体引用（`@MapKeyJoinColumn`）：文档键为键实体的标识符文本。 */
+    val mapKeyEntity: Boolean = false,
+    /**
+     * 属性级 `@Convert(attributeName = ...)` 覆盖规则，键为相对该属性的点分路径
+     * （例如 `@Embedded` 属性上的 `zipCode` / `geo.lat`）。
+     */
+    val nestedConvertOverrides: Map<String, JpaConvertOverride> = emptyMap(),
 ) {
 
     /** 声明类型是否为基本类型。 */
     val primitive: Boolean
         get() = declaredType.isPrimitive
+
+    /** 是否为“显式 @Convert 的关联属性”：整个关联值按基本属性转换后写出/读入。 */
+    val associationConverted: Boolean
+        get() = kind == JpaPropertyKind.ASSOCIATION && converter != null
 
     /** 是否可读取。 */
     val canRead: Boolean
