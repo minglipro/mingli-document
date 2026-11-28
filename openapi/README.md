@@ -10,7 +10,7 @@
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:openapi:2.2.0")
+implementation("com.mingliqiye.document:openapi:2.3.0")
 ```
 
 ## 主要 API

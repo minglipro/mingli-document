@@ -5,7 +5,7 @@ CSV 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:csv:2.2.0")
+implementation("com.mingliqiye.document.format:csv:2.3.0")
 ```
 
 ## 主要 API

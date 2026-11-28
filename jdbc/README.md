@@ -13,13 +13,13 @@ JDBC 数据库集成模块：`ResultSet` ⇄ `Node`/Bean，Bean/Map/Node → `Pr
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:jdbc:2.2.0")
+implementation("com.mingliqiye.document:jdbc:2.3.0")
 ```
 
 通常还需要一个格式 Mapper 用于 Bean 转换，例如：
 
 ```kotlin
-implementation("com.mingliqiye.document.format:json:2.2.0")
+implementation("com.mingliqiye.document.format:json:2.3.0")
 ```
 
 ## 主要 API

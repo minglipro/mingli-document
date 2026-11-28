@@ -4,7 +4,7 @@
 `serialization` 与各 `format-*` 模块在运行时读取。通常由依赖传递引入，无需单独声明：
 
 ```kotlin
-implementation("com.mingliqiye.document:annotation:2.2.0")
+implementation("com.mingliqiye.document:annotation:2.3.0")
 ```
 
 ## 总表

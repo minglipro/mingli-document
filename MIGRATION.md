@@ -1,4 +1,16 @@
-# 从 1.x 迁移到 2.2.0
+# 从 1.x 迁移到 2.3.0
+
+## 2.3.0
+
+2.3.0 在 2.2.0 基础上新增：
+
+```text
+jpa 模块（JPA / Hibernate 实体注解映射）
+annotation/exception/core/schema/schema-registry 的显式 MR-JAR module-info
+GraalVM Native Image 实测
+```
+
+API 向后兼容；Maven Central 发布暂缓。
 
 ## 2.2.0
 

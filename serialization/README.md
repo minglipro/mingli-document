@@ -22,7 +22,7 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization:2.2.0")
+implementation("com.mingliqiye.document:serialization:2.3.0")
 ```
 
 ## 主要 API

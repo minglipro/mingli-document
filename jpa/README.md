@@ -13,7 +13,7 @@ JPA / Hibernate ORM 集成模块：JPA 实体 ⇄ `Node` 树。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:jpa:2.2.0")
+implementation("com.mingliqiye.document:jpa:2.3.0")
 ```
 
 `jakarta.persistence-api:3.1.0` 会作为传递依赖引入；实际运行时 Hibernate 等 JPA

@@ -5,7 +5,7 @@ Kotlin 类型支持模块，向 `serialization` 的 Mapper 注入 Kotlin 实例�
 interface** 能像 Java Bean 一样参与映射。
 
 - 坐标：`com.mingliqiye.document:serialization-kotlin`
-- 当前版本：`2.2.0`
+- 当前版本：`2.3.0`
 - 包名：`com.mingliqiye.document.serialization.kotlin`
 - 目标字节码：JDK 8
 - 公开依赖：`com.mingliqiye.document:serialization`（`api`）
@@ -350,10 +350,10 @@ val order = mapper.parse(json, Order::class.java)
 ## 坐标与构建
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization-kotlin:2.2.0")
+implementation("com.mingliqiye.document:serialization-kotlin:2.3.0")
 
 // 使用 BOM
-implementation(platform("com.mingliqiye.document:mingli-document-bom:2.2.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.3.0"))
 implementation("com.mingliqiye.document:serialization-kotlin")
 ```
 

@@ -257,3 +257,15 @@
   Multi-Release JAR，JDK 9+ 使用显式 `module-info`（不再作为自动模块）；JDK 8 字节码、
   classpath 用法与自动模块名保持不变。其余可发布模块仍为自动模块（`alias-for` 模块名非法），
   详见 [docs/guide/jpms.md](docs/guide/jpms.md)
+
+---
+
+## 2.3.0 交付状态
+
+- master / v2.3.0 发布
+- 私服 2.3.0 全模块发布
+- jpa 模块：JPA / Hibernate 实体注解映射
+- 显式 module-info + Multi-Release JAR（5 个模块）
+- GraalVM Native Image 实测通过（GraalVM JDK21 + Windows SDK）
+- 全量构建 1342 tests 通过
+- Maven Central 发布暂缓

@@ -32,9 +32,9 @@ title: 常见问题
 
 - 运行：JDK 8+；
 - Java record 映射：JDK 16+ 运行时；
-- Kotlin data class：Kotlin 2.0（`serialization-kotlin` 用 Kotlin 2.2.0 编译）；
+- Kotlin data class：Kotlin 2.0（`serialization-kotlin` 用 Kotlin 2.3.0 编译）；
 - 构建源码：Gradle 8.x；
-- KSP：`2.2.0-1.0.21`。
+- KSP：`2.3.0-1.0.21`。
 
 ### Q3：有没有 Spring Boot Starter？
 
@@ -305,7 +305,7 @@ kotlinModule(UserId::class, Score::class)
 - 是否应用了 `com.google.devtools.ksp` 插件；
 - 是否 `ksp("com.mingliqiye.document:codegen")`；
 - 枚举是否 public（顶层或嵌套）；
-- KSP 版本是否 `2.2.0-1.0.21`（匹配 Kotlin 2.2.0）；
+- KSP 版本是否 `2.3.0-1.0.21`（匹配 Kotlin 2.3.0）；
 - 多个枚举的 `moduleName` 配置是否一致。
 
 ### Q36：`DocumentRuntimeCodecFactory` 和 KSP 有什么区别？

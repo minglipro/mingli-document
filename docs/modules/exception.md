@@ -4,7 +4,7 @@
 类型不匹配异常 `DocumentTypeException`，其余异常由各模块继承扩展。
 
 - 坐标：`com.mingliqiye.document:exception`
-- 当前版本：`2.2.0`
+- 当前版本：`2.3.0`
 - 包名：`com.mingliqiye.document.exception`
 - 目标字节码：JDK 8
 - 公开依赖：`com.mingliqiye.exception:mingli-exception:1.1.1-Final`（`api`）
@@ -297,7 +297,7 @@ public class FooParseException @JvmOverloads constructor(
 ## 依赖坐标
 
 ```kotlin
-implementation("com.mingliqiye.document:exception:2.2.0")
+implementation("com.mingliqiye.document:exception:2.3.0")
 ```
 
 通常由 `core` / `serialization` / `format-*` 传递引入；只有需要捕获

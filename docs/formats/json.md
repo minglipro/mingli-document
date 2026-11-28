@@ -10,14 +10,14 @@ description: format-json 模块：JsonMapper、JsonConfig、JsonReader、重复 
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:json:2.2.0")
+implementation("com.mingliqiye.document.format:json:2.3.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `json` |
-| 版本 | `2.2.0`（由根 `gradle.properties` 的 `projectVersion` 决定） |
+| 版本 | `2.3.0`（由根 `gradle.properties` 的 `projectVersion` 决定） |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | `com.fasterxml.jackson.core:jackson-core:2.15.3` |
 | 字节码 | JDK 8 |

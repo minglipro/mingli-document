@@ -12,14 +12,14 @@ Smile 是纯二进制格式，Mapper 只实现字节 API：`parse(String)` / `fo
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:smile:2.2.0")
+implementation("com.mingliqiye.document.format:smile:2.3.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `smile` |
-| 版本 | `2.2.0` |
+| 版本 | `2.3.0` |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | `com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.15.3` |
 | 字节码 | JDK 8 |

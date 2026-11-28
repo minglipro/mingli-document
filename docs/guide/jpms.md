@@ -13,7 +13,7 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 > `format-*` 等）依赖的第三方 jar 模块名不合法，暂时仍以「自动模块」方式提供，原因见
 > [限制](#限制)。**
 >
-> 版本基线：`gradle.properties` 的 `projectVersion=2.2.0`、`jvmVersion=8`。主 classes 仍由
+> 版本基线：`gradle.properties` 的 `projectVersion=2.3.0`、`jvmVersion=8`。主 classes 仍由
 > JDK 8 工具链编译；`module-info` 使用 **JDK 17 工具链 + `javac --release 9`** 单独编译。
 
 ## 目录
@@ -101,7 +101,7 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 ### 结构
 
 ```text
-core-2.2.0.jar
+core-2.3.0.jar
 ├── META-INF/MANIFEST.MF
 │   ├── Automatic-Module-Name: com.mingliqiye.document.core
 │   └── Multi-Release: true
@@ -205,9 +205,9 @@ public final class Main {
 }
 ```
 
-`lib/` 至少需要：`exception-2.2.0.jar`、`core-2.2.0.jar`、`schema-2.2.0.jar`，以及依赖
+`lib/` 至少需要：`exception-2.3.0.jar`、`core-2.3.0.jar`、`schema-2.3.0.jar`，以及依赖
 `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`（只有直接使用注解时才需要
-`annotation-2.2.0.jar`）。
+`annotation-2.3.0.jar`）。
 
 ```bash
 javac --module-path lib -d out src/smoke.app/module-info.java src/smoke.app/smoke/Main.java
@@ -221,11 +221,11 @@ JDK 17 实际运行（`--show-module-resolution` 节选）可以看到显式模�
 
 ```text
 root smoke.app file:///.../out/
-smoke.app requires com.mingliqiye.document.schema file:///.../lib/schema-2.2.0.jar
-smoke.app requires com.mingliqiye.document.core file:///.../lib/core-2.2.0.jar
+smoke.app requires com.mingliqiye.document.schema file:///.../lib/schema-2.3.0.jar
+smoke.app requires com.mingliqiye.document.core file:///.../lib/core-2.3.0.jar
 com.mingliqiye.document.schema requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
-com.mingliqiye.document.schema requires com.mingliqiye.document.core file:///.../lib/core-2.2.0.jar
-com.mingliqiye.document.core requires com.mingliqiye.document.exception file:///.../lib/exception-2.2.0.jar
+com.mingliqiye.document.schema requires com.mingliqiye.document.core file:///.../lib/core-2.3.0.jar
+com.mingliqiye.document.core requires com.mingliqiye.document.exception file:///.../lib/exception-2.3.0.jar
 com.mingliqiye.document.core requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
 com.mingliqiye.document.exception requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
 com.mingliqiye.document.exception requires mingli.exception file:///.../lib/mingli-exception-1.1.1-Final.jar automatic
@@ -285,7 +285,7 @@ gradle :annotation:build :exception:build :core:build :schema:build :schema-regi
 ### 1. 查看模块描述（确认是显式模块）
 
 ```bash
-jar --describe-module --file core/build/libs/core-2.2.0.jar --release 9
+jar --describe-module --file core/build/libs/core-2.3.0.jar --release 9
 ```
 
 JDK 17 实际输出：
@@ -293,7 +293,7 @@ JDK 17 实际输出：
 ```text
 releases: 9
 
-com.mingliqiye.document.core jar:file:///.../core-2.2.0.jar!/META-INF/versions/9/module-info.class
+com.mingliqiye.document.core jar:file:///.../core-2.3.0.jar!/META-INF/versions/9/module-info.class
 exports com.mingliqiye.document.core
 requires com.mingliqiye.document.exception transitive
 requires java.base mandated
@@ -308,7 +308,7 @@ requires kotlin.stdlib transitive
 ### 2. 校验 Multi-Release jar
 
 ```bash
-jar --validate --file core/build/libs/core-2.2.0.jar
+jar --validate --file core/build/libs/core-2.3.0.jar
 ```
 
 命令无输出且退出码为 0 表示 jar 结构合法。
@@ -316,7 +316,7 @@ jar --validate --file core/build/libs/core-2.2.0.jar
 ### 3. 检查 jar 内容与清单
 
 ```bash
-jar tf core/build/libs/core-2.2.0.jar | grep module-info
+jar tf core/build/libs/core-2.3.0.jar | grep module-info
 # META-INF/versions/9/module-info.class
 # （基版本根目录没有 module-info.class）
 ```
@@ -324,7 +324,7 @@ jar tf core/build/libs/core-2.2.0.jar | grep module-info
 Windows PowerShell：
 
 ```powershell
-Expand-Archive core\build\libs\core-2.2.0.jar -DestinationPath tmp
+Expand-Archive core\build\libs\core-2.3.0.jar -DestinationPath tmp
 Get-Content tmp\META-INF\MANIFEST.MF | Select-String 'Multi-Release|Automatic-Module-Name'
 # Automatic-Module-Name: com.mingliqiye.document.core
 # Multi-Release: true
@@ -333,7 +333,7 @@ Get-Content tmp\META-INF\MANIFEST.MF | Select-String 'Multi-Release|Automatic-Mo
 ### 4. 主 classes 仍是 JDK 8 字节码
 
 ```bash
-javap -verbose -cp core/build/libs/core-2.2.0.jar com.mingliqiye.document.core.StringNode \
+javap -verbose -cp core/build/libs/core-2.3.0.jar com.mingliqiye.document.core.StringNode \
   | grep 'major version'
 # major version: 52
 ```
