@@ -3,8 +3,10 @@
 本目录为 `mingli-document` 提供 GraalVM Native Image（AOT 静态镜像）的配置骨架、构建说明与
 可运行的冒烟示例。
 
-> **当前状态**：配置为「可编译、可被 native-image 发现」的骨架；本仓库环境未安装 GraalVM，
-> 因此没有执行真正的 `native-image` 构建（见文末[验证与限制](#验证与限制)）。
+> **当前状态**：配置为「可编译、可被 native-image 发现」的骨架；JVM smoke 已用
+> GraalVM JDK 21 与 JBR 25 实测通过。Windows 上 `native-image` 构建还需要
+> Visual Studio C++ Build Tools + Windows SDK（见第 3 节）；本机已安装 Build Tools，
+> 但缺少 Windows SDK 头文件，native 二进制构建尚未完成。
 > 所有反射注册规则都基于库源码中实际使用反射的位置整理，构建时请以 GraalVM 的报错和
 > tracing agent 的输出为准。
 

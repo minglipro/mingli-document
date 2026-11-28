@@ -63,6 +63,22 @@ SMOKE OK
 发现依赖 `java.beans.Introspector`，该路径建议使用 GraalVM for JDK 22+，详见上级
 [README](../README.md) 第 8 节；同时确保 `native-image` 在 `PATH` 中。
 
+Windows 还需要：
+
+```text
+Visual Studio C++ Build Tools（vcvarsall.bat）
+Windows 10/11 SDK（Include/.../ucrt/stdio.h 等 C 头文件）
+```
+
+先初始化 MSVC 环境再构建：
+
+```bat
+call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+```
+
+如果出现 `fatal error C1083: stdio.h: No such file or directory`，说明只装了 Build Tools，
+没有安装 Windows SDK 的“Windows 10/11 SDK”组件。
+
 ```bat
 :: 1) 编译示例并拷贝配置（classpath 用脚本打印的那条）
 javac -encoding UTF-8 --release 17 -cp "<classpath>" -d graalvm\native-smoke\build\classes graalvm\native-smoke\NativeSmoke.java

@@ -31,6 +31,12 @@ serialization/src/main/resources/META-INF/native-image/.../
 
 ## 构建命令
 
+Windows 需要先初始化 Visual Studio C++ 环境，并安装 Windows 10/11 SDK：
+
+```bat
+call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" x64
+```
+
 ```bash
 native-image \
   -cp "build/libs/*:..." \
@@ -38,6 +44,12 @@ native-image \
   --initialize-at-run-time=java.beans.Introspector \
   --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport \
   com.mingliqiye.document.graalvm.smoke.NativeSmoke
+```
+
+缺少 Windows SDK 时会报：
+
+```text
+fatal error C1083: stdio.h: No such file or directory
 ```
 
 ## 用户需要补充的反射配置
