@@ -9,8 +9,8 @@ import com.mingliqiye.document.schema.SchemaType
  * 在格式无关 [SchemaField] 的基础上增加 Protobuf 字段编号、`.proto` 类型、repeated 标记、
  * 复杂类型引用（message/enum/map）与 oneof 归属。
  *
- * message/enum/map 字段的 [protobufType] 只是类型占位，真实类型由 [typeReference] 描述：
- * - [ProtobufType.MESSAGE] 需要 [ProtobufTypeReference.MessageType]
+ * message/enum/map/group 字段的 [protobufType] 只是类型占位，真实类型由 [typeReference] 描述：
+ * - [ProtobufType.MESSAGE]/[ProtobufType.GROUP] 需要 [ProtobufTypeReference.MessageType]
  * - [ProtobufType.ENUM] 需要 [ProtobufTypeReference.EnumType]
  * - [ProtobufType.MAP] 需要 [ProtobufTypeReference.MapType]
  *
@@ -45,7 +45,7 @@ public class ProtobufSchemaField(
     /** 映射到格式无关 Schema 的类型，repeated 字段为 [SchemaType.ARRAY]。 */
     public val schemaType: SchemaType get() = if (repeated) SchemaType.ARRAY else protobufType.schemaType
 
-    /** message 字段引用的类型名；非 message 字段为 `null`。 */
+    /** message/group 字段引用的类型名；其它字段为 `null`。 */
     public val messageTypeName: String?
         get() = (typeReference as? ProtobufTypeReference.MessageType)?.typeName
 
@@ -73,8 +73,8 @@ public class ProtobufSchemaField(
         val reference = typeReference ?: return
         when (reference) {
             is ProtobufTypeReference.MessageType ->
-                require(protobufType == ProtobufType.MESSAGE) {
-                    "message 类型引用只能用于 MESSAGE 字段: $name"
+                require(protobufType == ProtobufType.MESSAGE || protobufType == ProtobufType.GROUP) {
+                    "message/group 类型引用只能用于 MESSAGE 或 GROUP 字段: $name"
                 }
 
             is ProtobufTypeReference.EnumType ->
@@ -89,6 +89,7 @@ public class ProtobufSchemaField(
                     "非法 Protobuf map key 类型: ${reference.keyType.typeName}，字段: $name"
                 }
                 require(reference.valueType != ProtobufType.MAP) { "map 字段的 value 不能是 map: $name" }
+                require(reference.valueType != ProtobufType.GROUP) { "map 字段的 value 不能是 group: $name" }
                 when (reference.valueType) {
                     ProtobufType.MESSAGE -> require(reference.valueReference is ProtobufTypeReference.MessageType) {
                         "map value 为 message 时必须提供 MessageType 引用: $name"
@@ -111,6 +112,7 @@ public class ProtobufSchemaField(
         require(oneofNamePattern.matches(oneofName)) { "非法 Protobuf oneof 名称: $oneofName" }
         require(!repeated) { "oneof 字段不能是 repeated: $name" }
         require(protobufType != ProtobufType.MAP) { "map 字段不能属于 oneof: $name" }
+        require(protobufType != ProtobufType.GROUP) { "group 字段不能属于 oneof: $name" }
         require(!required) { "oneof 字段不能是必填字段: $name" }
     }
 

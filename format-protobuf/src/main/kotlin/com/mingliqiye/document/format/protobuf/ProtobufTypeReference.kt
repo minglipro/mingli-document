@@ -3,11 +3,12 @@ package com.mingliqiye.document.format.protobuf
 /**
  * Protobuf 复杂字段的类型引用。
  *
- * 用于 [ProtobufSchemaField] 描述 message、enum 与 map 字段的真实类型：
+ * 用于 [ProtobufSchemaField] 描述 message、group、enum 与 map 字段的真实类型：
  * - [MessageType]、[EnumType] 的 `typeName` 默认是相对当前 message 的类型名；以 `.` 开头表示
  *   全限定名，需要给 [ProtobufSchema.toDescriptor] 传入依赖 Descriptor 才能解析。
+ * - [MessageType] 同时用于 [ProtobufType.MESSAGE] 与 [ProtobufType.GROUP] 字段。
  * - [MapType] 的 key 必须是允许作为 map key 的标量类型，value 可以是标量，也可以是
- *   [MessageType]/[EnumType] 引用。
+ *   [MessageType]/[EnumType] 引用（不能是 map 或 group）。
  *
  * @see ProtobufSchemaField.typeReference
  */

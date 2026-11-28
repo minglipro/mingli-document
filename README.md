@@ -481,7 +481,7 @@ gradle :fuzz:test
 gradle ktlintFormat
 ```
 
-更详细的开发规范、提交约定和发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+更详细的开发规范、提交约定和发布流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全边界见 [SECURITY.md](SECURITY.md)。
 
 ## 发布
 

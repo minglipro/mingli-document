@@ -167,6 +167,75 @@ public class ProtobufMessageBuilder public constructor(private val messageName: 
     )
 
     /**
+     * 添加 proto2 group 字段。
+     *
+     * group 在 wire 上使用 start-group/end-group 标签包围嵌套字段，语义与 message 相同；
+     * [messageTypeName] 指向的 message 必须已作为嵌套 message 定义（如 `nestedMessage("Foo")`），
+     * 生成的 Descriptor 会使用 `TYPE_GROUP`。group 字段不能属于 oneof、不能作为 map value。
+     *
+     * @param name 字段名
+     * @param fieldNumber 字段编号
+     * @param messageTypeName 引用的 message 类型名，相对当前 message 或 `.` 开头的全限定名
+     * @param repeated 是否为 repeated 字段
+     * @param required 是否必填；group 通常为可选字段，默认 `false`
+     * @param nullable 是否允许 `null`
+     * @param description 字段描述
+     * @return 当前构建器
+     */
+    public fun groupField(
+        name: String,
+        fieldNumber: Int,
+        messageTypeName: String,
+        repeated: Boolean = false,
+        required: Boolean = false,
+        nullable: Boolean = false,
+        description: String? = null,
+    ): ProtobufMessageBuilder = field(
+        name,
+        fieldNumber,
+        ProtobufType.GROUP,
+        repeated,
+        required,
+        nullable,
+        description,
+        ProtobufTypeReference.MessageType(messageTypeName),
+        null,
+    )
+
+    /**
+     * 使用外部 [Descriptor] 添加 proto2 group 字段。
+     *
+     * 类型引用记录为该 Descriptor 以 `.` 开头的全限定名；[ProtobufSchema.toDescriptor] 需要
+     * 通过依赖 FileDescriptor 解析该类型。
+     *
+     * @param name 字段名
+     * @param fieldNumber 字段编号
+     * @param messageType 外部 group message 描述符
+     * @param repeated 是否为 repeated 字段
+     * @param required 是否必填；group 通常为可选字段，默认 `false`
+     * @param nullable 是否允许 `null`
+     * @param description 字段描述
+     * @return 当前构建器
+     */
+    public fun groupField(
+        name: String,
+        fieldNumber: Int,
+        messageType: Descriptor,
+        repeated: Boolean = false,
+        required: Boolean = false,
+        nullable: Boolean = false,
+        description: String? = null,
+    ): ProtobufMessageBuilder = groupField(
+        name,
+        fieldNumber,
+        ".${messageType.fullName}",
+        repeated,
+        required,
+        nullable,
+        description,
+    )
+
+    /**
      * 添加 enum 字段。
      *
      * @param name 字段名

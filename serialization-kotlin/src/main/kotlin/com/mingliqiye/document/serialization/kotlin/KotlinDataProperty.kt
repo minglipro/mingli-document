@@ -3,11 +3,7 @@ package com.mingliqiye.document.serialization.kotlin
 import com.mingliqiye.document.annotation.DocumentIgnore
 import com.mingliqiye.document.annotation.DocumentName
 import com.mingliqiye.document.serialization.DocumentProperty
-import java.lang.reflect.GenericArrayType
-import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
-import java.lang.reflect.TypeVariable
-import java.lang.reflect.WildcardType
 
 /**
  * Kotlin data class 主构造参数对应的属性元数据。
@@ -30,12 +26,5 @@ internal class KotlinDataProperty(
 
     override fun isIgnored(): Boolean = annotations.any { it is DocumentIgnore }
 
-    override fun getRawType(): Class<*> = when (val current = type) {
-        is Class<*> -> current
-        is ParameterizedType -> (current.rawType as? Class<*>) ?: Any::class.java
-        is WildcardType -> (current.upperBounds.firstOrNull() as? Class<*>) ?: Any::class.java
-        is TypeVariable<*> -> (current.bounds.firstOrNull() as? Class<*>) ?: Any::class.java
-        is GenericArrayType -> Any::class.java
-        else -> Any::class.java
-    }
+    override fun getRawType(): Class<*> = rawJavaClass(type)
 }

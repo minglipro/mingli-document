@@ -24,6 +24,8 @@ import com.mingliqiye.document.schema.SchemaType
  * @property protobufFields Protobuf 字段列表，保持声明顺序
  * @property nestedMessages 嵌套 message 定义
  * @property enums 嵌套 enum 定义
+ * @property messageSetWireFormat 是否使用 MessageSet wire format；为 `true` 时 message 不能声明
+ *   普通字段（与 `option message_set_wire_format = true` 一致）
  */
 public class ProtobufSchema(
     messageName: String,
@@ -31,6 +33,7 @@ public class ProtobufSchema(
     packageName: String? = null,
     nestedMessageList: List<ProtobufMessage> = emptyList(),
     enumList: List<ProtobufEnum> = emptyList(),
+    messageSetWireFormat: Boolean = false,
 ) : DocumentSchema {
 
     /** message 名称，可含嵌套点号，如 `Outer.Inner`。 */
@@ -51,6 +54,9 @@ public class ProtobufSchema(
 
     /** 嵌套 enum 定义。 */
     public val enums: List<ProtobufEnum> = enumList.toList()
+
+    /** 是否使用 MessageSet wire format。 */
+    public val messageSetWireFormat: Boolean = messageSetWireFormat
 
     /** 格式无关字段视图，repeated 字段映射为 [SchemaType.ARRAY]。 */
     override val fields: List<SchemaField> = protobufFields.map { it.toSchemaField() }
@@ -76,6 +82,9 @@ public class ProtobufSchema(
         require(duplicateNames.isEmpty()) { "Protobuf 字段名重复: $duplicateNames" }
         val duplicateNumbers = protobufFields.groupBy { it.fieldNumber }.filterValues { it.size > 1 }.keys
         require(duplicateNumbers.isEmpty()) { "Protobuf 字段编号重复: $duplicateNumbers" }
+        require(!messageSetWireFormat || protobufFields.isEmpty()) {
+            "MessageSet wire format 的 message 不能声明普通字段: $messageName"
+        }
         ProtobufMessage(messageName.substringAfterLast('.'), protobufFields, nestedMessages, enums)
     }
 
@@ -123,8 +132,9 @@ public class ProtobufSchema(
      * 生成完整的 Protobuf [Descriptor]。
      *
      * 生成 proto2 语法的单文件 descriptor：字段类型/编号/repeated/required/oneof 映射为对应
-     * FieldDescriptorProto，message/enum 类型引用解析为文件内的绝对类型名，map 字段生成
-     * `map_entry = true` 的嵌套 entry message，[nestedMessages]/[enums] 递归生成。
+     * FieldDescriptorProto，message/enum/group 类型引用解析为文件内的绝对类型名，map 字段生成
+     * `map_entry = true` 的嵌套 entry message，[nestedMessages]/[enums] 递归生成；
+     * [messageSetWireFormat] 为 `true` 时设置 `message_set_wire_format` 选项。
      *
      * @param dependencies 依赖的 FileDescriptor，用于解析 `.` 开头的全限定类型引用；默认无依赖
      * @return 根 message 描述符
@@ -140,6 +150,7 @@ public class ProtobufSchema(
         "message" to messageName,
         "package" to packageName,
         "fullName" to messageFullName,
+        "messageSetWireFormat" to messageSetWireFormat,
         "fields" to protobufFields.map { it.toJsonDescription() },
         "nestedMessages" to nestedMessages.map { it.toJsonDescription() },
         "enums" to enums.map { it.toJsonDescription() },
@@ -162,12 +173,14 @@ public class ProtobufSchema(
          *
          * 字段类型/编号/repeated/required/presence 与 oneof 归属保持不变；嵌套 message/enum 递归
          * 还原为 [ProtobufMessage]/[ProtobufEnum]；map 字段由 map entry 还原为
-         * [ProtobufTypeReference.MapType]。根 message 之外的类型引用记录为全限定名。
+         * [ProtobufTypeReference.MapType]；group 字段还原为 [ProtobufType.GROUP]；
+         * `message_set_wire_format` 选项还原为 [messageSetWireFormat]。根 message 之外的类型引用
+         * 记录为全限定名。
          *
          * @param descriptor Protobuf message 描述符
          * @return Protobuf Schema
-         * @throws com.mingliqiye.document.format.protobuf.exception.ProtobufException group 字段
-         *   或非法 map entry 时抛出
+         * @throws com.mingliqiye.document.format.protobuf.exception.ProtobufException 非法 map entry
+         *   时抛出
          */
         @JvmStatic
         public fun fromDescriptor(descriptor: Descriptor): ProtobufSchema = ProtobufSchemaConverter.convert(descriptor)
@@ -192,6 +205,9 @@ public class ProtobufSchema(
             }
             parseNestedMessages(description).forEach { builder.nestedMessage(it) }
             parseEnums(description).forEach { builder.enumeration(it) }
+            if (description["messageSetWireFormat"] as? Boolean == true) {
+                builder.messageSetWireFormat()
+            }
             return builder.build()
         }
 
@@ -235,7 +251,10 @@ public class ProtobufSchema(
         }
 
         private fun parseTypeReference(description: Map<*, *>, protobufType: ProtobufType): ProtobufTypeReference? = when (protobufType) {
-            ProtobufType.MESSAGE -> (description["messageType"] as? String)?.let { ProtobufTypeReference.MessageType(it) }
+            ProtobufType.MESSAGE,
+            ProtobufType.GROUP,
+            -> (description["messageType"] as? String)?.let { ProtobufTypeReference.MessageType(it) }
+
             ProtobufType.ENUM -> (description["enumType"] as? String)?.let { ProtobufTypeReference.EnumType(it) }
             ProtobufType.MAP -> parseMapType(description)
             else -> null

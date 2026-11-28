@@ -20,6 +20,10 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * （无表头时按顺序对应），单元格按 Schema 类型解析；此时 [CsvSchema.header] 优先于
  * [CsvConfig.header]。可通过 [CsvMapper] 构造器、[CsvConfigBuilder.schema] 或
  * [CsvMapperBuilder.schema] 传入 Schema。
+ *
+ * 配置了 [CsvConfig.nestedMode] 时启用嵌套单元格（JSON 文本或点分列名）；Schema 中通过
+ * [CsvSchemaBuilder.objectField] / [CsvSchemaBuilder.arrayField] 声明的嵌套子 Schema 总是启用。
+ * 默认（`nestedMode` 为 `null` 且未声明子 Schema）保持旧行为：嵌套单元格报错。
  */
 public open class CsvMapper internal constructor(
     serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
@@ -82,7 +86,7 @@ public open class CsvMapper internal constructor(
 
     override fun createTextTokenReader(source: String): DocumentTokenReader {
         val csvConfig = mapperConfig as? CsvConfig
-        if (csvConfig?.schema != null) {
+        if (csvConfig?.schema != null || csvConfig?.nestedMode != null) {
             val node = parseCsv(source, mapperConfig)
             validateNodeLimits(node)
             return NodeTokenReader(node)
@@ -107,21 +111,23 @@ public open class CsvMapper internal constructor(
 private fun parseCsv(source: String, config: DocumentMapperConfig): Node {
     val csvConfig = config as? CsvConfig
     val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
+    val nestedMode = csvConfig?.nestedMode
     val schema = csvConfig?.schema
     return if (schema != null) {
-        CsvSchemaReader(source, schema, delimiter).read()
+        CsvSchemaReader(source, schema, delimiter, nestedMode).read()
     } else {
-        CsvReader(source, delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER).read()
+        CsvReader(source, delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode).read()
     }
 }
 
 private fun writeCsv(node: Node, config: DocumentMapperConfig): String {
     val csvConfig = config as? CsvConfig
     val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
+    val nestedMode = csvConfig?.nestedMode
     val schema = csvConfig?.schema
     return if (schema != null) {
-        CsvSchemaWriter(schema, delimiter).write(node)
+        CsvSchemaWriter(schema, delimiter, nestedMode).write(node)
     } else {
-        CsvWriter(delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER).write(node)
+        CsvWriter(delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode).write(node)
     }
 }

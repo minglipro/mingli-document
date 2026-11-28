@@ -23,6 +23,8 @@ public class ProtobufSchemaBuilder(
 
     private val definitionBuilder = ProtobufMessageBuilder(messageName.substringAfterLast('.'))
 
+    private var messageSetWireFormat: Boolean = false
+
     init {
         ProtobufSchema.checkMessageName(messageName)
         ProtobufSchema.checkPackageName(packageName)
@@ -168,6 +170,75 @@ public class ProtobufSchemaBuilder(
             nullable,
             description,
             oneofName,
+        )
+        return this
+    }
+
+    /**
+     * 添加 proto2 group 字段。
+     *
+     * group 在 wire 上使用 start-group/end-group 标签包围嵌套字段，语义与 message 相同；
+     * [messageTypeName] 指向的 message 必须已作为嵌套 message 定义。
+     *
+     * @param name 字段名
+     * @param fieldNumber 字段编号
+     * @param messageTypeName 引用的 message 类型名，相对当前 message 或 `.` 开头的全限定名
+     * @param repeated 是否为 repeated 字段
+     * @param required 是否必填；group 通常为可选字段，默认 `false`
+     * @param nullable 是否允许 `null`
+     * @param description 字段描述
+     * @return 当前构建器
+     */
+    public fun groupField(
+        name: String,
+        fieldNumber: Int,
+        messageTypeName: String,
+        repeated: Boolean = false,
+        required: Boolean = false,
+        nullable: Boolean = false,
+        description: String? = null,
+    ): ProtobufSchemaBuilder {
+        definitionBuilder.groupField(
+            name,
+            fieldNumber,
+            messageTypeName,
+            repeated,
+            required,
+            nullable,
+            description,
+        )
+        return this
+    }
+
+    /**
+     * 使用外部 [Descriptor] 添加 proto2 group 字段。
+     *
+     * @param name 字段名
+     * @param fieldNumber 字段编号
+     * @param messageType 外部 group message 描述符
+     * @param repeated 是否为 repeated 字段
+     * @param required 是否必填；group 通常为可选字段，默认 `false`
+     * @param nullable 是否允许 `null`
+     * @param description 字段描述
+     * @return 当前构建器
+     */
+    public fun groupField(
+        name: String,
+        fieldNumber: Int,
+        messageType: Descriptor,
+        repeated: Boolean = false,
+        required: Boolean = false,
+        nullable: Boolean = false,
+        description: String? = null,
+    ): ProtobufSchemaBuilder {
+        definitionBuilder.groupField(
+            name,
+            fieldNumber,
+            messageType,
+            repeated,
+            required,
+            nullable,
+            description,
         )
         return this
     }
@@ -330,6 +401,21 @@ public class ProtobufSchemaBuilder(
             packageName,
             definition.nestedMessages,
             definition.enums,
+            messageSetWireFormat,
         )
+    }
+
+    /**
+     * 设置是否使用 MessageSet wire format（proto2 `option message_set_wire_format = true`）。
+     *
+     * MessageSet message 只能包含 extension，不能声明普通字段；本 Schema 不声明 extension，
+     * extension 由外部 [ProtobufExtensionRegistry] 提供。
+     *
+     * @param messageSetWireFormat 是否使用 MessageSet wire format，默认 `true`
+     * @return 当前构建器
+     */
+    public fun messageSetWireFormat(messageSetWireFormat: Boolean = true): ProtobufSchemaBuilder {
+        this.messageSetWireFormat = messageSetWireFormat
+        return this
     }
 }

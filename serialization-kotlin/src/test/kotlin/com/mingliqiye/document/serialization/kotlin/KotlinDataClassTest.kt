@@ -108,9 +108,34 @@ class KotlinDataClassTest {
         assertEquals(User("小于", 18), user)
     }
 
+    @Test
+    fun genericParametersKeepElementTypes() {
+        val value = Typed(
+            numbers = listOf(1, 2, 3),
+            maybe = null,
+            matrix = mapOf("a" to listOf("x", "y")),
+        )
+
+        val node = jsonMapper.toNode(value)
+        assertEquals("""{"matrix":{"a":["x","y"]},"maybe":null,"numbers":[1,2,3]}""", jsonMapper.format(value))
+        assertEquals(value, jsonMapper.fromNode(node, Typed::class.java))
+        assertEquals(value, jsonMapper.parse(jsonMapper.format(value), Typed::class.java))
+    }
+
+    @Test
+    fun nullablePrimitiveParameters() {
+        assertEquals(Typed(emptyList(), 5, emptyMap()), jsonMapper.parse("""{"numbers":[],"maybe":5,"matrix":{}}""", Typed::class.java))
+    }
+
     private data class User(val name: String, val age: Int)
 
     private data class Address(val city: String)
+
+    private data class Typed(
+        val numbers: List<Int>,
+        val maybe: Int?,
+        val matrix: Map<String, List<String>>,
+    )
 
     private data class Profile(
         val user: User,

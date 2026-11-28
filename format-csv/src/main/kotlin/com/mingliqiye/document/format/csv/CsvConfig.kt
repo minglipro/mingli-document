@@ -5,11 +5,18 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
 /**
  * CSV Mapper 配置。
  *
- * 在通用字段/读写配置基础上增加 CSV 分隔符、表头选项与可选的 [CsvSchema]。
+ * 在通用字段/读写配置基础上增加 CSV 分隔符、表头选项、可选的 [CsvSchema] 与嵌套值读写方式。
  *
  * 配置了 [schema] 时：
  * - 列顺序、列名与单元格类型由 Schema 决定，[delimiter] 仍由本配置控制；
  * - 表头由 [CsvSchema.header] 决定，[header] 被忽略（Schema 优先）。
+ *
+ * 配置了 [nestedMode] 时启用嵌套单元格：
+ * - [CsvNestedMode.JSON]：`{...}` / `[...]` 单元格解析为嵌套节点，嵌套节点写出为 JSON 文本；
+ * - [CsvNestedMode.COLUMNS]：点分表头（`address.city`）读写为嵌套对象，写出时展开为点分列名。
+ *
+ * [nestedMode] 为 `null`（默认）时不支持嵌套，保持旧版本行为；声明了嵌套子 Schema 的字段
+ * 不受该开关限制（由 Schema 自身启用）。
  */
 public class CsvConfig internal constructor(
     base: DocumentMapperConfig,
@@ -19,6 +26,8 @@ public class CsvConfig internal constructor(
     public val header: Boolean,
     /** CSV Schema；非 null 时按 Schema 顺序与类型读写。 */
     public val schema: CsvSchema? = null,
+    /** 嵌套值读写方式；`null` 表示不支持嵌套（默认）。 */
+    public val nestedMode: CsvNestedMode? = null,
 ) : DocumentMapperConfig(base) {
 
     public companion object {

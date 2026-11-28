@@ -12,5 +12,6 @@ internal class DataClassParameterMetadata(
     val fieldName: String,
     val ignored: Boolean,
     val javaType: Type,
+    val jvmType: Class<*>,
     val property: DocumentProperty,
 )

@@ -9,6 +9,10 @@
 - Java record 支持（JDK 16+ 运行时）
 - 只读属性与字段 merge/update
 - CBOR sequence、Smile 多消息流
+- Kotlin value class / sealed class
+- CSV 嵌套结构 / 多级 Schema
+- Protobuf extensions / group / MessageSet / proto3 语义
+- Security baseline 与 SECURITY.md
 - Maven Central 发布配置
 - 运行期属性访问器生成：`DocumentAccessorCodegen`
 - 编译期源码生成器：`DocumentCodecSourceGenerator`

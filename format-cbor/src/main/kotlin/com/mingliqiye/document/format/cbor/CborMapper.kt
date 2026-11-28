@@ -89,7 +89,7 @@ public open class CborMapper internal constructor(
      * @param source CBOR 二进制内容
      * @return Token 读取器；保真模式下为 `null`
      */
-    override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTags) null else CborTokenReader(source)
+    override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTags || maxNodeDepth > 0) null else CborTokenReader(source)
 
     /**
      * 将 Java 实体写成 CBOR 字节。

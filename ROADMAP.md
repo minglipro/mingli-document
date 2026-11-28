@@ -28,7 +28,7 @@
 - [x] Builder 模式实例化
 - [x] 输入本地 `$ref` 解析\n- [x] 对象身份引用序列化
 - [x] Java record（JDK 16+ 运行时）
-- [ ] Kotlin value class / sealed class
+- [x] Kotlin value class / sealed class
 - [x] 只读属性
 - [x] 字段 merge / update
 
@@ -37,7 +37,7 @@
 ## 阶段 2：格式协议完整性
 
 - [x] Avro：非默认 codec、appendTo\n- [ ] Avro：完整 logical type
-- [ ] Protobuf：extensions、group、MessageSet、proto3 语义
+- [x] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
 - [x] CBOR sequence
 - [x] CBOR：canonical map key 排序
@@ -45,7 +45,7 @@
 - [x] Ion：timestamp / symbol / clob / blob 类型保真
 - [ ] YAML：自定义 tag、跨文档 anchor
 - [ ] TOML：注释保留
-- [ ] CSV：嵌套结构 / 多级 Schema
+- [x] CSV：嵌套结构 / 多级 Schema
 - [x] Smile：多消息流
 
 ---
@@ -76,7 +76,7 @@
 - [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
 - [x] 持续 fuzz harness（fuzzContinuous）\n- [x] Jazzer 覆盖率引导 fuzz\n- [x] JQF 集成
-- [ ] 安全测试基线
+- [x] 安全测试基线
 
 ---
 
