@@ -16,6 +16,10 @@
 - JPMS Automatic-Module-Name
 - 显式 module-info：21 个模块
 - GraalVM Native Image 实测
+- DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES
+- @DocumentNaming / @DocumentInclude
+- 对象映射便捷 API（readTree/writeTree/readValue/readerFor/writer）
+- reified 扩展迁移到 serialization-kotlin
 
 ## 已放弃
 
@@ -32,3 +36,4 @@
 - [ ] format-json 去掉 jackson 内部包 `DoubleToDecimal` 依赖
 - [ ] Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn`
 - [ ] `jlink` 支持（当前只有 annotation 可 jlink）
+- [ ] native-image 构建接入 CI
