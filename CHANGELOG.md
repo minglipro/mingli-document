@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.6.0（未发布）
+
+### 变更
+
+- XML 写出默认不再生成 `type="..."` 协议属性，输出更接近普通业务 XML；读取侧按
+  元素结构/标量文本推断类型
+- `XmlConfig` 新增 `typeAttributes(Boolean)`，默认 `false`；需要严格无损往返时设为 `true`
+- `Node.toXmlString(...)` 增加 `typeAttributes` 参数，默认 `false`
+
+### 说明
+
+- `nil="true"` 仍默认输出
+- 不输出 `type` 时，二进制、空容器、看起来像数字/布尔的字符串无法严格保真；
+  需要协议保真时开启 `typeAttributes(true)`
+
 ## 2.5.1
 
 ### 修复

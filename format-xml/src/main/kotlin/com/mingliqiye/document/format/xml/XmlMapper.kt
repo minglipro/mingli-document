@@ -15,8 +15,8 @@ import java.io.OutputStreamWriter
 /**
  * XML 文档映射器。
  *
- * 使用 [DocumentMapper] 的通用 Node 映射能力，并通过 `type` / `nil` 属性保存 XML
- * 无法原生表达的类型信息。
+ * 使用 [DocumentMapper] 的通用 Node 映射能力；`nil` 属性默认保留，`type` 协议默认
+ * 不输出，可通过 [XmlConfig.typeAttributes] 开启以严格保存 XML 无法原生表达的类型信息。
  *
  * 通过 [XmlConfig] 可额外启用属性映射与命名空间感知：
  * - 属性映射：`@DocumentName("@id")` 的字段写成 XML attribute `id="..."`，

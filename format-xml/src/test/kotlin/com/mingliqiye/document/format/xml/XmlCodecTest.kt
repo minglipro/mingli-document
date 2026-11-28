@@ -30,7 +30,7 @@ class XmlCodecTest {
             ),
         )
 
-        val xml = node.toXmlString(pretty = true)
+        val xml = node.toXmlString(pretty = true, typeAttributes = true)
         assertTrue(xml.startsWith("<root type=\"object\">"))
         assertTrue(xml.contains("&amp;"))
         assertTrue(xml.contains("&lt;xml&gt;"))
@@ -46,13 +46,13 @@ class XmlCodecTest {
     @Test
     fun emptyContainersAndScalars() {
         val emptyObject = ObjectNode.from(emptyMap())
-        assertEquals(0, XmlReader(emptyObject.toXmlString()).read().asObject().size)
+        assertEquals(0, XmlReader(emptyObject.toXmlString(typeAttributes = true)).read().asObject().size)
 
         val emptyArray = ArrayNode.from(emptyList())
-        assertEquals(0, XmlReader(emptyArray.toXmlString()).read().asArray().size)
+        assertEquals(0, XmlReader(emptyArray.toXmlString(typeAttributes = true)).read().asArray().size)
 
-        assertEquals("", XmlReader(StringNode.of("").toXmlString()).read().asString())
-        assertEquals(42, XmlReader(NumberNode.of(42).toXmlString()).read().asNumber().toInt())
+        assertEquals("", XmlReader(StringNode.of("").toXmlString(typeAttributes = true)).read().asString())
+        assertEquals(42, XmlReader(NumberNode.of(42).toXmlString(typeAttributes = true)).read().asNumber().toInt())
     }
 
     @Test
@@ -65,7 +65,7 @@ class XmlCodecTest {
     @Test
     fun namesWithInvalidXmlCharactersRoundTrip() {
         val node = ObjectNode.from(mapOf("user name" to StringNode.of("value")))
-        val xml = node.toXmlString()
+        val xml = node.toXmlString(typeAttributes = true)
         val restored = XmlReader(xml).read()
 
         assertEquals("value", restored.asObject()["user name"]?.asString())

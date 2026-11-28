@@ -7,7 +7,8 @@ description: format-xml 模块：XmlMapper、XmlConfig、type/nil 协议、属�
 
 `format-xml` 提供 XML 读写，核心类型是 `XmlMapper`。
 
-XML 没有原生类型信息，模块用 `type` / `nil` 属性保存节点类型；属性、命名空间与混合内容通过 `XmlConfig` 按需启用。
+XML 没有原生类型信息，模块可选择用 `type` / `nil` 协议保存节点类型；`type` 默认不输出，
+属性、命名空间与混合内容通过 `XmlConfig` 按需启用。
 
 ## Maven 坐标与依赖
 
@@ -27,7 +28,8 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 
 ## 特性
 
-- **`type` / `nil` 协议**：元素上用 `type="object|array|string|number|boolean|binary"`、`nil="true"` 保存节点类型，保证非字符串标量可无损往返；
+- **`type` / `nil` 协议**：默认只输出 `nil="true"`；用 `typeAttributes(true)` 开启后元素上额外输出
+  `type="object|array|string|number|boolean|binary"`，保证非字符串标量严格无损往返；
 - **属性映射**：启用后 XML attribute 映射为对象字段 `attributePrefix + localName`（默认 `@id`），写出时把带前缀的标量字段写成属性；
 - **命名空间**：`PREFIX`（`prefix:local` + `xmlns` 属性字段）与 `CLARK`（`{uri}local`，写出自动分配前缀）两种模式；
 - **混合内容策略**：`PRESERVE`（默认，文本进 `#text`）/ `PRESERVE_ORDERED`（额外 `#content` 有序数组）/ `REJECT`；
@@ -67,6 +69,7 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 | `namespaceMode(XmlNamespaceMode)` | `PREFIX` / `CLARK` |
 | `textKey(String)` / `itemsKey(String)` / `contentKey(String)` | 自定义保留字段名（不能为空） |
 | `mixedContentPolicy(XmlMixedContentPolicy)` | 混合内容策略 |
+| `typeAttributes(Boolean)` | 是否输出 `type="..."` 协议属性，默认 `false` |
 | `subtype(...)` / `typeProperty(...)` | 多态子类型 |
 | `resolveReferences` / `writeReferences` | 本地 `$ref` |
 | `build()` | 构建 `XmlConfig` |
@@ -166,7 +169,7 @@ val extended = """<root><a type="number">1</a></root>""".toXmlNode()
 
 ### `type` / `nil` 协议与结构推断
 
-写出时元素上使用：
+默认 `typeAttributes = false`，写出时不生成 `type`；开启后元素上使用：
 
 | 属性 | 含义 |
 |---|---|
@@ -364,18 +367,18 @@ val xml = XmlMapper().format(Account().apply { name = "小于" })
 
 | Node | XML 读取 | XML 写出 |
 |---|---|---|
-| `ObjectNode` | 元素（`type="object"` 或结构推断） | `<name type="object">...</name>` |
-| `ArrayNode` | `type="array"` 或子元素全为 `item` | `<name type="array"><item .../></name>` |
-| `StringNode` | `type="string"` 或标量推断 | `type="string"` 文本元素 |
-| `NumberNode` | `type="number"`（非法数字抛 `XmlParseException`）或标量推断 | `type="number"`，文本为 `NumberNode.raw` |
-| `BooleanNode` | `type="boolean"`（非 true/false 抛异常）或标量推断 | `type="boolean"` |
+| `ObjectNode` | 元素（`type="object"` 或结构推断） | `<name>...</name>`（开启协议时 `type="object"`） |
+| `ArrayNode` | `type="array"` 或子元素全为 `item` | `<name><item .../></name>`（开启协议时 `type="array"`） |
+| `StringNode` | `type="string"` 或标量推断 | 文本元素（开启协议时 `type="string"`） |
+| `NumberNode` | `type="number"`（非法数字抛 `XmlParseException`）或标量推断 | 文本为 `NumberNode.raw`（开启协议时 `type="number"`） |
+| `BooleanNode` | `type="boolean"`（非 true/false 抛异常）或标量推断 | `true` / `false` 文本（开启协议时 `type="boolean"`） |
 | `NullNode` | `nil="true"` | `<name nil="true"/>` |
-| `BinaryNode` | `type="binary"`，Base64 解码 | `type="binary"`，Base64 文本 |
+| `BinaryNode` | `type="binary"`，Base64 解码 | Base64 文本（开启协议时 `type="binary"`） |
 
 补充规则：
 
 - 属性字段值按标量推断（`true`/`false`/数字/字符串）；
-- 无 `type` 属性且内容无法推断时按字符串处理；
+- 默认输出没有 `type` 属性；读取侧按结构/文本推断，二进制和“看起来像数字的字符串”无法严格保真，需要无损往返时开启 `typeAttributes(true)`；
 - 数字使用 `BigDecimal` 校验，写出时原样使用 `raw`；
 - 元素/属性的非法名称字符编码为 `_xHHHH_`。
 

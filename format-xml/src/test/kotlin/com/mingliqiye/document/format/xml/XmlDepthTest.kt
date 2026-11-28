@@ -50,16 +50,16 @@ class XmlDepthTest {
 
     @Test
     fun configBuilderSetsMaxDepth() {
-        val mapper = XmlMapper(XmlConfig.builder().maxDepth(3).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).maxDepth(3).build())
         assertFailsWith<XmlParseException> { mapper.parse(text, Map::class.java) }
 
-        val okMapper = XmlMapper(XmlConfig.builder().maxDepth(4).build())
+        val okMapper = XmlMapper(XmlConfig.builder().typeAttributes(true).maxDepth(4).build())
         okMapper.parse(text, Map::class.java)
     }
 
     @Test
     fun nonDefaultReadConfigNodePathHonorsMaxDepth() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").maxDepth(2).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").maxDepth(2).build())
         assertFailsWith<XmlParseException> {
             mapper.parse("<root><a><b>1</b></a></root>", Map::class.java)
         }
@@ -75,10 +75,10 @@ class XmlDepthTest {
 
     @Test
     fun configDefaultAndValidation() {
-        assertEquals(XmlConfig.DEFAULT_MAX_DEPTH, XmlConfig.builder().build().maxDepth)
-        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().maxDepth(0) }
-        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().maxDepth(-1) }
-        assertEquals(8, XmlConfig.builder().maxDepth(8).build().maxDepth)
+        assertEquals(XmlConfig.DEFAULT_MAX_DEPTH, XmlConfig.builder().typeAttributes(true).build().maxDepth)
+        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().typeAttributes(true).maxDepth(0) }
+        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().typeAttributes(true).maxDepth(-1) }
+        assertEquals(8, XmlConfig.builder().typeAttributes(true).maxDepth(8).build().maxDepth)
     }
 
     @Test

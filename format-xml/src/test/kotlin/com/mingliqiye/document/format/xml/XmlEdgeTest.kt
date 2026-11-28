@@ -20,7 +20,7 @@ class XmlEdgeTest {
 
     @Test
     fun scalarElementAttributesUseWrapperAndRoundTrip() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val xml = """<person id="7"><name lang="en">Bob</name><age unit="year">18</age></person>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -47,7 +47,7 @@ class XmlEdgeTest {
 
     @Test
     fun scalarAttributeWrapperMapsBeanFields() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val catalog = Catalog().apply {
             item = Item().apply {
                 price = Price().apply {
@@ -67,7 +67,7 @@ class XmlEdgeTest {
 
     @Test
     fun scalarWithoutAttributesKeepsPlainNode() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val node = mapper.parse("<root><name>Bob</name><count>3</count></root>", Node::class.java).asObject()
 
         assertTrue(node["name"]?.isString == true)
@@ -77,7 +77,7 @@ class XmlEdgeTest {
 
     @Test
     fun customTextKeyIsUsedForScalarWrappers() {
-        val config = XmlConfig.builder().attributePrefix("@").textKey("value").build()
+        val config = XmlConfig.builder().typeAttributes(true).attributePrefix("@").textKey("value").build()
         val mapper = XmlMapper(config)
         val node = mapper.parse("<root><name lang=\"en\">Bob</name></root>", Node::class.java).asObject()
 
@@ -89,7 +89,7 @@ class XmlEdgeTest {
 
     @Test
     fun nilElementWithAttributesKeepsAttributes() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val node = mapper.parse("<root><gone id=\"2\" nil=\"true\"/></root>", Node::class.java).asObject()
         val gone = node["gone"]?.asObject()
 
@@ -105,7 +105,7 @@ class XmlEdgeTest {
 
     @Test
     fun arrayElementAttributesUseWrapperAndRoundTrip() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val xml = """<root><list id="1"><item>a</item><item>b</item></list></root>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -125,7 +125,7 @@ class XmlEdgeTest {
 
     @Test
     fun customItemsKeyIsUsedForArrayWrappers() {
-        val config = XmlConfig.builder().attributePrefix("@").itemsKey("values").build()
+        val config = XmlConfig.builder().typeAttributes(true).attributePrefix("@").itemsKey("values").build()
         val mapper = XmlMapper(config)
         val node = mapper.parse("<root><list id=\"1\"><item>a</item></list></root>", Node::class.java).asObject()
         val list = node["list"]?.asObject()
@@ -138,7 +138,7 @@ class XmlEdgeTest {
 
     @Test
     fun arrayElementMixedTextIsPreserved() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val xml = """<root><list id="1">prefix<item>a</item></list></root>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -155,7 +155,7 @@ class XmlEdgeTest {
 
     @Test
     fun clarkNamesPreserveNamespaceUriAndGenerateDeclarations() {
-        val config = XmlConfig.builder().namespaceMode(XmlNamespaceMode.CLARK).build()
+        val config = XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).build()
         assertTrue(config.namespaceAware)
         assertTrue(config.attributeMode)
         val mapper = XmlMapper(config)
@@ -178,7 +178,7 @@ class XmlEdgeTest {
 
     @Test
     fun clarkRootNameGetsPrefixAndDeclaration() {
-        val config = XmlConfig.builder()
+        val config = XmlConfig.builder().typeAttributes(true)
             .namespaceMode(XmlNamespaceMode.CLARK)
             .rootName("{urn:example}catalog")
             .build()
@@ -202,7 +202,7 @@ class XmlEdgeTest {
 
     @Test
     fun clarkModeAssignsPrefixesPerUri() {
-        val config = XmlConfig.builder().namespaceMode(XmlNamespaceMode.CLARK).build()
+        val config = XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).build()
         val mapper = XmlMapper(config)
         val node = ObjectNode.of(
             "{urn:a}x" to StringNode.of("1"),
@@ -220,7 +220,7 @@ class XmlEdgeTest {
 
     @Test
     fun clarkScalarAttributeWrapperRoundTrips() {
-        val mapper = XmlMapper(XmlConfig.builder().namespaceMode(XmlNamespaceMode.CLARK).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).build())
         val xml = """<root><price xmlns:p="urn:p" p:currency="CNY">100</price></root>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -236,7 +236,7 @@ class XmlEdgeTest {
 
     @Test
     fun clarkScalarRootNameGetsDeclaration() {
-        val config = XmlConfig.builder()
+        val config = XmlConfig.builder().typeAttributes(true)
             .namespaceMode(XmlNamespaceMode.CLARK)
             .rootName("{urn:example}value")
             .build()
@@ -249,7 +249,7 @@ class XmlEdgeTest {
 
     @Test
     fun prefixModeStillKeepsQualifiedNames() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").namespaceAware(true).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").namespaceAware(true).build())
         val xml = """<ns:person xmlns:ns="urn:example" ns:id="7"><ns:name>小于</ns:name></ns:person>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -261,7 +261,7 @@ class XmlEdgeTest {
 
     @Test
     fun mixedContentPreserveKeepsTextAndChildren() {
-        val mapper = XmlMapper()
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).build())
         val node = mapper.parse("<p>Hello <b>world</b>!</p>", Node::class.java).asObject()
 
         assertEquals("Hello !", node["#text"]?.asString())
@@ -276,7 +276,7 @@ class XmlEdgeTest {
 
     @Test
     fun mixedContentWithAttributesIsPreserved() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val node = mapper.parse("""<p id="1">Hello <b>world</b>!</p>""", Node::class.java).asObject()
 
         assertEquals(1, node["@id"]?.asNumber()?.toInt())
@@ -303,7 +303,7 @@ class XmlEdgeTest {
 
     @Test
     fun mixedContentRejectThrowsParseException() {
-        val config = XmlConfig.builder().mixedContentPolicy(XmlMixedContentPolicy.REJECT).build()
+        val config = XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.REJECT).build()
         val mapper = XmlMapper(config)
 
         assertFailsWith<XmlParseException> {
@@ -319,7 +319,7 @@ class XmlEdgeTest {
 
     @Test
     fun mixedContentRejectAllowsFormattingWhitespace() {
-        val config = XmlConfig.builder().mixedContentPolicy(XmlMixedContentPolicy.REJECT).build()
+        val config = XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.REJECT).build()
         val mapper = XmlMapper(config)
         val pretty = ObjectNode.of("b" to StringNode.of("world")).toXmlString(pretty = true)
 
@@ -337,7 +337,7 @@ class XmlEdgeTest {
         assertEquals(
             "<root type=\"object\"><name type=\"string\">Bob</name>" +
                 "<tags type=\"array\"><item type=\"string\">a</item></tags></root>",
-            node.toXmlString(),
+            node.toXmlString(typeAttributes = true),
         )
 
         val parsed = XmlReader("<root type=\"object\">\n  <name type=\"string\">Bob</name>\n</root>").read().asObject()
@@ -348,14 +348,14 @@ class XmlEdgeTest {
 
     @Test
     fun clarkModeConfigurationAndValidation() {
-        val clark = XmlConfig.builder().namespaceMode(XmlNamespaceMode.CLARK).namespaceAware(false).build()
+        val clark = XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).namespaceAware(false).build()
         assertTrue(clark.namespaceAware)
         assertTrue(clark.clarkNames)
 
-        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().textKey("") }
-        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().itemsKey("") }
-        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().textKey("#x").itemsKey("#x").build() }
-        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().attributePrefix("@").textKey("@text").build() }
+        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().typeAttributes(true).textKey("") }
+        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().typeAttributes(true).itemsKey("") }
+        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().typeAttributes(true).textKey("#x").itemsKey("#x").build() }
+        assertFailsWith<IllegalArgumentException> { XmlConfig.builder().typeAttributes(true).attributePrefix("@").textKey("@text").build() }
         assertFailsWith<IllegalArgumentException> {
             XmlReader("<x/>", namespaceMode = XmlNamespaceMode.CLARK)
         }

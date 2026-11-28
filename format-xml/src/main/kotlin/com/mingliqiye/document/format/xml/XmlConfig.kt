@@ -66,6 +66,16 @@ public class XmlConfig internal constructor(
      * 与 [DocumentMapperConfig.maxNodeDepth] 同时设置时取两者较小值。
      */
     public val maxDepth: Int = DEFAULT_MAX_DEPTH,
+    /**
+     * 是否在写出时生成 `type="..."` 协议属性，默认 `false`。
+     *
+     * 默认输出更接近普通业务的 XML（仍保留 `nil="true"`），读取侧按
+     * 元素结构或标量文本推断类型：
+     * - 数字/布尔文本会还原为 `NumberNode` / `BooleanNode`；
+     * - 看起来像数字的字符串、二进制等无法仅靠文本区分的类型会按推断结果处理，
+     *   需要严格保真时开启该选项。
+     */
+    public val typeAttributes: Boolean = false,
 ) : DocumentMapperConfig(base) {
 
     init {

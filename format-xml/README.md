@@ -67,7 +67,7 @@ val node = com.mingliqiye.document.format.xml.XmlReader(source, maxDepth = 64).r
 
 ## 特性
 
-- `type` / `nil` 协议
+- `nil` 协议默认保留；`type` 协议默认不输出，可用 `typeAttributes(true)` 开启
 - XML 属性映射
 - `PREFIX` / `CLARK` 命名空间
 - 混合内容 `PRESERVE` / `PRESERVE_ORDERED` / `REJECT`

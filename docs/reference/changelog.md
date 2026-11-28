@@ -8,6 +8,7 @@
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
+| `2.6.0`（未发布） | XML 默认协议调整 | `type` 属性默认不输出，新增 `typeAttributes(Boolean)` |
 | `2.5.1` | 标量映射修复 | YAML / JSON 的 `NUMBER` / `BOOLEAN` 标量映射到 `String` 属性时按文本转换 |
 | `2.5.0` | record 支持独立模块、JPA 剩余映射细节 | `record-support` 模块、`JavaRecordSupport` SPI、record 测试迁移、JPA `@Convert(attributeName)`/关系转换/实体 Map 键、Hibernate 复合主键引用解析 |
 | `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info、对象映射便捷 API |
@@ -23,6 +24,15 @@
 | `1.0.0` | 初始发布 | core/annotation/exception/schema/serialization/serialization-kotlin + 11 格式 + BOM |
 
 发布标签：`1.0.0`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v2.0.0`、`v2.1.0`、`v2.2.0`、`v2.3.0`、`v2.4.0`、`v2.5.0`、`v2.5.1`。
+
+## 2.6.0（未发布）
+
+### 变更
+
+- XML 写出默认不再生成 `type="..."` 协议属性，读取侧按结构/文本推断
+- `XmlConfig` 新增 `typeAttributes(Boolean)`，默认 `false`
+- `Node.toXmlString(...)` 增加 `typeAttributes` 参数，默认 `false`
+- `nil="true"` 仍默认输出；需要严格保真二进制/空容器/类数字字符串时开启协议
 
 ## 2.5.1
 

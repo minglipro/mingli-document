@@ -13,8 +13,9 @@ import java.util.Base64
 /**
  * 将文档树写成 XML 文本。
  *
- * XML 没有原生类型信息，因此在元素上使用 `type` 与 `nil` 属性保存节点类型：
- * `type="object|array|string|number|boolean"`、`nil="true"`。
+ * XML 没有原生类型信息；默认使用结构/文本推断，`nil="true"` 仍保留。
+ * 开启 [XmlConfig.typeAttributes] 后额外使用
+ * `type="object|array|string|number|boolean|binary"` 保存节点类型。
  *
  * 启用属性映射（[attributePrefix] 非空）时，对象中以该前缀开头的标量字段写成
  * XML attribute（键名去掉前缀，`type` / `nil` 保留给类型协议，不写出）。
@@ -51,6 +52,7 @@ internal class XmlWriter(
     private val textKey: String = XmlConfig.DEFAULT_TEXT_KEY,
     private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
+    private val typeAttributes: Boolean = false,
 ) {
 
     init {
@@ -156,7 +158,7 @@ internal class XmlWriter(
             out.append("/>")
             return
         }
-        out.append(" type=\"").append(scalarTypeName(text)).append('"')
+        appendTypeAttribute(scalarTypeName(text))
         appendAttributes(attributes)
         out.append('>')
         appendEscapedText(scalarTextValue(text))
@@ -182,7 +184,7 @@ internal class XmlWriter(
         val text = wrapperText(node)
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        out.append(" type=\"array\"")
+        appendTypeAttribute("array")
         appendAttributes(attributes)
         if (content != null) {
             writeOrderedBody(content, indent, name, ARRAY_ITEM_NAME)
@@ -240,7 +242,7 @@ internal class XmlWriter(
         }
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        out.append(" type=\"object\"")
+        appendTypeAttribute("object")
         appendAttributes(attributes)
         if (content != null) {
             writeOrderedBody(content, indent, name, expectedElementName = null)
@@ -318,7 +320,7 @@ internal class XmlWriter(
     ) {
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        out.append(" type=\"array\"")
+        appendTypeAttribute("array")
         if (node.size == 0) {
             out.append("/>")
             return
@@ -343,7 +345,8 @@ internal class XmlWriter(
     ) {
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        out.append(" type=\"").append(type).append("\">")
+        appendTypeAttribute(type)
+        out.append(">")
         appendEscapedText(value)
         out.append("</").append(name).append('>')
     }
@@ -468,6 +471,12 @@ internal class XmlWriter(
     private fun isNonNilScalar(node: Node): Boolean = node is StringNode || node is NumberNode || node is BooleanNode || node is BinaryNode
 
     private fun isScalarNode(node: Node): Boolean = isNonNilScalar(node) || node is NullNode
+
+    private fun appendTypeAttribute(type: String) {
+        if (typeAttributes) {
+            out.append(" type=\"").append(type).append('"')
+        }
+    }
 
     private fun scalarTypeName(node: Node): String = when (node) {
         is StringNode -> "string"
@@ -623,6 +632,7 @@ internal class XmlWriter(
             xmlConfig?.textKey ?: XmlConfig.DEFAULT_TEXT_KEY,
             xmlConfig?.itemsKey ?: XmlConfig.DEFAULT_ITEMS_KEY,
             xmlConfig?.contentKey ?: XmlConfig.DEFAULT_CONTENT_KEY,
+            xmlConfig?.typeAttributes ?: false,
         )
     }
 }
@@ -638,6 +648,7 @@ internal class XmlWriter(
  * @param textKey 文本字段名
  * @param itemsKey 带属性数组的数组字段名
  * @param contentKey 有序混合内容的数组字段名
+ * @param typeAttributes 是否输出 `type="..."` 协议属性，默认 `false`
  * @return XML 文本
  */
 public fun Node.toXmlString(
@@ -649,6 +660,7 @@ public fun Node.toXmlString(
     textKey: String = XmlConfig.DEFAULT_TEXT_KEY,
     itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
+    typeAttributes: Boolean = false,
 ): String = XmlWriter(
     rootName,
     attributePrefix,
@@ -657,4 +669,5 @@ public fun Node.toXmlString(
     textKey,
     itemsKey,
     contentKey,
+    typeAttributes,
 ).write(this, pretty)

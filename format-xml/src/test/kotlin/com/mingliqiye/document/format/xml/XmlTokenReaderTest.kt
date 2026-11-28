@@ -269,7 +269,7 @@ class XmlTokenReaderTest {
         assertTrue(genericProbe.readerUsed is XmlTokenReader)
 
         // rootName 只影响写出，读取仍走原生路径。
-        val rootNameProbe = ProbeXmlMapper(XmlConfig.builder().rootName("person").build())
+        val rootNameProbe = ProbeXmlMapper(XmlConfig.builder().typeAttributes(true).rootName("person").build())
         rootNameProbe.parse("<root><name>x</name></root>", Node::class.java)
         assertTrue(rootNameProbe.readerUsed is XmlTokenReader)
     }
@@ -277,14 +277,14 @@ class XmlTokenReaderTest {
     @Test
     fun nonDefaultConfigsFallBackToNodeTokenReaderProbe() {
         val configs = listOf(
-            XmlConfig.builder().attributePrefix("@").build(),
-            XmlConfig.builder().namespaceAware(true).build(),
-            XmlConfig.builder().namespaceMode(XmlNamespaceMode.CLARK).build(),
-            XmlConfig.builder().textKey("value").build(),
-            XmlConfig.builder().itemsKey("values").build(),
-            XmlConfig.builder().contentKey("nodes").build(),
-            XmlConfig.builder().mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED).build(),
-            XmlConfig.builder().mixedContentPolicy(XmlMixedContentPolicy.REJECT).build(),
+            XmlConfig.builder().typeAttributes(true).attributePrefix("@").build(),
+            XmlConfig.builder().typeAttributes(true).namespaceAware(true).build(),
+            XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).build(),
+            XmlConfig.builder().typeAttributes(true).textKey("value").build(),
+            XmlConfig.builder().typeAttributes(true).itemsKey("values").build(),
+            XmlConfig.builder().typeAttributes(true).contentKey("nodes").build(),
+            XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED).build(),
+            XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.REJECT).build(),
         )
         for (config in configs) {
             val probe = ProbeXmlMapper(config)

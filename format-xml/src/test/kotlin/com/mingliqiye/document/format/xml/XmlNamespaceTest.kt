@@ -25,7 +25,7 @@ class XmlNamespaceTest {
               <ns:name>小于</ns:name>
             </ns:person>
         """.trimIndent()
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").namespaceAware(true).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").namespaceAware(true).build())
 
         val node = mapper.parse(xml, Node::class.java).asObject()
         assertEquals("urn:example", node["@xmlns:ns"]?.asString())
@@ -35,7 +35,7 @@ class XmlNamespaceTest {
 
     @Test
     fun namespacedBeanRoundTrip() {
-        val config = XmlConfig.builder().attributePrefix("@").namespaceAware(true).build()
+        val config = XmlConfig.builder().typeAttributes(true).attributePrefix("@").namespaceAware(true).build()
         val mapper = XmlMapper(config)
         val person = NamespacedPerson().apply {
             xmlnsNs = "urn:example"
@@ -57,12 +57,12 @@ class XmlNamespaceTest {
 
     @Test
     fun namespaceAwareEnablesDefaultAttributePrefix() {
-        val config = XmlConfig.builder().namespaceAware(true).build()
+        val config = XmlConfig.builder().typeAttributes(true).namespaceAware(true).build()
         assertTrue(config.namespaceAware)
         assertTrue(config.attributeMode)
         assertEquals(XmlConfig.DEFAULT_ATTRIBUTE_PREFIX, config.attributePrefix)
 
-        val configWithPrefix = XmlConfig.builder().attributePrefix("$").namespaceAware(true).build()
+        val configWithPrefix = XmlConfig.builder().typeAttributes(true).attributePrefix("$").namespaceAware(true).build()
         assertEquals("$", configWithPrefix.attributePrefix)
         assertTrue(configWithPrefix.namespaceAware)
     }
@@ -71,10 +71,10 @@ class XmlNamespaceTest {
     fun namespaceAwareKeepsQualifiedNameWhileLegacyEscapesColon() {
         val node = ObjectNode.of("ns:name" to StringNode.of("x"))
 
-        val legacy = node.toXmlString()
+        val legacy = node.toXmlString(typeAttributes = true)
         assertTrue(legacy.contains("ns_x003A_name"))
 
-        val namespaced = node.toXmlString(namespaceAware = true)
+        val namespaced = node.toXmlString(namespaceAware = true, typeAttributes = true)
         assertTrue(namespaced.contains("<ns:name type=\"string\">x</ns:name>"))
     }
 
@@ -85,7 +85,7 @@ class XmlNamespaceTest {
             "ns:user name" to StringNode.of("v"),
             "@ns:user id" to StringNode.of("u-1"),
         )
-        val xml = node.toXmlString(rootName = "ns:root", attributePrefix = "@", namespaceAware = true)
+        val xml = node.toXmlString(rootName = "ns:root", attributePrefix = "@", namespaceAware = true, typeAttributes = true)
 
         assertTrue(xml.contains("<ns:root type=\"object\""))
         assertTrue(xml.contains("ns:user_x0020_id=\"u-1\""))
@@ -109,7 +109,7 @@ class XmlNamespaceTest {
     @Test
     fun defaultNamespaceIsPreservedAsAttributeField() {
         val xml = """<person xmlns="urn:default"><name>小于</name></person>"""
-        val config = XmlConfig.builder().namespaceAware(true).build()
+        val config = XmlConfig.builder().typeAttributes(true).namespaceAware(true).build()
         val mapper = XmlMapper(config)
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -126,7 +126,7 @@ class XmlNamespaceTest {
     @Test
     fun attributeOnlyNamespaceElementRoundTrips() {
         val xml = """<ns:person xmlns:ns="urn:example" ns:id="7"/>"""
-        val mapper = XmlMapper(XmlConfig.builder().namespaceAware(true).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).namespaceAware(true).build())
 
         val node = mapper.parse(xml, Node::class.java)
         val output = mapper.format(node)

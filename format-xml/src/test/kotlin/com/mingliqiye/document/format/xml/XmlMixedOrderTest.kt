@@ -57,7 +57,7 @@ class XmlMixedOrderTest {
     @Test
     fun orderedContentWithAttributes() {
         val mapper = XmlMapper(
-            XmlConfig.builder()
+            XmlConfig.builder().typeAttributes(true)
                 .attributePrefix("@")
                 .mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED)
                 .build(),
@@ -146,7 +146,7 @@ class XmlMixedOrderTest {
 
     @Test
     fun orderedContentKeyIsConfigurable() {
-        val config = XmlConfig.builder()
+        val config = XmlConfig.builder().typeAttributes(true)
             .mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED)
             .contentKey("nodes")
             .build()
@@ -164,7 +164,7 @@ class XmlMixedOrderTest {
     @Test
     fun orderedArrayMixedContentRoundTrips() {
         val mapper = XmlMapper(
-            XmlConfig.builder()
+            XmlConfig.builder().typeAttributes(true)
                 .attributePrefix("@")
                 .mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED)
                 .build(),
@@ -187,7 +187,7 @@ class XmlMixedOrderTest {
 
     @Test
     fun preservePolicyStillEmitsOnlyTextKey() {
-        val mapper = XmlMapper()
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).build())
         val node = mapper.parse("<p>Hello <b>world</b>!</p>", Node::class.java).asObject()
 
         assertNull(node["#content"])
@@ -199,7 +199,7 @@ class XmlMixedOrderTest {
     @Test
     fun rejectPolicyStillThrows() {
         val mapper = XmlMapper(
-            XmlConfig.builder().mixedContentPolicy(XmlMixedContentPolicy.REJECT).build(),
+            XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.REJECT).build(),
         )
 
         assertFailsWith<XmlParseException> {
@@ -232,12 +232,12 @@ class XmlMixedOrderTest {
             ),
         )
 
-        assertEquals("<root type=\"object\">X<b type=\"string\">Y</b></root>", node.toXmlString())
+        assertEquals("<root type=\"object\">X<b type=\"string\">Y</b></root>", node.toXmlString(typeAttributes = true))
     }
 
     @Test
     fun orderedMixedContentWorksWithClarkNamespaces() {
-        val config = XmlConfig.builder()
+        val config = XmlConfig.builder().typeAttributes(true)
             .namespaceMode(XmlNamespaceMode.CLARK)
             .mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED)
             .build()
@@ -271,7 +271,7 @@ class XmlMixedOrderTest {
     }
 
     private fun orderedMapper(): XmlMapper = XmlMapper(
-        XmlConfig.builder().mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED).build(),
+        XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED).build(),
     )
 
     private fun numberOccurrences(text: String, target: String): Int {

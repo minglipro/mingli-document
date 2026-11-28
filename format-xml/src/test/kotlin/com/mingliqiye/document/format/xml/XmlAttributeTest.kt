@@ -25,7 +25,7 @@ class XmlAttributeTest {
 
     @Test
     fun mapperMapsAttributesToBeanFields() {
-        val mapper = XmlMapper(XmlConfig.builder().attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
         val person = Person().apply {
             id = 7
             name = "小于"
@@ -49,7 +49,7 @@ class XmlAttributeTest {
 
     @Test
     fun attributePrefixIsConfigurable() {
-        val config = XmlConfig.builder().attributePrefix("$").build()
+        val config = XmlConfig.builder().typeAttributes(true).attributePrefix("$").build()
         assertEquals("$", config.attributePrefix)
         assertTrue(config.attributeMode)
         assertEquals("root", config.rootName)
@@ -65,18 +65,18 @@ class XmlAttributeTest {
 
     @Test
     fun attributeModeSwitchUsesDefaultPrefix() {
-        val defaultMode = XmlConfig.builder().attributeMode(true).build()
+        val defaultMode = XmlConfig.builder().typeAttributes(true).attributeMode(true).build()
         assertTrue(defaultMode.attributeMode)
         assertEquals(XmlConfig.DEFAULT_ATTRIBUTE_PREFIX, defaultMode.attributePrefix)
 
-        val disabled = XmlConfig.builder().attributePrefix("@").attributeMode(false).build()
+        val disabled = XmlConfig.builder().typeAttributes(true).attributePrefix("@").attributeMode(false).build()
         assertFalse(disabled.attributeMode)
         assertNull(disabled.attributePrefix)
     }
 
     @Test
     fun attributeAndNamespaceDefaultToDisabled() {
-        val config = XmlConfig.builder().build()
+        val config = XmlConfig.builder().typeAttributes(true).build()
 
         assertFalse(config.attributeMode)
         assertNull(config.attributePrefix)
@@ -84,11 +84,21 @@ class XmlAttributeTest {
     }
 
     @Test
-    fun defaultConfigKeepsLegacyTypeProtocol() {
+    fun defaultConfigOmitsLegacyTypeProtocol() {
         val mapper = XmlMapper()
         val xml = mapper.format(Person().apply { id = 5 })
 
         assertFalse(xml.contains(" id=\"5\""))
+        assertFalse(xml.contains("type=\"number\""))
+        assertTrue(xml.contains("_x0040_id>5</_x0040_id>"))
+        assertEquals(5, mapper.parse(xml, Person::class.java).id)
+    }
+
+    @Test
+    fun legacyTypeProtocolCanBeEnabled() {
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).build())
+        val xml = mapper.format(Person().apply { id = 5 })
+
         assertTrue(xml.contains("_x0040_id type=\"number\""))
         assertEquals(5, mapper.parse(xml, Person::class.java).id)
     }
@@ -205,7 +215,7 @@ class XmlAttributeTest {
     @Test
     fun emptyAttributePrefixIsRejected() {
         assertFailsWith<IllegalArgumentException> {
-            XmlConfig.builder().attributePrefix("")
+            XmlConfig.builder().typeAttributes(true).attributePrefix("")
         }
     }
 

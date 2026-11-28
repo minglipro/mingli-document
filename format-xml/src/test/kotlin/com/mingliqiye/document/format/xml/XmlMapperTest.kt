@@ -12,7 +12,7 @@ class XmlMapperTest {
 
     @Test
     fun mapperMapsBeanToXmlAndBack() {
-        val mapper = XmlMapper()
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).build())
         val person = Person().apply {
             name = "小于"
             age = 18
@@ -34,7 +34,7 @@ class XmlMapperTest {
     @Test
     fun rootNameAndPrettyAreConfigurable() {
         val mapper = XmlMapper(
-            XmlConfig.builder()
+            XmlConfig.builder().typeAttributes(true)
                 .rootName("person")
                 .build(),
         )
@@ -46,7 +46,7 @@ class XmlMapperTest {
 
     @Test
     fun documentRootNameAnnotationSetsRootElement() {
-        val mapper = XmlMapper()
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).build())
 
         assertTrue(mapper.format(NamedRootPerson().apply { name = "小于" }).startsWith("<person type=\"object\">"))
         assertTrue(mapper.formatPretty(NamedRootPerson()).startsWith("<person type=\"object\">"))
@@ -54,7 +54,7 @@ class XmlMapperTest {
 
     @Test
     fun documentRootNameAnnotationOverridesConfiguredRootName() {
-        val mapper = XmlMapper(XmlConfig.builder().rootName("configured").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).rootName("configured").build())
 
         assertTrue(mapper.format(NamedRootPerson()).startsWith("<person type=\"object\">"))
     }
@@ -62,7 +62,7 @@ class XmlMapperTest {
     @Test
     fun builderAcceptsXmlConfig() {
         val mapper = XmlMapper.builder()
-            .config(XmlConfig.builder().rootName("bean").build())
+            .config(XmlConfig.builder().typeAttributes(true).rootName("bean").build())
             .build()
 
         assertTrue(mapper.format(Person()).startsWith("<bean type=\"object\">"))

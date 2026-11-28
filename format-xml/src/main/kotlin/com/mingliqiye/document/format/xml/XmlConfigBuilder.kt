@@ -22,6 +22,7 @@ public class XmlConfigBuilder {
     private var contentKey = XmlConfig.DEFAULT_CONTENT_KEY
     private var mixedContentPolicy = XmlMixedContentPolicy.PRESERVE
     private var maxDepth = XmlConfig.DEFAULT_MAX_DEPTH
+    private var typeAttributes = false
 
     /**
      * 为指定字段绑定转换器。
@@ -204,6 +205,21 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 是否在写出 XML 时生成 `type="..."` 协议属性，默认 `false`。
+     *
+     * 默认不输出，得到更接近普通业务 XML 的结果；读取侧按元素结构/标量文本推断类型。
+     * 看起来像数字/布尔的字符串会经标量转换得到对应字符串，但二进制等无法仅靠文本
+     * 区分的类型无法严格保真；需要无损往返时开启。
+     *
+     * @param enabled 是否生成 type 属性
+     * @return 当前构建器
+     */
+    public fun typeAttributes(enabled: Boolean): XmlConfigBuilder {
+        this.typeAttributes = enabled
+        return this
+    }
+
+    /**
      * 注册多态子类型。
      *
      * @param baseClass 基类/接口
@@ -296,6 +312,7 @@ public class XmlConfigBuilder {
             contentKey,
             mixedContentPolicy,
             maxDepth,
+            typeAttributes,
         )
     }
 }
