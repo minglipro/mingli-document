@@ -1,4 +1,5 @@
 import org.gradle.api.attributes.LibraryElements
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
@@ -62,6 +63,16 @@ allprojects {
     plugins.apply("org.jetbrains.kotlin.jvm")
     plugins.apply("org.jetbrains.dokka")
     plugins.apply("org.jetbrains.dokka-javadoc")
+
+    // 发布源码 jar（Kotlin + Java + 显式 module-info）。
+    extensions.configure<JavaPluginExtension> {
+        withSourcesJar()
+    }
+    tasks.named<Jar>("sourcesJar") {
+        from("src/main/kotlin")
+        from("src/main/java")
+        from("src/main/java9")
+    }
 
     repositories {
         mavenLocal()

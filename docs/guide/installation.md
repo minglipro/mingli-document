@@ -72,7 +72,8 @@ Maven：
 - `-SNAPSHOT` 版本只推 snapshot 仓库；
 - 正式版本只推 release 仓库；
 - Gradle Plugin 专用仓库不参与本库发布；
-- 所有 jar、pom、module metadata、javadoc、kotlindoc 都带 GPG `.asc` 签名。
+- 所有 jar、pom、module metadata、javadoc、kotlindoc 都带 GPG `.asc` 签名；
+- 每个可发布模块同时发布 `-sources.jar`（Kotlin/Java 源码与显式 `module-info.java`）。
 
 ## Gradle 安装
 

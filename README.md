@@ -609,6 +609,7 @@ gradle publish
 - 正式版本只推送 release 仓库
 - Gradle Plugin 专用仓库不参与本库发布
 - jar、pom、module metadata、javadoc、kotlindoc 均带 GPG `.asc` 签名
+- 每个可发布模块同时发布 `-sources.jar`（Kotlin/Java 源码与 `module-info.java`）
 
 ## 兼容性说明
 
