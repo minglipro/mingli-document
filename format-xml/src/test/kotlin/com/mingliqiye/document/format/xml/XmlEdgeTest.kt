@@ -97,7 +97,8 @@ class XmlEdgeTest {
         assertTrue(gone?.get("#text") is NullNode)
 
         val output = mapper.format(node)
-        assertTrue(output.contains("<gone nil=\"true\" id=\"2\"/>"))
+        assertTrue(output.contains("xmlns:xsi=\"${XmlConfig.XSI_NAMESPACE}\""))
+        assertTrue(output.contains("<gone xsi:nil=\"true\" id=\"2\"/>"))
         val reparsed = mapper.parse(output, Node::class.java).asObject()["gone"]?.asObject()
         assertTrue(reparsed?.get("#text") is NullNode)
         assertEquals(2, reparsed?.get("@id")?.asNumber()?.toInt())

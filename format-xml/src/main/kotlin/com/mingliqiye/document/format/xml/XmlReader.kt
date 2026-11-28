@@ -58,6 +58,8 @@ public class XmlReader(
     private val mixedContentPolicy: XmlMixedContentPolicy = XmlMixedContentPolicy.PRESERVE,
     private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
     private val maxDepth: Int = XmlConfig.DEFAULT_MAX_DEPTH,
+    private val emptyElementAsNull: Boolean = false,
+    private val processXsiNil: Boolean = true,
 ) {
 
     init {
@@ -95,7 +97,7 @@ public class XmlReader(
 
     private fun toNode(element: Element): Node {
         val attributes = attributeFields(element)
-        if (element.getAttribute(PROTOCOL_NIL) == "true") {
+        if (processXsiNil && isNilElement(element)) {
             return wrapScalar(element, attributes, NullNode.INSTANCE)
         }
         return when (element.getAttribute(PROTOCOL_TYPE)) {
@@ -266,6 +268,25 @@ public class XmlReader(
      * `type` / `nil` 是类型协议属性，不映射为普通字段；Clark 模式下跳过 `xmlns` 声明，
      * 其余属性按 `attributePrefix + 名称` 映射。
      */
+    private fun isNilElement(element: Element): Boolean {
+        val attributes = element.attributes
+        for (index in 0 until attributes.length) {
+            val attribute = attributes.item(index) as? Attr ?: continue
+            if (isNilAttribute(attribute) && attribute.value == "true") {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun isNilAttribute(attribute: Attr): Boolean {
+        val name = attribute.name
+        val localName = attribute.localName
+        return name == PROTOCOL_NIL ||
+            name == "$XSI_PREFIX:$PROTOCOL_NIL" ||
+            (attribute.namespaceURI == XmlConfig.XSI_NAMESPACE && localName == PROTOCOL_NIL)
+    }
+
     private fun attributeFields(element: Element): List<Pair<String, Node>> {
         val prefix = attributePrefix ?: return emptyList()
         val attributes = element.attributes
@@ -273,7 +294,7 @@ public class XmlReader(
         for (index in 0 until attributes.length) {
             val attribute = attributes.item(index) as? Attr ?: continue
             val name = attribute.name
-            if (name == PROTOCOL_TYPE || name == PROTOCOL_NIL) {
+            if (name == PROTOCOL_TYPE || name == PROTOCOL_NIL || isNilAttribute(attribute)) {
                 continue
             }
             val keyName = if (namespaceMode == XmlNamespaceMode.CLARK) {
@@ -322,6 +343,9 @@ public class XmlReader(
 
     private fun inferScalar(text: String): Node {
         val trimmed = text.trim()
+        if (trimmed.isEmpty() && emptyElementAsNull) {
+            return NullNode.INSTANCE
+        }
         return when {
             trimmed == "true" -> BooleanNode.of(true)
             trimmed == "false" -> BooleanNode.of(false)
@@ -367,6 +391,7 @@ public class XmlReader(
 
         private const val PROTOCOL_TYPE = "type"
         private const val PROTOCOL_NIL = "nil"
+        private const val XSI_PREFIX = "xsi"
         private const val ARRAY_ITEM_NAME = "item"
         private const val XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/"
 
@@ -424,6 +449,8 @@ public class XmlReader(
             xmlConfig?.mixedContentPolicy ?: XmlMixedContentPolicy.PRESERVE,
             xmlConfig?.contentKey ?: XmlConfig.DEFAULT_CONTENT_KEY,
             maxDepth,
+            xmlConfig?.emptyElementAsNull ?: false,
+            xmlConfig?.processXsiNil ?: true,
         )
     }
 }

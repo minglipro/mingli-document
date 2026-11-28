@@ -69,13 +69,25 @@ public class XmlConfig internal constructor(
     /**
      * 是否在写出时生成 `type="..."` 协议属性，默认 `false`。
      *
-     * 默认输出更接近普通业务的 XML（仍保留 `nil="true"`），读取侧按
+     * 默认输出更接近普通业务的 XML（null 写成 `xsi:nil="true"`），读取侧按
      * 元素结构或标量文本推断类型：
      * - 数字/布尔文本会还原为 `NumberNode` / `BooleanNode`；
      * - 看起来像数字的字符串、二进制等无法仅靠文本区分的类型会按推断结果处理，
      *   需要严格保真时开启该选项。
      */
     public val typeAttributes: Boolean = false,
+    /**
+     * 空元素读取策略，默认关闭 `EMPTY_ELEMENT_AS_NULL`（空元素读成空字符串）。
+     *
+     * 对齐 Jackson XML 的 `XmlReadFeature`。
+     */
+    public val readFeatures: Set<XmlReadFeature> = DEFAULT_READ_FEATURES,
+    /**
+     * XML 写出特性，默认开启 `WRITE_NULLS_AS_XSI_NIL`。
+     *
+     * 对齐 Jackson XML 的 `XmlWriteFeature`。
+     */
+    public val writeFeatures: Set<XmlWriteFeature> = DEFAULT_WRITE_FEATURES,
 ) : DocumentMapperConfig(base) {
 
     init {
@@ -103,9 +115,32 @@ public class XmlConfig internal constructor(
         textKey == DEFAULT_TEXT_KEY &&
         itemsKey == DEFAULT_ITEMS_KEY &&
         contentKey == DEFAULT_CONTENT_KEY &&
-        mixedContentPolicy == XmlMixedContentPolicy.PRESERVE
+        mixedContentPolicy == XmlMixedContentPolicy.PRESERVE &&
+        !emptyElementAsNull &&
+        processXsiNil
+
+    /** 是否启用空元素读取为 null。 */
+    public val emptyElementAsNull: Boolean
+        get() = XmlReadFeature.EMPTY_ELEMENT_AS_NULL in readFeatures
+
+    /** 是否处理 `xsi:nil`。 */
+    public val processXsiNil: Boolean
+        get() = XmlReadFeature.PROCESS_XSI_NIL in readFeatures
+
+    /** 是否把 null 写成 `xsi:nil`。 */
+    public val writeNullsAsXsiNil: Boolean
+        get() = XmlWriteFeature.WRITE_NULLS_AS_XSI_NIL in writeFeatures
 
     public companion object {
+
+        /** null/空元素读取默认特性。 */
+        public val DEFAULT_READ_FEATURES: Set<XmlReadFeature> = setOf(XmlReadFeature.PROCESS_XSI_NIL)
+
+        /** null 写出默认特性。 */
+        public val DEFAULT_WRITE_FEATURES: Set<XmlWriteFeature> = setOf(XmlWriteFeature.WRITE_NULLS_AS_XSI_NIL)
+
+        /** `xsi:nil` 使用的命名空间。 */
+        public const val XSI_NAMESPACE: String = "http://www.w3.org/2001/XMLSchema-instance"
 
         /** 属性映射默认前缀。 */
         public const val DEFAULT_ATTRIBUTE_PREFIX: String = "@"

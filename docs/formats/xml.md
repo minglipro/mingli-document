@@ -28,7 +28,7 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 
 ## 特性
 
-- **`type` / `nil` 协议**：默认只输出 `nil="true"`；用 `typeAttributes(true)` 开启后元素上额外输出
+- **`type` / `nil` 协议**：null 默认输出 `xsi:nil="true"`；用 `typeAttributes(true)` 开启后元素上额外输出
   `type="object|array|string|number|boolean|binary"`，保证非字符串标量严格无损往返；
 - **属性映射**：启用后 XML attribute 映射为对象字段 `attributePrefix + localName`（默认 `@id`），写出时把带前缀的标量字段写成属性；
 - **命名空间**：`PREFIX`（`prefix:local` + `xmlns` 属性字段）与 `CLARK`（`{uri}local`，写出自动分配前缀）两种模式；
@@ -70,6 +70,8 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 | `textKey(String)` / `itemsKey(String)` / `contentKey(String)` | 自定义保留字段名（不能为空） |
 | `mixedContentPolicy(XmlMixedContentPolicy)` | 混合内容策略 |
 | `typeAttributes(Boolean)` | 是否输出 `type="..."` 协议属性，默认 `false` |
+| `enable/disable/configure(XmlReadFeature)` | Jackson 风格读取特性：`EMPTY_ELEMENT_AS_NULL`、`PROCESS_XSI_NIL` |
+| `enable/disable/configure(XmlWriteFeature)` | Jackson 风格写出特性：`WRITE_NULLS_AS_XSI_NIL` |
 | `subtype(...)` / `typeProperty(...)` | 多态子类型 |
 | `resolveReferences` / `writeReferences` | 本地 `$ref` |
 | `build()` | 构建 `XmlConfig` |
@@ -179,9 +181,9 @@ val extended = """<root><a type="number">1</a></root>""".toXmlNode()
 | `type="number"` | 数字（文本按 `BigDecimal` 校验） |
 | `type="boolean"` | `true` / `false` |
 | `type="binary"` | Base64 编码的 `BinaryNode` |
-| `nil="true"` | `NullNode` |
+| `xsi:nil="true"` | `NullNode` |
 
-读取没有类型属性时按元素结构推断：
+读取没有类型属性时按元素结构推断（`xsi:nil="true"` 始终优先解释为 null）：
 
 - 无子元素、无属性 → 标量推断：`true` / `false` / 数字 / 字符串；
 - 子元素全部名为 `item` → 数组；
@@ -372,13 +374,16 @@ val xml = XmlMapper().format(Account().apply { name = "小于" })
 | `StringNode` | `type="string"` 或标量推断 | 文本元素（开启协议时 `type="string"`） |
 | `NumberNode` | `type="number"`（非法数字抛 `XmlParseException`）或标量推断 | 文本为 `NumberNode.raw`（开启协议时 `type="number"`） |
 | `BooleanNode` | `type="boolean"`（非 true/false 抛异常）或标量推断 | `true` / `false` 文本（开启协议时 `type="boolean"`） |
-| `NullNode` | `nil="true"` | `<name nil="true"/>` |
+| `NullNode` | `xsi:nil="true"`；空元素 + `EMPTY_ELEMENT_AS_NULL` | `<name xsi:nil="true"/>`；关闭 `WRITE_NULLS_AS_XSI_NIL` 时 `<name/>` |
 | `BinaryNode` | `type="binary"`，Base64 解码 | Base64 文本（开启协议时 `type="binary"`） |
+| 空元素 `<age/>` | 默认 `""`；启用 `EMPTY_ELEMENT_AS_NULL` 时为 null | 关闭 `WRITE_NULLS_AS_XSI_NIL` 时输出 `<age/>` |
 
 补充规则：
 
 - 属性字段值按标量推断（`true`/`false`/数字/字符串）；
 - 默认输出没有 `type` 属性；读取侧按结构/文本推断，二进制和“看起来像数字的字符串”无法严格保真，需要无损往返时开启 `typeAttributes(true)`；
+- `<age/>` 默认读取为字符串空值；显式 `xsi:nil="true"` 始终为 null；
+- 关闭 `WRITE_NULLS_AS_XSI_NIL` 让 NullNode 写成空元素，配合 `EMPTY_ELEMENT_AS_NULL` 可保持 null 往返；
 - 数字使用 `BigDecimal` 校验，写出时原样使用 `raw`；
 - 元素/属性的非法名称字符编码为 `_xHHHH_`。
 
@@ -443,7 +448,7 @@ println(mapper.format(node))
 ### 5. 文档根类型限制
 
 ```kotlin
-// 根节点必须是可写的对象/数组/标量；直接写 NullNode 会得到 nil="true"
+// 根节点必须是可写的对象/数组/标量；直接写 NullNode 会得到 xsi:nil="true"
 val node = mapper.parse("<root nil=\"true\"/>", Node::class.java)
 check(node.isNull)
 ```

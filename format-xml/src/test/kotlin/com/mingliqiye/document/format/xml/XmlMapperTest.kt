@@ -40,7 +40,7 @@ class XmlMapperTest {
         )
         val xml = mapper.formatPretty(Person().apply { name = "小于" })
 
-        assertTrue(xml.startsWith("<person type=\"object\">"))
+        assertTrue(xml.startsWith("<person") && xml.contains("type=\"object\""))
         assertTrue(xml.contains("\n"))
     }
 
@@ -48,15 +48,15 @@ class XmlMapperTest {
     fun documentRootNameAnnotationSetsRootElement() {
         val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).build())
 
-        assertTrue(mapper.format(NamedRootPerson().apply { name = "小于" }).startsWith("<person type=\"object\">"))
-        assertTrue(mapper.formatPretty(NamedRootPerson()).startsWith("<person type=\"object\">"))
+        assertTrue(mapper.format(NamedRootPerson().apply { name = "小于" }).startsWith("<person") && mapper.format(NamedRootPerson()).contains("type=\"object\""))
+        assertTrue(mapper.formatPretty(NamedRootPerson()).startsWith("<person") && mapper.formatPretty(NamedRootPerson()).contains("type=\"object\""))
     }
 
     @Test
     fun documentRootNameAnnotationOverridesConfiguredRootName() {
         val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).rootName("configured").build())
 
-        assertTrue(mapper.format(NamedRootPerson()).startsWith("<person type=\"object\">"))
+        assertTrue(mapper.format(NamedRootPerson()).startsWith("<person") && mapper.format(NamedRootPerson()).contains("type=\"object\""))
     }
 
     @Test
@@ -65,7 +65,7 @@ class XmlMapperTest {
             .config(XmlConfig.builder().typeAttributes(true).rootName("bean").build())
             .build()
 
-        assertTrue(mapper.format(Person()).startsWith("<bean type=\"object\">"))
+        assertTrue(mapper.format(Person()).startsWith("<bean") && mapper.format(Person()).contains("type=\"object\""))
     }
 
     @DocumentRootName("person")

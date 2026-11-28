@@ -23,6 +23,8 @@ public class XmlConfigBuilder {
     private var mixedContentPolicy = XmlMixedContentPolicy.PRESERVE
     private var maxDepth = XmlConfig.DEFAULT_MAX_DEPTH
     private var typeAttributes = false
+    private val readFeatures = XmlConfig.DEFAULT_READ_FEATURES.toMutableSet()
+    private val writeFeatures = XmlConfig.DEFAULT_WRITE_FEATURES.toMutableSet()
 
     /**
      * 为指定字段绑定转换器。
@@ -220,6 +222,68 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 开启 XML 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: XmlReadFeature): XmlConfigBuilder {
+        readFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭 XML 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: XmlReadFeature): XmlConfigBuilder {
+        readFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 设置 XML 读取特性开关。
+     *
+     * @param feature 读取特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: XmlReadFeature, enabled: Boolean): XmlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 开启 XML 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: XmlWriteFeature): XmlConfigBuilder {
+        writeFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭 XML 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: XmlWriteFeature): XmlConfigBuilder {
+        writeFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 设置 XML 写出特性开关。
+     *
+     * @param feature 写出特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: XmlWriteFeature, enabled: Boolean): XmlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
      * 注册多态子类型。
      *
      * @param baseClass 基类/接口
@@ -313,6 +377,8 @@ public class XmlConfigBuilder {
             mixedContentPolicy,
             maxDepth,
             typeAttributes,
+            readFeatures.toSet(),
+            writeFeatures.toSet(),
         )
     }
 }

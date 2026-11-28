@@ -31,7 +31,7 @@ class XmlCodecTest {
         )
 
         val xml = node.toXmlString(pretty = true, typeAttributes = true)
-        assertTrue(xml.startsWith("<root type=\"object\">"))
+        assertTrue(xml.startsWith("<root") && xml.contains("type=\"object\""))
         assertTrue(xml.contains("&amp;"))
         assertTrue(xml.contains("&lt;xml&gt;"))
 

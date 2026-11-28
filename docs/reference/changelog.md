@@ -31,8 +31,10 @@
 
 - XML 写出默认不再生成 `type="..."` 协议属性，读取侧按结构/文本推断
 - `XmlConfig` 新增 `typeAttributes(Boolean)`，默认 `false`
-- `Node.toXmlString(...)` 增加 `typeAttributes` 参数，默认 `false`
-- `nil="true"` 仍默认输出；需要严格保真二进制/空容器/类数字字符串时开启协议
+- 新增 `XmlReadFeature` / `XmlWriteFeature`：`EMPTY_ELEMENT_AS_NULL`、`PROCESS_XSI_NIL`、`WRITE_NULLS_AS_XSI_NIL`
+- null 默认写 `xsi:nil="true"`；`<age/>` 默认读空字符串，开启 `EMPTY_ELEMENT_AS_NULL` 读 null
+- `Node.toXmlString(...)` 增加 `typeAttributes` / `writeNullsAsXsiNil` 参数
+- null 默认写 `xsi:nil="true"`；需要严格保真二进制/空容器/类数字字符串时开启 `typeAttributes(true)`
 
 ## 2.5.1
 

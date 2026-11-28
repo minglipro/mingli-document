@@ -7,11 +7,15 @@
 - XML 写出默认不再生成 `type="..."` 协议属性，输出更接近普通业务 XML；读取侧按
   元素结构/标量文本推断类型
 - `XmlConfig` 新增 `typeAttributes(Boolean)`，默认 `false`；需要严格无损往返时设为 `true`
-- `Node.toXmlString(...)` 增加 `typeAttributes` 参数，默认 `false`
+- 新增 `XmlReadFeature`：`EMPTY_ELEMENT_AS_NULL`（默认关闭）、`PROCESS_XSI_NIL`（默认开启）
+- 新增 `XmlWriteFeature`：`WRITE_NULLS_AS_XSI_NIL`（默认开启）
+- null 默认写为 `xsi:nil="true"` 并声明 `xmlns:xsi`；关闭后写空元素
+- `<age/>` 默认读空字符串，开启 `EMPTY_ELEMENT_AS_NULL` 读 null
+- `Node.toXmlString(...)` 增加 `typeAttributes` / `writeNullsAsXsiNil` 参数
 
 ### 说明
 
-- `nil="true"` 仍默认输出
+- null 默认写 `xsi:nil="true"`，并自动声明 `xmlns:xsi`
 - 不输出 `type` 时，二进制、空容器、看起来像数字/布尔的字符串无法严格保真；
   需要协议保真时开启 `typeAttributes(true)`
 

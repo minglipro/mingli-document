@@ -19,7 +19,7 @@ import java.util.Base64
  *
  * 生成语义与 `NodeTokenReader(XmlReader(source).read())` 等价：
  * - 根元素直接按内容输出，不额外包根名；
- * - `nil="true"` -> NULL，`type="object|array|string|number|boolean|binary"` 协议；
+ * - `xsi:nil="true"` / `nil="true"` -> NULL，`type="object|array|string|number|boolean|binary"` 协议；
  * - 无类型属性时按元素结构推断：无子元素 -> 标量推断，子元素全为 `item` -> 数组，
  *   否则对象按元素名分组（重名合并为数组、保持首次出现顺序）；
  * - 对象/数组容器的直接文本（裁剪后非空）输出为 `#text` 字段；
@@ -72,6 +72,7 @@ internal class XmlTokenReader(
 
         private const val PROTOCOL_TYPE = "type"
         private const val PROTOCOL_NIL = "nil"
+        private const val PROTOCOL_XSI_NIL = "xsi:nil"
         private const val ARRAY_ITEM_NAME = "item"
         private const val TEXT_KEY = XmlConfig.DEFAULT_TEXT_KEY
         private const val ITEMS_KEY = XmlConfig.DEFAULT_ITEMS_KEY
@@ -85,7 +86,9 @@ internal class XmlTokenReader(
         }
 
         private fun appendElement(element: Element, tokens: MutableList<DocumentToken>) {
-            if (element.getAttribute(PROTOCOL_NIL) == "true") {
+            if (element.getAttribute(PROTOCOL_NIL) == "true" ||
+                element.getAttribute(PROTOCOL_XSI_NIL) == "true"
+            ) {
                 tokens.add(DocumentToken.nullValue())
                 return
             }

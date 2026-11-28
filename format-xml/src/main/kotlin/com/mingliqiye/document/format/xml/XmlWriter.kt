@@ -13,7 +13,7 @@ import java.util.Base64
 /**
  * 将文档树写成 XML 文本。
  *
- * XML 没有原生类型信息；默认使用结构/文本推断，`nil="true"` 仍保留。
+ * XML 没有原生类型信息；默认使用结构/文本推断，null 默认写成 `xsi:nil="true"`。
  * 开启 [XmlConfig.typeAttributes] 后额外使用
  * `type="object|array|string|number|boolean|binary"` 保存节点类型。
  *
@@ -53,6 +53,7 @@ internal class XmlWriter(
     private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
     private val typeAttributes: Boolean = false,
+    private val writeNullsAsXsiNil: Boolean = true,
 ) {
 
     init {
@@ -76,6 +77,7 @@ internal class XmlWriter(
     private var out: Appendable = StringBuilder()
     private val namespacePrefixes = LinkedHashMap<String, String>()
     private var pretty = false
+    private var rootUsesXsiNil = false
 
     fun write(node: Node, pretty: Boolean): String {
         val builder = StringBuilder()
@@ -90,6 +92,7 @@ internal class XmlWriter(
         this.pretty = pretty
         this.out = target
         namespacePrefixes.clear()
+        rootUsesXsiNil = writeNullsAsXsiNil && containsNull(node)
         if (namespaceMode == XmlNamespaceMode.CLARK) {
             collectNamespaces(rootName, node)
         }
@@ -118,7 +121,11 @@ internal class XmlWriter(
             is NullNode -> {
                 appendIndent(indent, compact)
                 appendStart(name, isRoot)
-                out.append(" nil=\"true\"/>")
+                if (writeNullsAsXsiNil) {
+                    out.append(" xsi:nil=\"true\"/>")
+                } else {
+                    out.append("/>")
+                }
             }
 
             is ObjectNode -> writeContainer(name, node, indent, isRoot, compact)
@@ -153,7 +160,9 @@ internal class XmlWriter(
         appendIndent(indent, compact)
         appendStart(name, isRoot)
         if (text is NullNode) {
-            out.append(" nil=\"true\"")
+            if (writeNullsAsXsiNil) {
+                out.append(" xsi:nil=\"true\"")
+            }
             appendAttributes(attributes)
             out.append("/>")
             return
@@ -355,6 +364,9 @@ internal class XmlWriter(
         out.append('<').append(name)
         if (isRoot) {
             appendNamespaceDeclarations()
+            if (rootUsesXsiNil) {
+                out.append(" xmlns:xsi=\"").append(XmlConfig.XSI_NAMESPACE).append('"')
+            }
         }
     }
 
@@ -471,6 +483,13 @@ internal class XmlWriter(
     private fun isNonNilScalar(node: Node): Boolean = node is StringNode || node is NumberNode || node is BooleanNode || node is BinaryNode
 
     private fun isScalarNode(node: Node): Boolean = isNonNilScalar(node) || node is NullNode
+
+    private fun containsNull(node: Node): Boolean = when (node) {
+        is NullNode -> true
+        is ObjectNode -> node.asMap().values.any(::containsNull)
+        is ArrayNode -> node.any(::containsNull)
+        else -> false
+    }
 
     private fun appendTypeAttribute(type: String) {
         if (typeAttributes) {
@@ -633,6 +652,7 @@ internal class XmlWriter(
             xmlConfig?.itemsKey ?: XmlConfig.DEFAULT_ITEMS_KEY,
             xmlConfig?.contentKey ?: XmlConfig.DEFAULT_CONTENT_KEY,
             xmlConfig?.typeAttributes ?: false,
+            xmlConfig?.writeNullsAsXsiNil ?: true,
         )
     }
 }
@@ -649,6 +669,7 @@ internal class XmlWriter(
  * @param itemsKey 带属性数组的数组字段名
  * @param contentKey 有序混合内容的数组字段名
  * @param typeAttributes 是否输出 `type="..."` 协议属性，默认 `false`
+ * @param writeNullsAsXsiNil 是否把 null 写成 `xsi:nil="true"`，默认 `true`
  * @return XML 文本
  */
 public fun Node.toXmlString(
@@ -661,6 +682,7 @@ public fun Node.toXmlString(
     itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
     typeAttributes: Boolean = false,
+    writeNullsAsXsiNil: Boolean = true,
 ): String = XmlWriter(
     rootName,
     attributePrefix,
@@ -670,4 +692,5 @@ public fun Node.toXmlString(
     itemsKey,
     contentKey,
     typeAttributes,
+    writeNullsAsXsiNil,
 ).write(this, pretty)

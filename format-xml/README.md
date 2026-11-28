@@ -67,7 +67,10 @@ val node = com.mingliqiye.document.format.xml.XmlReader(source, maxDepth = 64).r
 
 ## 特性
 
-- `nil` 协议默认保留；`type` 协议默认不输出，可用 `typeAttributes(true)` 开启
+- null 默认写为 `xsi:nil="true"`，可用 `disable(XmlWriteFeature.WRITE_NULLS_AS_XSI_NIL)` 转为空元素
+- `<age/>` 默认读取为空字符串，可用 `enable(XmlReadFeature.EMPTY_ELEMENT_AS_NULL)` 读取为 null
+- `xsi:nil` 默认处理，可用 `disable(XmlReadFeature.PROCESS_XSI_NIL)` 忽略
+- `type` 协议默认不输出，可用 `typeAttributes(true)` 开启
 - XML 属性映射
 - `PREFIX` / `CLARK` 命名空间
 - 混合内容 `PRESERVE` / `PRESERVE_ORDERED` / `REJECT`
