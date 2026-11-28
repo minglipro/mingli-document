@@ -70,7 +70,7 @@
 - [x] 全格式 maxInputSize
 - [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
-- [x] 持续 fuzz harness（fuzzContinuous）\n- [x] Jazzer 覆盖率引导 fuzz\n- [ ] JQF 集成
+- [x] 持续 fuzz harness（fuzzContinuous）\n- [x] Jazzer 覆盖率引导 fuzz\n- [x] JQF 集成
 - [ ] 安全测试基线
 
 ---
