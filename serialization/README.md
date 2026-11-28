@@ -226,6 +226,37 @@ class UserBuilder {
 Builder 存在 @DocumentBuild 或无参 build()
 ```
 
+## 代码生成
+
+### 运行期属性访问代码生成
+
+```kotlin
+val codegen = DocumentAccessorCodegen()
+val getter = codegen.getter(User::class.java, "name")
+val setter = codegen.setter(User::class.java, "name")
+```
+
+优先使用 LambdaMetafactory 生成直接调用代码，失败时回退反射。
+
+### 编译期源码生成
+
+```kotlin
+val source = DocumentCodecSourceGenerator().enumConverter(
+    Status::class.java,
+    "com.example.generated",
+)
+```
+
+生成的源码可直接写入源码目录，由编译器编译；也可以生成模块：
+
+```kotlin
+val module = DocumentCodecSourceGenerator().module(
+    packageName = "com.example.generated",
+    moduleName = "GeneratedDocumentModule",
+    converterTypes = listOf("com.example.generated.StatusDocumentConverter"),
+)
+```
+
 ## 构建
 
 ```bash

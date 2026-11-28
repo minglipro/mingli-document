@@ -54,8 +54,10 @@
 - [x] TOML 原生 Token Reader\n- [x] YAML 原生 Token Reader\n- [x] XML 原生 Token Reader（默认配置）
 - [x] JSON 紧凑模式纯字节写出
 - [x] Schubfach Double 最短格式化
-- [ ] 运行期代码生成
-- [ ] 编译期代码生成
+- [x] 运行期属性访问代码生成
+- [x] 编译期枚举转换器源码生成
+- [ ] 运行期 Bean 编解码器生成
+- [ ] 编译期注解处理器 / KSP
 - [ ] 大文件流式 Bean 映射
 - [ ] 对象池 / 零拷贝
 
