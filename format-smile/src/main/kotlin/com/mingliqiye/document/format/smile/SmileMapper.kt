@@ -1,5 +1,7 @@
 package com.mingliqiye.document.format.smile
 
+import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
 import com.mingliqiye.document.serialization.DocumentBaseDeserializer
 import com.mingliqiye.document.serialization.DocumentBaseSerializer
@@ -38,6 +40,8 @@ public open class SmileMapper internal constructor(
     propertyMetadataResolver,
     config,
 ) {
+
+    private val maxNodeDepth: Int = config.maxNodeDepth
 
     /**
      * 创建默认 Smile 映射器。
@@ -82,6 +86,81 @@ public open class SmileMapper internal constructor(
         try {
             writeTo(value, writer)
             return writer.toByteArray()
+        } finally {
+            writer.close()
+        }
+    }
+
+    /**
+     * 解析 Smile 多消息流（连续多个根值），按出现顺序返回全部文档树。
+     *
+     * 空输入返回空列表；只有一个根值时返回长度为 1 的列表。每个根值独立解析，
+     * 深度限制取自 Mapper 配置的 `maxNodeDepth`（0 表示不限制）。
+     *
+     * @param source Smile 多消息流二进制内容
+     * @param maxItems 最大消息数量；0 表示不限制
+     * @return 按出现顺序排列的文档树列表；空输入返回空列表
+     * @throws com.mingliqiye.document.format.smile.exception.SmileParseException
+     *   任一消息格式非法、数据不完整、消息数超过 maxItems，或包含 NaN/Infinity
+     *   等无法表示的浮点值时抛出
+     */
+    public fun parseAllToNodes(source: ByteArray, maxItems: Int = 0): List<Node> {
+        checkInputSize(source.size.toLong())
+        return SmileSequenceReader(source, maxNodeDepth, maxItems).readAll()
+    }
+
+    /**
+     * 解析 Smile 多消息流，按出现顺序把每个根值反序列化为指定类型。
+     *
+     * 空输入返回空列表；反序列化失败时整体抛出
+     * [com.mingliqiye.document.serialization.exception.DocumentSerializationException]。
+     *
+     * @param source Smile 多消息流二进制内容
+     * @param targetType 每个根值的目标类型
+     * @param maxItems 最大消息数量；0 表示不限制
+     * @return 按出现顺序反序列化得到的实体列表
+     */
+    public fun <T> parseAll(
+        source: ByteArray,
+        targetType: Class<T>,
+        maxItems: Int = 0,
+    ): List<T> = parseAllToNodes(source, maxItems).map { fromNode(it, targetType) }
+
+    /**
+     * 解析 Smile 多消息流，按出现顺序把每个根值反序列化为指定泛型类型。
+     *
+     * @param source Smile 多消息流二进制内容
+     * @param targetType 每个根值的目标泛型类型引用
+     * @param maxItems 最大消息数量；0 表示不限制
+     * @return 按出现顺序反序列化得到的实体列表
+     */
+    public fun <T> parseAll(
+        source: ByteArray,
+        targetType: DocumentTypeReference<T>,
+        maxItems: Int = 0,
+    ): List<T> = parseAllToNodes(source, maxItems).map { fromNode(it, targetType) }
+
+    /**
+     * 把多个 Java 实体按顺序写成 Smile 多消息流字节。
+     *
+     * 空 [Iterable] 返回空字节数组。通过 [writeTo] 驱动 [SmileTokenWriter]
+     * 直接写 Token 流（不构建 Node 树），Smile 头部只写一次，各根值首尾相接。
+     *
+     * @param values 要写出的实体、Map、集合或文档树，按迭代顺序输出
+     * @return Smile 多消息流二进制内容；空集合返回空字节数组
+     * @throws com.mingliqiye.document.format.smile.exception.SmileException 写出失败时抛出
+     */
+    public fun formatAll(values: Iterable<Any?>): ByteArray {
+        val iterator = values.iterator()
+        if (!iterator.hasNext()) {
+            return ByteArray(0)
+        }
+        val writer = SmileTokenWriter()
+        return try {
+            while (iterator.hasNext()) {
+                writeTo(iterator.next(), writer)
+            }
+            writer.toByteArray()
         } finally {
             writer.close()
         }

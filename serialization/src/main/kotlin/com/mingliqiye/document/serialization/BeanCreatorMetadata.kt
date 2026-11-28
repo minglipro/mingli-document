@@ -12,6 +12,8 @@ import java.lang.reflect.Type
  *   [com.mingliqiye.document.annotation.DocumentName]
  * @property explicitDocumentName 参数上显式标注的文档字段名；未标注时为 `null`
  * @property type 参数泛型类型
+ * @property ignored 参数对应的 record 组件被 `@DocumentIgnore` 标记：不参与文档字段
+ *   匹配，构造时始终使用 Java 默认值
  */
 internal class BeanCreatorParameter(
     val index: Int,
@@ -19,6 +21,7 @@ internal class BeanCreatorParameter(
     val documentName: String,
     val explicitDocumentName: String?,
     val type: Type,
+    val ignored: Boolean = false,
 )
 
 /**
@@ -40,14 +43,19 @@ internal class BeanCreatorMetadata(
     val argumentCount: Int
         get() = parameters.size
 
-    /** 构造参数可接受的文档字段名集合。 */
-    val documentNames: Set<String> = parameters.mapTo(LinkedHashSet()) { it.documentName }
+    /** 构造参数可接受的文档字段名集合；忽略参数不参与匹配。 */
+    val documentNames: Set<String> = parameters
+        .filterNot { it.ignored }
+        .mapTo(LinkedHashSet()) { it.documentName }
 
     private val parametersByDocumentName: Map<String, BeanCreatorParameter> =
-        parameters.associateBy { it.documentName }
+        parameters.filterNot { it.ignored }.associateBy { it.documentName }
 
     private val parametersByJavaName: Map<String, BeanCreatorParameter> =
-        parameters.mapNotNull { parameter -> parameter.javaName?.let { it to parameter } }.toMap()
+        parameters
+            .filterNot { it.ignored }
+            .mapNotNull { parameter -> parameter.javaName?.let { it to parameter } }
+            .toMap()
 
     /** 按文档字段名查找构造参数。 */
     fun parameter(documentName: String): BeanCreatorParameter? = parametersByDocumentName[documentName]

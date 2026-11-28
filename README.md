@@ -491,6 +491,10 @@ gradle publishToMavenLocal
 
 # 远程：仓库地址与凭据由 Gradle init.gradle 提供
 gradle publish
+
+# Maven Central（需要环境变量与 GPG）
+# MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
+gradle publish
 ```
 
 发布规则：

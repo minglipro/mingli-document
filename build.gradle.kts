@@ -50,6 +50,24 @@ allprojects {
 
     afterEvaluate {
         extensions.configure<PublishingExtension> {
+            repositories {
+                maven {
+                    name = "MavenCentral"
+                    url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+                    credentials {
+                        username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME").orNull
+                        password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").orNull
+                    }
+                }
+                maven {
+                    name = "MavenCentralSnapshot"
+                    url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+                    credentials {
+                        username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME").orNull
+                        password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").orNull
+                    }
+                }
+            }
             publications {
                 create<MavenPublication>("mavenJava") {
                     from(components["java"])
@@ -61,6 +79,8 @@ allprojects {
                     artifact(tasks.named("javaDocJar"))
                     artifact(tasks.named("kotlinDocJar"))
                     pom {
+                        name.set(artifactId)
+                        description.set("mingli-document module ${project.name}")
                         url = "https://github.com/minglipro/mingli-document"
                         licenses {
                             license {
@@ -98,7 +118,8 @@ allprojects {
             when {
                 repositoryName.contains("GradlePlugin", ignoreCase = true) -> false
                 snapshot -> repositoryName.contains("Snapshot", ignoreCase = true)
-                else -> repositoryName.contains("Release", ignoreCase = true)
+                else -> repositoryName.contains("Release", ignoreCase = true) ||
+                    repositoryName == "MavenCentral"
             }
         }
     }

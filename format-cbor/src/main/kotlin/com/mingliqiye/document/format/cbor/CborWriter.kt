@@ -49,11 +49,24 @@ public class CborWriter(
      *
      * @throws CborException 生成 CBOR 失败，或 [NumberNode.raw] 不是合法数字时抛出
      */
-    public fun write(node: Node): ByteArray {
+    public fun write(node: Node): ByteArray = writeAll(listOf(node))
+
+    /**
+     * 按顺序写出多个节点，返回 CBOR sequence 字节（各数据项直接首尾相接）。
+     *
+     * 仅供 [CborSequenceWriter] 使用；空集合返回空字节数组。
+     *
+     * @param nodes 要写出的文档树
+     * @return CBOR 二进制内容
+     * @throws CborException 生成 CBOR 失败，或 [NumberNode.raw] 不是合法数字时抛出
+     */
+    internal fun writeAll(nodes: Iterable<Node>): ByteArray {
         val buffer = ByteArrayOutputStream()
         try {
             CBOR_FACTORY.createGenerator(buffer).use { generator ->
-                writeValue(generator, node)
+                for (node in nodes) {
+                    writeValue(generator, node)
+                }
             }
         } catch (e: IOException) {
             throw CborException("Failed to write CBOR: ${e.message}", e)

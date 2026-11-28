@@ -12,6 +12,8 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 - 字段转换器、日期格式、数字格式
 - 多态类型注册与类型属性
 - Bean 元数据缓存与访问器
+- Java record、只读属性与构造器注入
+- `merge` 合并到已有对象（`MergePolicy`）
 - `DocumentTokenReader` / `DocumentTokenWriter`
 - `BinaryDocumentMapper`
 - `NodeTokenReader`
@@ -33,6 +35,8 @@ mapper.format(value)
 mapper.formatBytes(value)
 mapper.parse(file, User::class.java)
 mapper.format(value, outputStream)
+mapper.merge(node, target)                    // 合并到已有对象，未出现字段保留
+mapper.merge(node, target, MergePolicy.DEEP)  // 嵌套 Bean 深合并
 ```
 
 ## 配置示例
@@ -190,6 +194,116 @@ class User {
 - 缺字段按 `MissingFieldPolicy` 处理
 - 未标注构造器继续走原有无参构造逻辑
 
+## Java record
+
+record 组件访问器是 `name()` 而不是 `getName()`，Mapper 会自动识别 record 组件：
+
+```java
+public record Address(String city, int zipCode) {}
+
+public record User(
+        @DocumentName("display_name") String name,
+        int age,
+        Address address) {}
+```
+
+```kotlin
+val node = mapper.toNode(User("小于", 18, Address("杭州", 310000)))
+// {"display_name":"小于","age":18,"address":{"city":"杭州","zipCode":310000}}
+
+val user = mapper.fromNode(node, User::class.java)
+```
+
+- 序列化：record 组件访问器作为可读属性写出，支持 `@DocumentName`、`@DocumentIgnore`
+  与命名策略
+- 反序列化：优先使用 `@DocumentCreator` 构造器；没有标注时自动绑定 canonical
+  constructor，按组件名（可用 `@DocumentName` 覆盖）取字段
+- record 组件都是只读的，按构造参数注入；缺失字段按 `MissingFieldPolicy` 处理
+- `@DocumentIgnore` 标记的组件既不写出，也不从文档读取
+- 只读属性见下一节
+
+record 反射 API（`Class.isRecord()` / `RecordComponent`）从 JDK 16 开始提供。
+Mapper 通过反射按名称探测，**主代码仍按 JDK 8 目标编译**：运行在 JDK 8 时该分支
+不会执行，普通 Bean 行为不变；运行在 JDK 16+ 时自动启用 record 支持。
+
+## 只读属性
+
+没有 setter、也不是可写构造参数的属性（Java `final` 字段、只有 getter 的属性）：
+
+- 序列化照常写出
+- 反序列化直接跳过：文档中出现该字段时不会被当作未知字段，即使开启
+  `failOnUnknownFields` 也不报错
+- `MissingFieldPolicy.FAIL` 不会因为缺少只读字段而报错
+- record / `@DocumentCreator` 构造器 Bean 中，只读属性是构造参数，按参数注入
+
+```java
+public final class ReadOnlyUser {
+    public final String tag = "fixed";   // 无 setter，反序列化跳过
+
+    private final String name;
+
+    @DocumentCreator
+    public ReadOnlyUser(@DocumentName("name") String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    @DocumentName("label")
+    public String getLabel() {           // 只读属性：写出 label，读入时跳过
+        return name.toUpperCase();
+    }
+}
+```
+
+## 合并已有对象
+
+`merge(node, target)` 把文档树合并到已有对象：文档中出现的字段覆盖，未出现的字段
+保留原值。
+
+```kotlin
+val user = mapper.parse(
+    """{"name":"a","age":18,"address":{"city":"杭州","zipCode":310000}}""",
+    User::class.java,
+)
+
+// 浅合并：address 整体替换为文档中的对象
+mapper.merge(ObjectNode.of("age" to NumberNode.of(20)), user)
+// user.age == 20；name、address 保留
+
+// 深合并：嵌套 Bean 递归合并，保留文档中没有出现的嵌套字段
+mapper.merge(
+    ObjectNode.of("address" to ObjectNode.of("city" to StringNode.of("北京"))),
+    user,
+    MergePolicy.DEEP,
+)
+// user.address.city == "北京"，user.address.zipCode == 310000
+```
+
+`MergePolicy`：
+
+```text
+REPLACE           文档字段整体替换（默认）
+DEEP              嵌套 Bean 递归合并，保留嵌套对象未出现字段
+SKIP_NULLS        文档中的 null 不覆盖已有值
+DEEP_SKIP_NULLS   深合并 + 忽略 null
+MergePolicy.of(deepMerge, skipNulls)  自定义组合
+```
+
+语义与限制：
+
+- 只支持 Node 到 Bean 的合并；流式 `writeTo` 没有合并 API
+- 可变 Bean 就地修改并返回同一实例；record / `@DocumentCreator` / `@DocumentBuilder`
+  Bean 返回新实例（原实例不变），通过“已有对象序列化结果 + 覆盖字段”重建
+- 集合、Map、数组与多态声明字段始终整体替换，不做元素级合并
+- 只读属性即使在文档中出现也会跳过
+- 文档中的未知字段默认忽略，开启 `failOnUnknownFields` 时报错
+- `MissingFieldPolicy` 不参与 merge：未出现的字段一律保留原值
+- `node` 必须是对象节点；目标为 `null` 或非 Bean 类型时抛
+  `DocumentSerializationException`
+
 ## Builder 模式
 
 不可变类也可以通过 Builder 反序列化：
@@ -275,7 +389,11 @@ val module = DocumentCodecSourceGenerator().module(
 ## 构建
 
 ```bash
+# 默认测试（JDK 8 工具链，Java record 测试自动跳过）
 gradle :serialization:test
+
+# Java record 映射测试：需要 JDK 16+ 运行时，测试用 Java 17 工具链执行
+gradle :serialization:recordTest
 ```
 
 文档：[根 README](../README.md) · [贡献指南](../CONTRIBUTING.md)

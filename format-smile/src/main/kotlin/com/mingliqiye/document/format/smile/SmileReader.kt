@@ -56,6 +56,40 @@ public class SmileReader @JvmOverloads constructor(
         }
     }
 
+    /**
+     * 读取 Smile 多消息流（连续多个根值）中的全部文档树。
+     *
+     * 仅供 [SmileSequenceReader] 使用；单值 [read] 语义保持不变。每个根值独立
+     * 解析，深度从 1 重新开始计数。空输入返回空列表。
+     *
+     * @param maxItems 最大消息数量；`<= 0` 表示不限制
+     * @return 按出现顺序排列的文档树列表
+     * @throws SmileParseException 任一消息格式非法、数据不完整、消息数超过
+     *   maxItems，或包含 NaN/Infinity 等无法表示的浮点值时抛出
+     */
+    internal fun readAll(maxItems: Int): List<Node> {
+        val parser = try {
+            SMILE_FACTORY.createParser(source)
+        } catch (e: IOException) {
+            throw SmileParseException("Invalid Smile: ${e.message}", e)
+        }
+        try {
+            val nodes = ArrayList<Node>()
+            while (true) {
+                val token = parser.nextToken() ?: break
+                if (maxItems > 0 && nodes.size >= maxItems) {
+                    throw SmileParseException("Smile stream contains more than maxItems $maxItems values")
+                }
+                nodes.add(readValue(parser, token, 1))
+            }
+            return nodes
+        } catch (e: IOException) {
+            throw SmileParseException("Invalid Smile: ${e.message}", e)
+        } finally {
+            closeQuietly(parser)
+        }
+    }
+
     private fun readDocument(parser: JsonParser): Node {
         val firstToken = parser.nextToken()
             ?: throw SmileParseException("Smile document has no top-level value")

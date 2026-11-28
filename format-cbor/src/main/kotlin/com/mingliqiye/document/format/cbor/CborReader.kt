@@ -75,6 +75,48 @@ public class CborReader @JvmOverloads constructor(
      */
     public fun read(): Node = if (preserveTags) readPreservingTags() else readWithoutTags()
 
+    /**
+     * 读取 CBOR sequence（连续多个自描述数据项）中的全部文档树。
+     *
+     * 仅供 [CborSequenceReader] 使用；单值 [read] 语义保持不变。每个数据项独立
+     * 解析，深度从 1 重新开始计数。空输入返回空列表。
+     *
+     * @param maxItems 最大数据项数量；`<= 0` 表示不限制
+     * @return 按出现顺序排列的文档树列表
+     * @throws CborParseException 任一项格式非法、项数超过 maxItems，或包含
+     *   NaN/Infinity 等无法表示的浮点值时抛出
+     */
+    internal fun readAll(maxItems: Int): List<Node> {
+        val parser = try {
+            CBOR_FACTORY.createParser(source)
+        } catch (e: IOException) {
+            throw CborParseException("Cannot create CBOR parser", e)
+        }
+        try {
+            val nodes = ArrayList<Node>()
+            while (true) {
+                parser.nextToken() ?: break
+                if (maxItems > 0 && nodes.size >= maxItems) {
+                    throw CborParseException("CBOR sequence contains more than maxItems $maxItems items")
+                }
+                nodes.add(if (preserveTags) readTaggedValue(parser, 1) else readTreeValue(parser))
+            }
+            return nodes
+        } catch (e: JsonProcessingException) {
+            throw CborParseException("Invalid CBOR: ${e.originalMessage}", e)
+        } catch (e: IOException) {
+            throw CborParseException("Invalid CBOR: ${e.message}", e)
+        } finally {
+            closeQuietly(parser)
+        }
+    }
+
+    private fun readTreeValue(parser: CBORParser): Node {
+        val tree: JsonNode = OBJECT_MAPPER.readTree<JsonNode>(parser)
+            ?: throw CborParseException("CBOR sequence item has no value")
+        return toNode(tree)
+    }
+
     private fun readWithoutTags(): Node {
         val parser = try {
             CBOR_FACTORY.createParser(source)

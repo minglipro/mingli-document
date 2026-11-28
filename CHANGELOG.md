@@ -6,6 +6,10 @@
 
 - KSP 编译期代码生成：`@DocumentEnumCodec`、枚举转换器、`DocumentModule`
 - 运行期 Bean 编解码器：`DocumentRuntimeCodecFactory`
+- Java record 支持（JDK 16+ 运行时）
+- 只读属性与字段 merge/update
+- CBOR sequence、Smile 多消息流
+- Maven Central 发布配置
 - 运行期属性访问器生成：`DocumentAccessorCodegen`
 - 编译期源码生成器：`DocumentCodecSourceGenerator`
 - JQF 9 格式覆盖率引导 fuzz + `fuzzJqf` 任务

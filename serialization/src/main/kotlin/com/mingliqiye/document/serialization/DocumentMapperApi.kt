@@ -198,6 +198,33 @@ public interface DocumentMapperApi {
      */
     public fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D
 
+    /**
+     * 将文档树合并到已有对象，文档中没有出现的字段保持目标对象的原值。
+     *
+     * 等价于 [merge] 使用 [MergePolicy.REPLACE]。
+     *
+     * @param node 合并来源文档树，必须是对象节点
+     * @param target 已存在的目标对象
+     * @return 合并结果；可变 Bean 就地修改并返回同一实例，
+     *   不可变 Bean（record、构造器注入、Builder）返回新实例
+     */
+    public fun <T> merge(node: Node, target: T): T = merge(node, target, MergePolicy.REPLACE)
+
+    /**
+     * 按指定策略将文档树合并到已有对象。
+     *
+     * 文档中出现的字段覆盖目标对象，未出现的字段保留原值；嵌套 Bean 是否
+     * 递归合并、文档中的 `null` 是否覆盖由 [policy] 决定。
+     *
+     * 默认实现不支持合并；[DocumentMapper] 提供完整实现。
+     *
+     * @param node 合并来源文档树，必须是对象节点
+     * @param target 已存在的目标对象
+     * @param policy 合并策略
+     * @return 合并结果
+     */
+    public fun <T> merge(node: Node, target: T, policy: MergePolicy): T = throw DocumentSerializationException("${this.javaClass.name} does not support merge")
+
     public companion object {
 
         /**

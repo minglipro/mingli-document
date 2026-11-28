@@ -27,9 +27,10 @@
 - [x] 构造器注入
 - [x] Builder 模式实例化
 - [x] 输入本地 `$ref` 解析\n- [x] 对象身份引用序列化
-- [ ] Java record / Kotlin value class / sealed class
-- [ ] 只读属性
-- [ ] 字段 merge / update
+- [x] Java record（JDK 16+ 运行时）
+- [ ] Kotlin value class / sealed class
+- [x] 只读属性
+- [x] 字段 merge / update
 
 ---
 
@@ -38,12 +39,14 @@
 - [x] Avro：非默认 codec、appendTo\n- [ ] Avro：完整 logical type
 - [ ] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
-- [ ] CBOR sequence\n- [x] CBOR：canonical map key 排序\n- [x] CBOR：可选 tag 保真
+- [x] CBOR sequence
+- [x] CBOR：canonical map key 排序
+- [x] CBOR：可选 tag 保真
 - [x] Ion：timestamp / symbol / clob / blob 类型保真
 - [ ] YAML：自定义 tag、跨文档 anchor
 - [ ] TOML：注释保留
 - [ ] CSV：嵌套结构 / 多级 Schema
-- [ ] Smile：多消息流
+- [x] Smile：多消息流
 
 ---
 
@@ -93,8 +96,9 @@
 - [x] 原子文件写入
 - [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）\n- [ ] Gitea CI
-- [ ] Maven Central 发布
-- [x] SHA-256 校验和\n- [x] CycloneDX JSON SBOM
+- [x] Maven Central 发布配置
+- [x] SHA-256 校验和
+- [x] CycloneDX JSON SBOM
 - [ ] JPMS module-info
 - [ ] GraalVM Native Image
 
