@@ -5,6 +5,8 @@ plugins {
 rootProject.name = "mingli-document"
 
 include(":annotation")
+include(":codegen")
+include(":codegen-test")
 include(":core")
 include(":exception")
 include(":format-json")

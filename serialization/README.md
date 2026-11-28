@@ -238,6 +238,21 @@ val setter = codegen.setter(User::class.java, "name")
 
 优先使用 LambdaMetafactory 生成直接调用代码，失败时回退反射。
 
+### 运行期 Bean 编解码器生成
+
+```kotlin
+val factory = DocumentRuntimeCodecFactory(
+    namingStrategy = PropertyNamingStrategy.SNAKE_CASE,
+    writeNulls = false,
+)
+val mapper = JsonMapper.builder()
+    .addConverter(factory.converter(User::class.java))
+    .build()
+```
+
+生成器按字段元数据与 [DocumentAccessorCodegen] 访问器构建运行期转换器，支持
+`@DocumentName`、`@DocumentIgnore` 与无参构造器 + setter。
+
 ### 编译期源码生成
 
 ```kotlin
