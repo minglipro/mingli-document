@@ -35,6 +35,11 @@ mapper.format(value)
 mapper.formatBytes(value)
 mapper.parse(file, User::class.java)
 mapper.format(value, outputStream)
+mapper.formatBytes(value)                   // 文本格式返回 charset 编码字节；二进制返回原始字节
+mapper.formatPretty(value, file)            // 格式化文本写入 File
+mapper.formatPretty(value, path)            // 格式化文本写入 Path
+mapper.formatPretty(value, outputStream)    // 格式化文本写入 OutputStream
+mapper.formatPretty(value, writer)          // 格式化文本写入 Writer
 mapper.merge(node, target)                    // 合并到已有对象，未出现字段保留
 mapper.merge(node, target, MergePolicy.DEEP)  // 嵌套 Bean 深合并
 ```

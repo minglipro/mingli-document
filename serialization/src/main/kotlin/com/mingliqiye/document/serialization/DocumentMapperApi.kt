@@ -111,6 +111,40 @@ public interface DocumentMapperApi {
     public fun formatPretty(value: Any?): String
 
     /**
+     * 将 Java 实体以格式化形式写入文件。
+     */
+    public fun formatPretty(value: Any?, file: File) {
+        file.writeBytes(formatPretty(value).toByteArray(Charsets.UTF_8))
+    }
+
+    /**
+     * 将 Java 实体以格式化形式写入路径。
+     */
+    public fun formatPretty(value: Any?, path: Path) {
+        java.nio.file.Files.write(path, formatPretty(value).toByteArray(Charsets.UTF_8))
+    }
+
+    /**
+     * 将 Java 实体以格式化形式写入输出流。
+     *
+     * 调用方负责关闭流；本方法只 flush。
+     */
+    public fun formatPretty(value: Any?, output: OutputStream) {
+        output.write(formatPretty(value).toByteArray(Charsets.UTF_8))
+        output.flush()
+    }
+
+    /**
+     * 将 Java 实体以格式化形式写入字符流。
+     *
+     * 只支持文本格式；调用方负责关闭 Writer。
+     */
+    public fun formatPretty(value: Any?, writer: Writer) {
+        writer.write(formatPretty(value))
+        writer.flush()
+    }
+
+    /**
      * 从文件解析 Java 实体。
      *
      * 文本格式按 UTF-8 读取，二进制格式按字节读取。
