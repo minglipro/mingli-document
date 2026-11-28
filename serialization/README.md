@@ -27,7 +27,7 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization:2.5.0")
+implementation("com.mingliqiye.document:serialization:2.5.1")
 ```
 
 ## 主要 API
@@ -466,7 +466,7 @@ context.addDeserializer(deserializer) // 只影响反序列化
 ```kotlin
 val mapper = JsonMapper.builder()
     .addConverter(MoneyConverter())
-    .propertyMetadataResolver(resolver) // 2.5.0 新增：Builder 直接注册属性元数据解析器
+    .propertyMetadataResolver(resolver) // 2.5.1 新增：Builder 直接注册属性元数据解析器
     .build()
 ```
 
@@ -588,7 +588,7 @@ public record User(
 
 ```kotlin
 // 依赖：serialization（或任一格式模块）+ record-support，运行在 JDK 17+
-implementation("com.mingliqiye.document:record-support:2.5.0") // JDK 17+
+implementation("com.mingliqiye.document:record-support:2.5.1") // JDK 17+
 
 val node = mapper.toNode(User("小于", 18, Address("杭州", 310000)))
 // {"display_name":"小于","age":18,"address":{"city":"杭州","zipCode":310000}}

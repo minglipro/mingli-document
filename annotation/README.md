@@ -92,7 +92,7 @@ USE_DEFAULTS  回退到下一优先级，最终使用全局 writeNulls
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:annotation:2.5.0")
+implementation("com.mingliqiye.document:annotation:2.5.1")
 ```
 
 ## 示例

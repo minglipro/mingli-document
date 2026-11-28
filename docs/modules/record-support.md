@@ -17,7 +17,7 @@ record 映射。
 ## 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document:record-support:2.5.0") // JDK 17+
+implementation("com.mingliqiye.document:record-support:2.5.1") // JDK 17+
 ```
 
 - group：`com.mingliqiye.document`；artifactId：`record-support`；

@@ -1,6 +1,6 @@
 # TODO
 
-当前分支：`dev`，版本 `2.5.0`。
+当前分支：`dev`，版本 `2.5.1`。
 
 ## 已完成（2.4.0）
 
@@ -15,6 +15,11 @@
 - @DocumentNaming / @DocumentInclude
 - 对象映射便捷 API
 - reified 扩展迁移到 serialization-kotlin
+
+## 已完成（2.5.1）
+
+- YAML / JSON `NUMBER` / `BOOLEAN` 标量映射到 `String` 属性的文本转换修复
+- 增加 YAML 与 serialization-kotlin 回归测试
 
 ## 已完成（2.5.0）
 

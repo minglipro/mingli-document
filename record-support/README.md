@@ -16,7 +16,7 @@ Java record 支持模块（JDK 17+）。
 
 ```kotlin
 // JDK 17+
-implementation("com.mingliqiye.document:record-support:2.5.0")
+implementation("com.mingliqiye.document:record-support:2.5.1")
 ```
 
 `record-support` 依赖 `serialization`，因此引入本模块后不需要再单独声明

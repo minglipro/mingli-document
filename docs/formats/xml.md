@@ -12,14 +12,14 @@ XML 没有原生类型信息，模块用 `type` / `nil` 属性保存节点类型
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:xml:2.5.0")
+implementation("com.mingliqiye.document.format:xml:2.5.1")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `xml` |
-| 版本 | `2.5.0` |
+| 版本 | `2.5.1` |
 | 传递依赖 | `core`、`exception`、`serialization`；`annotation`（实现依赖） |
 | 第三方依赖 | 无（使用 JDK `javax.xml.parsers.DocumentBuilderFactory` DOM） |
 | 字节码 | JDK 8 |

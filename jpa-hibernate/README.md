@@ -13,7 +13,7 @@ JPA 元模型（`jakarta.persistence.metamodel`）区分关联属性，不再扫
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:jpa-hibernate:2.5.0")
+implementation("com.mingliqiye.document:jpa-hibernate:2.5.1")
 ```
 
 需要 Hibernate ORM **6.5.x**（开发与测试使用 `6.5.3.Final`），它会作为传递依赖引入。

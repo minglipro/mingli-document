@@ -3,7 +3,7 @@
 ## 坐标
 
 ```kotlin
-implementation("com.mingliqiye.document:jpa:2.5.0")
+implementation("com.mingliqiye.document:jpa:2.5.1")
 ```
 
 ## 能力

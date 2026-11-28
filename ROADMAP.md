@@ -307,6 +307,13 @@
 - Gitea CI / Maven Central：已放弃
 - 私服 / GitHub Release 已发布
 
+## 2.5.1 交付状态
+
+- 修复 YAML / JSON `NUMBER` / `BOOLEAN` 标量映射到 `String` 属性时的类型错误
+- 新增 YAML 与 serialization-kotlin 回归测试
+- 全量构建 1632 tests 通过
+- master / v2.5.1 发布
+
 ## 2.5.0 交付状态
 
 - Java record 支持独立为 `record-support` 模块（JDK 17+ 字节码）：`serialization` 改为

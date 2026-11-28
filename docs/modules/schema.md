@@ -5,7 +5,7 @@
 Schema 适配到这套接口，`openapi` 再把它们翻译成 OpenAPI 3.0 文档。
 
 - 坐标：`com.mingliqiye.document:schema`
-- 当前版本：`2.5.0`
+- 当前版本：`2.5.1`
 - 包名：`com.mingliqiye.document.schema`
 - 目标字节码：JDK 8
 - 公开依赖：`com.mingliqiye.document:core`（`api`）
@@ -306,10 +306,10 @@ val document = OpenApiGenerator.of(config)
 
 ```kotlin
 // Gradle
-implementation("com.mingliqiye.document:schema:2.5.0")
+implementation("com.mingliqiye.document:schema:2.5.1")
 
 // 或使用 BOM
-implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.1"))
 implementation("com.mingliqiye.document:schema")
 ```
 

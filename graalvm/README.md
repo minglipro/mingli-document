@@ -171,8 +171,8 @@ plugins {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document:serialization:2.5.0")
-    implementation("com.mingliqiye.document.format:json:2.5.0")
+    implementation("com.mingliqiye.document:serialization:2.5.1")
+    implementation("com.mingliqiye.document.format:json:2.5.1")
 }
 
 application {
@@ -466,7 +466,7 @@ schema 为准；也可直接用 tracing agent 生成对应条目。）
 
 1. `gradle --offline :core:jar :serialization:jar` 构建成功；
    `core` / `serialization` jar 内已包含 `META-INF/native-image/**` 资源
-   （可用 `jar tf core/build/libs/core-2.5.0.jar` 查看）。
+   （可用 `jar tf core/build/libs/core-2.5.1.jar` 查看）。
 2. 本目录下所有 JSON 配置文件均通过 JSON 解析校验，字段符合
    [reflect-config-schema](https://www.graalvm.org/docs/reference-manual/native-image/assets/reflect-config-schema-v1.1.0.json)
    中的已有配置项。

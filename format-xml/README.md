@@ -5,7 +5,7 @@ XML 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:xml:2.5.0")
+implementation("com.mingliqiye.document.format:xml:2.5.1")
 ```
 
 ## 主要 API

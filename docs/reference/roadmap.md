@@ -284,7 +284,11 @@
 > 仓库根的 `TODO.md` 记录了更细粒度的待办项，本表只列路线图级目标。
 
 
-## 当前状态（2.5.0）
+## 当前状态（2.5.1）
+
+- 修复 YAML / JSON `NUMBER` / `BOOLEAN` 标量映射到 `String` 属性时的类型错误
+- 新增 YAML 与 serialization-kotlin 回归测试
+- 全量构建 1632 tests 通过
 
 - **Java record 支持独立为 `record-support` 模块**（JDK 17+ 字节码）：`serialization`
   不再内嵌 record 反射探测，改为公共 `JavaRecordSupport` SPI + `ServiceLoader`；

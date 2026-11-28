@@ -5,10 +5,10 @@
 多态、构造器/Builder 实例化、合并、`$ref`、Token 与流式读写、安全限制等能力。
 
 - 坐标：`com.mingliqiye.document:serialization`
-- 当前版本：`2.5.0`
+- 当前版本：`2.5.1`
 - 包名：`com.mingliqiye.document.serialization`
 - 目标字节码：JDK 8
-- 公开依赖：`core`、`exception`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3`；Java record 额外依赖可选模块 `record-support`（JDK 17+，2.5.0 起）
+- 公开依赖：`core`、`exception`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3`；Java record 额外依赖可选模块 `record-support`（JDK 17+，2.5.1 起）
 - 测试依赖：`format-json`（仅测试用）
 
 ## 职责
@@ -463,11 +463,11 @@ println(mapper.fromNode(node, User::class.java).userName) // 小于
 ## 坐标与构建
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization:2.5.0")
-implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.0")) // 或使用 BOM
+implementation("com.mingliqiye.document:serialization:2.5.1")
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.1")) // 或使用 BOM
 
-// Java record 映射额外依赖（JDK 17+，2.5.0 起）
-implementation("com.mingliqiye.document:record-support:2.5.0")
+// Java record 映射额外依赖（JDK 17+，2.5.1 起）
+implementation("com.mingliqiye.document:record-support:2.5.1")
 ```
 
 ```bash

@@ -3,7 +3,7 @@
 ## 坐标
 
 ```kotlin
-implementation("com.mingliqiye.document:validation:2.5.0")
+implementation("com.mingliqiye.document:validation:2.5.1")
 ```
 
 需要运行期提供 Jakarta Validation Provider，例如 Hibernate Validator。

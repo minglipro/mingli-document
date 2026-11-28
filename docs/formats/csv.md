@@ -12,14 +12,14 @@ CSV 只能表达平坦表格：根节点固定为 `ArrayNode`，每个元素是�
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:csv:2.5.0")
+implementation("com.mingliqiye.document.format:csv:2.5.1")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `csv` |
-| 版本 | `2.5.0` |
+| 版本 | `2.5.1` |
 | 传递依赖 | `core`、`exception`、`serialization`、`schema` |
 | 第三方依赖 | `org.apache.commons:commons-csv:1.10.0` |
 | 字节码 | JDK 8 |

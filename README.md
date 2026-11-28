@@ -60,13 +60,13 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.5.0")
+    implementation("com.mingliqiye.document.format:json:2.5.1")
 
     // 需要 Kotlin data class 时
-    implementation("com.mingliqiye.document:serialization-kotlin:2.5.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:2.5.1")
 
-    // 需要 Java record 支持时（JDK 17+，2.5.0 起）
-    implementation("com.mingliqiye.document:record-support:2.5.0")
+    // 需要 Java record 支持时（JDK 17+，2.5.1 起）
+    implementation("com.mingliqiye.document:record-support:2.5.1")
 }
 ```
 
@@ -92,7 +92,7 @@ protobuf
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.1"))
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")
@@ -110,7 +110,7 @@ Maven：
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>2.5.0</version>
+            <version>2.5.1</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -638,7 +638,7 @@ Apache License, Version 2.0。
 ## 变更记录
 
 - [CHANGELOG.md](CHANGELOG.md)
-- [1.0.0 -> 2.5.0 迁移指南](MIGRATION.md)
+- [1.0.0 -> 2.5.1 迁移指南](MIGRATION.md)
 
 ## 贡献
 
