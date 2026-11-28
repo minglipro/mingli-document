@@ -204,3 +204,25 @@
 
 - JQF 集成
 - 运行期 / 编译期代码生成
+---
+
+## 2.0.0 交付状态
+
+- master / v2.0.0 已发布
+- 私服 2.0.0 全模块发布成功
+- 全量构建通过，1029 tests
+- 新增 codegen / openapi 模块
+- 运行期/编译期代码生成、JQF/Jazzer、原生 Token Reader、Schubfach、类型保真、record/只读/merge、CBOR sequence、Smile 多消息、Protobuf 高级语义、CSV 嵌套、YAML 自定义 tag、安全基线
+- dev 本地保持未推送
+
+仍延后：
+
+- TOML 注释保留
+- 大文件流式 Bean 映射
+- 对象池 / 零拷贝
+- Schema Registry 适配
+- Bean Validation 集成
+- 数据库 / ORM 集成
+- JPMS module-info
+- GraalVM Native Image
+- Maven Central 实际发布（配置已就绪，需凭据/GPG）

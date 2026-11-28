@@ -51,20 +51,24 @@ allprojects {
     afterEvaluate {
         extensions.configure<PublishingExtension> {
             repositories {
-                maven {
-                    name = "MavenCentral"
-                    url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
-                    credentials {
-                        username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME").orNull
-                        password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").orNull
+                if (providers.environmentVariable("MAVEN_CENTRAL_USERNAME").isPresent &&
+                    providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").isPresent
+                ) {
+                    maven {
+                        name = "MavenCentral"
+                        url = uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+                        credentials {
+                            username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME").get()
+                            password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").get()
+                        }
                     }
-                }
-                maven {
-                    name = "MavenCentralSnapshot"
-                    url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-                    credentials {
-                        username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME").orNull
-                        password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").orNull
+                    maven {
+                        name = "MavenCentralSnapshot"
+                        url = uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+                        credentials {
+                            username = providers.environmentVariable("MAVEN_CENTRAL_USERNAME").get()
+                            password = providers.environmentVariable("MAVEN_CENTRAL_PASSWORD").get()
+                        }
                     }
                 }
             }
