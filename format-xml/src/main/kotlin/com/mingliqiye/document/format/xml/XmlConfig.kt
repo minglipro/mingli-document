@@ -58,7 +58,19 @@ public class XmlConfig internal constructor(
     public val contentKey: String,
     /** 混合内容处理策略；默认 [XmlMixedContentPolicy.PRESERVE]。 */
     public val mixedContentPolicy: XmlMixedContentPolicy,
+    /**
+     * 解析时允许的最大 XML 元素嵌套深度（根元素深度为 `1`），默认 [DEFAULT_MAX_DEPTH]。
+     *
+     * 超限时 Node 路径与 Token 路径都抛出
+     * [com.mingliqiye.document.format.xml.exception.XmlParseException]；
+     * 与 [DocumentMapperConfig.maxNodeDepth] 同时设置时取两者较小值。
+     */
+    public val maxDepth: Int = DEFAULT_MAX_DEPTH,
 ) : DocumentMapperConfig(base) {
+
+    init {
+        require(maxDepth > 0) { "maxDepth must be positive, but was $maxDepth" }
+    }
 
     /** 是否启用属性映射，等价于 [attributePrefix] 不为 `null`。 */
     public val attributeMode: Boolean
@@ -96,6 +108,13 @@ public class XmlConfig internal constructor(
 
         /** 有序混合内容的默认数组字段名。 */
         public const val DEFAULT_CONTENT_KEY: String = "#content"
+
+        /**
+         * 默认最大 XML 元素嵌套深度（根元素深度为 `1`）。
+         *
+         * 512 层足以覆盖常见业务文档，同时避免恶意超深输入耗尽调用栈。
+         */
+        public const val DEFAULT_MAX_DEPTH: Int = 512
 
         /**
          * 创建 XML 配置构建器。

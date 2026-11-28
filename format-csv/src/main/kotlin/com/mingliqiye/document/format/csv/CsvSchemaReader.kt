@@ -24,12 +24,15 @@ import org.apache.commons.csv.CSVParser
  * @param schema CSV Schema
  * @param delimiter 字段分隔符
  * @param nestedMode 嵌套值读写方式；默认 `null` 表示不支持通用嵌套
+ * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]；
+ *   `0` 或负数表示不限制（显式关闭保护）
  */
 public class CsvSchemaReader(
     private val source: String,
     private val schema: CsvSchema,
     private val delimiter: Char = DEFAULT_CSV_DELIMITER,
     private val nestedMode: CsvNestedMode? = null,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     /**
@@ -57,7 +60,7 @@ public class CsvSchemaReader(
         if (!records.hasNext()) {
             return ArrayNode.EMPTY
         }
-        val decoder = CsvSchemaRowDecoder(schema, nestedMode)
+        val decoder = CsvSchemaRowDecoder(schema, nestedMode, maxDepth)
         if (schema.header) {
             decoder.readHeader(records.next())
         } else {
@@ -79,15 +82,19 @@ public class CsvSchemaReader(
          * @param schema CSV Schema
          * @param delimiter 字段分隔符
          * @param nestedMode 嵌套值读写方式
+         * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]
          * @return 文档树
-         * @throws CsvParseException CSV 格式非法、列缺失或单元格无法按 Schema 类型解析时抛出
+         * @throws CsvParseException CSV 格式非法、列缺失、单元格无法按 Schema 类型解析或
+         *   嵌套深度超限时抛出
          */
         @JvmStatic
+        @JvmOverloads
         public fun parse(
             source: String,
             schema: CsvSchema,
             delimiter: Char = DEFAULT_CSV_DELIMITER,
             nestedMode: CsvNestedMode? = null,
-        ): Node = CsvSchemaReader(source, schema, delimiter, nestedMode).read()
+            maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+        ): Node = CsvSchemaReader(source, schema, delimiter, nestedMode, maxDepth).read()
     }
 }

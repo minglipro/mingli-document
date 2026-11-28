@@ -18,12 +18,14 @@ import org.apache.commons.csv.CSVRecord
  * @param header 是否使用表头（Schema 存在时应传 [CsvSchema.header]）
  * @param nestedMode 嵌套值读写方式
  * @param schema CSV Schema；`null` 表示使用类型推断路径
+ * @param maxDepth 解析最大嵌套深度；`0` 或负数表示不限制
  */
 internal class CsvStreamRowSource(
     private val records: Iterator<CSVRecord>,
     header: Boolean,
     nestedMode: CsvNestedMode?,
     private val schema: CsvSchema?,
+    maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     private val plainDecoder: CsvRowDecoder?
@@ -34,11 +36,11 @@ internal class CsvStreamRowSource(
 
     init {
         if (schema == null) {
-            plainDecoder = CsvRowDecoder(nestedMode)
+            plainDecoder = CsvRowDecoder(nestedMode, maxDepth)
             schemaDecoder = null
         } else {
             plainDecoder = null
-            schemaDecoder = CsvSchemaRowDecoder(schema, nestedMode)
+            schemaDecoder = CsvSchemaRowDecoder(schema, nestedMode, maxDepth)
         }
     }
 

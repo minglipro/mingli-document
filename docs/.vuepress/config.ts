@@ -99,6 +99,7 @@ export default defineUserConfig({
             '/modules/validation.md',
             '/modules/jdbc.md',
             '/modules/jpa.md',
+            '/modules/jpa-hibernate.md',
           ],
         },
         {

@@ -40,6 +40,16 @@ import java.nio.file.Path
  * enum、array、map、record 以及 union（含 null union）。由于通用
  * [com.mingliqiye.document.core.NumberNode] 只保存十进制值，Avro `float`/`double`
  * 的 NaN、Infinity 不受支持。
+ *
+ * 支持 Avro logical type：`date`、`time-millis`、`time-micros`、
+ * `timestamp-millis`、`timestamp-micros`、`local-timestamp-millis`、
+ * `local-timestamp-micros`、`decimal`（bytes/fixed）、`uuid`、`duration`
+ * （fixed size 12）。读取时映射为日期/时间 ISO 字符串、保留 scale 的数字、
+ * UUID 字符串或 months/days/millis 对象；写出时按 Schema 反向编码。未知
+ * logical type 回退到底层 Avro 类型；已知 logical type 的 Schema 结构非法时
+ * 读取抛
+ * [com.mingliqiye.document.format.avro.exception.AvroParseException]、写出抛
+ * [com.mingliqiye.document.format.avro.exception.AvroException]。
  */
 public open class AvroMapper internal constructor(
     /** writer Schema：用于写出与解析裸单根 datum。 */
@@ -64,6 +74,9 @@ public open class AvroMapper internal constructor(
 
     /** Avro record Schema 别名，等同 [writerSchema]。 */
     public val schema: Schema get() = writerSchema
+
+    /** 容器记录转换时使用的最大嵌套深度，来自通用配置。 */
+    private val maxNodeDepth: Int = config.maxNodeDepth
 
     init {
         require(writerSchema.type == Schema.Type.RECORD) {
@@ -265,7 +278,7 @@ public open class AvroMapper internal constructor(
      * @throws com.mingliqiye.document.format.avro.exception.AvroParseException
      *   容器损坏或 Schema 无法演进时抛出
      */
-    public fun parseContainerToNodes(source: ByteArray): List<Node> = AvroContainerReader(readerSchema).read(source)
+    public fun parseContainerToNodes(source: ByteArray): List<Node> = AvroContainerReader(readerSchema, maxNodeDepth).read(source)
 
     /**
      * 读取 OCF 内全部记录并映射为指定 Java 类型。

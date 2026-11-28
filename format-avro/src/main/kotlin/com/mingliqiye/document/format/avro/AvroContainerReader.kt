@@ -30,11 +30,13 @@ internal class AvroContainerHeader(
  * 使用 `DataFileReader<GenericRecord>`：writer Schema 与 codec 取自容器头部
  * （`DataFileReader` 自动识别 codec），reader Schema 由构造参数提供（通常来自
  * [AvroMapper.readerSchema]），由 `GenericDatumReader` 完成 Schema 演进。
- * 容器损坏、非 OCF 字节、codec 不受支持（只支持 [AvroCodec] 中的三种）或 schema
- * 无法演进统一抛出 [AvroParseException]。
+ * 记录按 reader Schema 转换为 [Node]，reader Schema 上的 logical type 会生效。
+ * 容器损坏、非 OCF 字节、codec 不受支持（只支持 [AvroCodec] 中的三种）、schema
+ * 无法演进或逻辑类型非法统一抛出 [AvroParseException]。
  */
 internal class AvroContainerReader(
     private val readerSchema: Schema,
+    private val maxDepth: Int = 0,
 ) {
 
     /**
@@ -52,7 +54,7 @@ internal class AvroContainerReader(
             val datumReader = GenericDatumReader<GenericRecord>(null, readerSchema)
             DataFileReader<GenericRecord>(SeekableByteArrayInput(source), datumReader).use { reader ->
                 while (reader.hasNext()) {
-                    nodes.add(AvroDatumConverter.toNode(reader.next()))
+                    nodes.add(AvroDatumConverter.toNode(reader.next(), readerSchema, maxDepth))
                 }
             }
         } catch (e: AvroParseException) {

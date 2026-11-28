@@ -36,7 +36,7 @@
 
 ## 阶段 2：格式协议完整性
 
-- [x] Avro：非默认 codec、appendTo\n- [ ] Avro：完整 logical type
+- [x] Avro：非默认 codec、appendTo\n- [x] Avro：完整 logical type
 - [x] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
 - [x] CBOR sequence
@@ -71,7 +71,7 @@
 - [x] Mapper 层 maxNodeDepth / maxNodeCount
 - [x] CBOR / Smile 解析器 maxDepth
 - [x] Protobuf 解析器 maxDepth
-- [x] Avro 解析器 maxDepth\n- [x] Ion 解析器 maxDepth\n- [x] YAML 解析器 maxDepth\n- [ ] XML / Properties / TOML / CSV maxDepth
+- [x] Avro 解析器 maxDepth\n- [x] Ion 解析器 maxDepth\n- [x] YAML 解析器 maxDepth\n- [x] XML / Properties / TOML / CSV maxDepth
 - [x] 全格式 maxInputSize
 - [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
@@ -88,7 +88,7 @@
 - [x] Bean Validation 集成
 - [x] JDBC 数据库集成
 - [x] JPA 实体注解映射（jpa 模块）
-- [ ] Hibernate Session / EntityManager 集成
+- [x] Hibernate Session / EntityManager 集成
 
 ---
 
@@ -102,7 +102,7 @@
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
-- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry；其余模块待上游依赖修复模块名，见 docs/guide/jpms.md）
+- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa 九个模块；其余 format-* / serialization-kotlin / codegen / openapi / jpa-hibernate 仍为自动模块，见 docs/guide/jpms.md）
 - [x] GraalVM Native Image 实测通过（GraalVM JDK21 + VS BuildTools + Windows SDK）
 
 ---
@@ -253,10 +253,12 @@
 
 ## dev 开发状态（未发布）
 
-- JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` 五个模块改为
-  Multi-Release JAR，JDK 9+ 使用显式 `module-info`（不再作为自动模块）；JDK 8 字节码、
-  classpath 用法与自动模块名保持不变。其余可发布模块仍为自动模块（`alias-for` 模块名非法），
-  详见 [docs/guide/jpms.md](docs/guide/jpms.md)
+- JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
+  `jdbc` / `validation` / `jpa` 九个模块改为 Multi-Release JAR，JDK 9+ 使用显式 `module-info`
+  （不再作为自动模块）；JDK 8 字节码、classpath 用法与自动模块名保持不变。`alias-for` 1.0.4
+  已提供合法模块名（`com.mingliqiye.utils.aliasfor`），不再阻塞；`format-*`、
+  `serialization-kotlin`、`codegen`、`openapi`、`jpa-hibernate` 仍为自动模块，详见
+  [docs/guide/jpms.md](docs/guide/jpms.md)
 
 ---
 

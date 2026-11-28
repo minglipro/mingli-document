@@ -109,15 +109,20 @@ Maven：
 
 ### JPMS 模块与 module-info
 
-`annotation` / `exception` / `core` / `schema` / `schema-registry` 五个模块的主 jar 是
-**Multi-Release JAR**：JDK 9+ 使用 jar 内显式的 `META-INF/versions/9/module-info.class`
-（`jar --describe-module --release 9` 不再显示 `automatic`），JDK 8 仍按 classpath 使用原有
-JDK 8 字节码，行为不变：
+`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
+`jdbc` / `validation` / `jpa` 九个模块的主 jar 是 **Multi-Release JAR**：JDK 9+ 使用 jar 内
+显式的 `META-INF/versions/9/module-info.class`（`jar --describe-module --release 9` 不再显示
+`automatic`），JDK 8 仍按 classpath 使用原有 JDK 8 字节码，行为不变：
 
 | 模块（主 jar） | 模块名 | JPMS 形态 |
 |---|---|---|
-| `annotation` / `exception` / `core` / `schema` / `schema-registry` | `com.mingliqiye.document.<模块名>` | ✅ 显式 `module-info`（Multi-Release） |
-| `serialization` / `serialization-kotlin` / `format-*` / `codegen` / `openapi` / `jdbc` / `validation` 等 | `com.mingliqiye.document[.format].<模块名>` | ⚠️ 自动模块（`Automatic-Module-Name`，待上游依赖修复模块名） |
+| `annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` | `com.mingliqiye.document.<模块名>` | ✅ 显式 `module-info`（Multi-Release） |
+| `serialization-kotlin` / `format-*` / `codegen` / `openapi` / `jpa-hibernate` 等 | `com.mingliqiye.document[.format].<模块名>` | ⚠️ 自动模块（`Automatic-Module-Name`，后续补 `module-info`） |
+
+`serialization` 依赖的 `alias-for` 自 1.0.4 起提供合法模块名
+（`Automatic-Module-Name: com.mingliqiye.utils.aliasfor`），不再是显式 `module-info` 的阻塞项。
+注意 `jpa` 的 module path 运行期要求 JDK 11+（依赖的 `jakarta.persistence-api:3.1.0` 是
+class file 55）；`serialization` / `jdbc` / `validation` 没有这个限制。
 
 ```java
 module my.app {
@@ -469,6 +474,7 @@ gradle :benchmarks:jmh
 | `validation` | Jakarta Bean Validation 集成 |
 | `jdbc` | JDBC / ResultSet / PreparedStatement 集成 |
 | `jpa` | JPA / Hibernate 实体注解映射 |
+| `jpa-hibernate` | Hibernate Session / EntityManager 运行期集成 |
 | `format-*` | 各格式 Mapper |
 | `bom` | Maven BOM：`mingli-document-bom` |
 | `benchmarks` | JMH 性能基准（不发布） |
@@ -484,6 +490,7 @@ gradle :benchmarks:jmh
 [validation](validation/README.md) ·
 [jdbc](jdbc/README.md) ·
 [jpa](jpa/README.md) ·
+[jpa-hibernate](jpa-hibernate/README.md) ·
 [serialization](serialization/README.md) ·
 [serialization-kotlin](serialization-kotlin/README.md) ·
 [codegen](codegen/README.md) ·
@@ -544,10 +551,13 @@ gradle publish
 ## 兼容性说明
 
 - 目标字节码：JDK 8
-- JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` 提供 Multi-Release
-  显式 `module-info`（JDK 9+），其余模块仍为自动模块；主 classes 仍是 JDK 8 字节码，JDK 8
-  按 classpath 使用；`jlink` 目前仅 `annotation` 可用（依赖链含自动模块 `mingli.exception`）。
-  详见 [docs/guide/jpms.md](docs/guide/jpms.md)
+- JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
+  `jdbc` / `validation` / `jpa` 提供 Multi-Release 显式 `module-info`（JDK 9+），其余模块
+  （`format-*`、`serialization-kotlin`、`codegen`、`openapi`、`jpa-hibernate`）仍为自动模块；
+  主 classes 仍是 JDK 8 字节码，JDK 8 按 classpath 使用；`jlink` 目前仅 `annotation` 可用
+  （依赖链含自动模块 `mingli.exception`）；`jpa` 走 module path 需要 JDK 11+（依赖
+  `jakarta.persistence-api:3.1.0` 的 class file 55）。详见
+  [docs/guide/jpms.md](docs/guide/jpms.md)
 - 文本 Token Reader：YAML/XML/Properties/TOML/CSV 通过 `NodeTokenReader` 适配
 - CSV 只支持平坦表格
 - TOML 日期时间映射为字符串

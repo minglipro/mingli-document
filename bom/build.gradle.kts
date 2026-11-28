@@ -19,6 +19,7 @@ dependencies {
         api(project(":validation"))
         api(project(":jdbc"))
         api(project(":jpa"))
+        api(project(":jpa-hibernate"))
         api(project(":serialization"))
         api(project(":serialization-kotlin"))
         api(project(":codegen"))

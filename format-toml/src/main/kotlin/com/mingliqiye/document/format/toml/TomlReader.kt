@@ -7,9 +7,7 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.toml.exception.TomlParseException
-import org.tomlj.Toml
 import org.tomlj.TomlArray
-import org.tomlj.TomlParseError
 import org.tomlj.TomlParseResult
 import org.tomlj.TomlTable
 import java.time.LocalDate
@@ -26,35 +24,29 @@ import java.time.OffsetDateTime
  *
  * TOML 文档根必须是表；合法文档解析后根节点总是 [ObjectNode]。
  *
+ * 解析深度：默认安全上限 [maxDepth] 为 [TomlMapper.DEFAULT_MAX_DEPTH]（512，根表深度
+ * 为 `1`）。解析前先做词法预扫描拒绝超深数组/内联 table，解析后再对结果树做迭代
+ * 深度校验，超限统一抛 [TomlParseException]，不会 StackOverflow。
+ *
  * @param source TOML 文本
+ * @param maxDepth 最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]；
+ *   `0` 或负数表示不限制（显式关闭保护）
  */
 public class TomlReader(
     private val source: String,
+    private val maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH,
 ) {
 
     /**
      * 解析并返回文档树。
      *
      * @return 根对象节点
-     * @throws TomlParseException TOML 文本非法、根不是表或包含不支持的值类型时抛出
+     * @throws TomlParseException TOML 文本非法、根不是表、包含不支持的值类型或
+     *   嵌套深度超过 [maxDepth] 时抛出
      */
     public fun read(): Node {
-        val result = parseResult()
+        val result = TomlParser.parse(source, maxDepth)
         return toObjectNode(rootTable(result))
-    }
-
-    private fun parseResult(): TomlParseResult {
-        val result = try {
-            Toml.parse(source)
-        } catch (e: TomlParseError) {
-            throw parseException(e)
-        } catch (e: RuntimeException) {
-            throw TomlParseException("Invalid TOML: ${e.message}", e)
-        }
-        if (result.hasErrors()) {
-            throw parseException(result.errors().first())
-        }
-        return result
     }
 
     /**
@@ -66,14 +58,6 @@ public class TomlReader(
     private fun rootTable(result: TomlParseResult): TomlTable {
         val root: Any? = result
         return root as? TomlTable ?: throw TomlParseException("TOML document root must be a table")
-    }
-
-    private fun parseException(error: TomlParseError): TomlParseException {
-        val position = error.position()
-        return TomlParseException(
-            "Invalid TOML at line ${position.line()}, column ${position.column()}: ${error.message}",
-            error,
-        )
     }
 
     private fun toObjectNode(table: TomlTable): ObjectNode {
@@ -121,18 +105,21 @@ public class TomlReader(
          * 解析 TOML 字符串。
          *
          * @param source TOML 文本
+         * @param maxDepth 最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]
          * @return 文档树
-         * @throws TomlParseException TOML 文本非法时抛出
+         * @throws TomlParseException TOML 文本非法或嵌套深度超限时抛出
          */
         @JvmStatic
-        public fun parse(source: String): Node = TomlReader(source).read()
+        @JvmOverloads
+        public fun parse(source: String, maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH): Node = TomlReader(source, maxDepth).read()
     }
 }
 
 /**
  * 将 TOML 字符串解析为文档树。
  *
+ * @param maxDepth 最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]
  * @return 文档树
- * @throws TomlParseException TOML 文本非法时抛出
+ * @throws TomlParseException TOML 文本非法或嵌套深度超限时抛出
  */
-public fun String.toTomlNode(): Node = TomlReader(this).read()
+public fun String.toTomlNode(maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH): Node = TomlReader(this, maxDepth).read()

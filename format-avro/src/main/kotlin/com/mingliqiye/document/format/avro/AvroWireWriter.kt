@@ -18,6 +18,13 @@ import java.util.Base64
  * 记录字段按 Schema 顺序写出：Node 缺少字段时优先使用 Schema 默认值，可空 union
  * 字段写 `null`，其余情况抛出 [AvroException]；记录中出现 Schema 未声明的字段同样
  * 抛出 [AvroException]。
+ *
+ * 节点先按 Schema 声明的 logical type 反向编码（见 [AvroLogicalType] 与
+ * [AvroLogicalValues]）：日期/时间/时间戳接受 ISO-8601 字符串或对应 epoch 数值，
+ * decimal 接受数字或十进制字符串，uuid 接受 UUID 字符串，duration 接受
+ * months/days/millis 对象（也接受 12 字节二进制）。未知 logical type 回退到底层
+ * Avro 类型的原有写出规则；已知 logical type 的 Schema 结构非法时抛出
+ * [AvroException]。
  */
 internal class AvroWireWriter(
     private val schema: Schema,
@@ -54,21 +61,55 @@ internal class AvroWireWriter(
      */
     fun toDatum(node: Node): Any? = toDatum(node, schema, "$")
 
-    private fun toDatum(node: Node, schema: Schema, path: String): Any? = when (schema.type) {
-        Schema.Type.NULL -> nullDatum(node, path)
-        Schema.Type.BOOLEAN -> booleanDatum(node, path)
-        Schema.Type.INT -> intDatum(node, path)
-        Schema.Type.LONG -> longDatum(node, path)
-        Schema.Type.FLOAT -> floatDatum(node, path)
-        Schema.Type.DOUBLE -> doubleDatum(node, path)
-        Schema.Type.STRING -> stringDatum(node, path)
-        Schema.Type.BYTES -> bytesDatum(node, path)
-        Schema.Type.FIXED -> fixedDatum(node, schema, path)
-        Schema.Type.ENUM -> enumDatum(node, schema, path)
-        Schema.Type.ARRAY -> arrayDatum(node, schema, path)
-        Schema.Type.MAP -> mapDatum(node, schema, path)
-        Schema.Type.RECORD -> recordDatum(node, schema, path)
-        Schema.Type.UNION -> unionDatum(node, schema, path)
+    private fun toDatum(node: Node, schema: Schema, path: String): Any? {
+        if (schema.type == Schema.Type.UNION) {
+            return unionDatum(node, schema, path)
+        }
+        val logicalType = logicalTypeOf(schema, path)
+        if (logicalType != null) {
+            return logicalDatum(node, schema, logicalType, path)
+        }
+        return when (schema.type) {
+            Schema.Type.NULL -> nullDatum(node, path)
+            Schema.Type.BOOLEAN -> booleanDatum(node, path)
+            Schema.Type.INT -> intDatum(node, path)
+            Schema.Type.LONG -> longDatum(node, path)
+            Schema.Type.FLOAT -> floatDatum(node, path)
+            Schema.Type.DOUBLE -> doubleDatum(node, path)
+            Schema.Type.STRING -> stringDatum(node, path)
+            Schema.Type.BYTES -> bytesDatum(node, path)
+            Schema.Type.FIXED -> fixedDatum(node, schema, path)
+            Schema.Type.ENUM -> enumDatum(node, schema, path)
+            Schema.Type.ARRAY -> arrayDatum(node, schema, path)
+            Schema.Type.MAP -> mapDatum(node, schema, path)
+            Schema.Type.RECORD -> recordDatum(node, schema, path)
+            Schema.Type.UNION -> throw AvroException("Unexpected Avro union at $path")
+        }
+    }
+
+    private fun logicalTypeOf(schema: Schema, path: String): AvroLogicalType? = try {
+        AvroLogicalType.fromSchema(schema)
+    } catch (e: IllegalArgumentException) {
+        throw AvroException("Invalid Avro logical type at $path: ${e.message}", e)
+    }
+
+    private fun logicalDatum(
+        node: Node,
+        schema: Schema,
+        logicalType: AvroLogicalType,
+        path: String,
+    ): Any? {
+        if (logicalType == AvroLogicalType.DURATION && !node.isObject) {
+            // 允许 duration 直接给 12 字节 fixed（BinaryNode 或 Base64 字符串）
+            return fixedDatum(node, schema, path)
+        }
+        return try {
+            AvroLogicalValues.toDatum(node, schema, logicalType, path)
+        } catch (e: AvroException) {
+            throw e
+        } catch (e: IllegalArgumentException) {
+            throw AvroException("Invalid Avro ${logicalType.typeName} logical type at $path: ${e.message}", e)
+        }
     }
 
     private fun nullDatum(node: Node, path: String): Any? {

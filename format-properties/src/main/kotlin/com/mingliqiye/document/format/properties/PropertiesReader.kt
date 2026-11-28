@@ -16,10 +16,17 @@ import java.util.Properties
  *
  * 平铺 key 会按 `.` / `[index]` 还原成对象和数组。
  *
+ * 解析深度：key 路径的段数决定对象/数组嵌套深度（根对象深度为 `1`，`a.b.c=1` 的
+ * 最深层级为 `4`）。超过 [maxDepth] 时抛出 [PropertiesParseException]，并在构建
+ * 中间结构前完成校验，避免超深输入 StackOverflow。
+ *
  * @param source Properties 文本
+ * @param maxDepth 最大嵌套深度，默认 [PropertiesMapper.DEFAULT_MAX_DEPTH]（512）；
+ *   `0` 或负数表示不限制（显式关闭保护）
  */
 public class PropertiesReader(
     private val source: String,
+    private val maxDepth: Int = PropertiesMapper.DEFAULT_MAX_DEPTH,
 ) {
 
     /**
@@ -41,6 +48,7 @@ public class PropertiesReader(
         val root = arrayOfNulls<Any?>(1)
         for (name in names) {
             val segments = PropertiesPath.parse(name)
+            checkDepth(segments, name)
             val value = inferScalar(properties.getProperty(name))
             if (segments.first().isIndex) {
                 root[0] = insert(root[0] as? MutableList<Any?>, segments, 0, value, name)
@@ -50,6 +58,21 @@ public class PropertiesReader(
             }
         }
         return toNode(root[0])
+    }
+
+    /**
+     * 校验单个 key 路径的最大嵌套深度。
+     *
+     * 深度定义为根对象 `1` 加上路径段数，与 Node 树逐节点深度一致。
+     */
+    private fun checkDepth(segments: List<PropertiesPathSegment>, name: String) {
+        if (maxDepth <= 0) {
+            return
+        }
+        val depth = segments.size + 1
+        if (depth > maxDepth) {
+            throw PropertiesParseException("Properties key path '$name' depth $depth exceeds maxDepth $maxDepth")
+        }
     }
 
     private fun insert(

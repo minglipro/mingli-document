@@ -17,9 +17,12 @@ import java.math.BigDecimal
  *
  * @param header 是否把首行当作表头
  * @param nestedMode 嵌套值读取方式；`null` 表示平坦表格
+ * @param maxDepth 解析最大嵌套深度（根数组为 `1`、行对象为 `2`、单元格标量为 `3`）；
+ *   `0` 或负数表示不限制
  */
 internal class CsvRowDecoder(
     private val nestedMode: CsvNestedMode?,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     private var columns: List<CsvColumn>? = null
@@ -41,6 +44,7 @@ internal class CsvRowDecoder(
      * @return 行对象节点
      */
     fun readRow(record: CSVRecord): Node {
+        checkRowDepth()
         if (nestedMode == CsvNestedMode.COLUMNS) {
             val refs = columns ?: defaultColumns(record.size())
             return buildNestedRow(record, refs)
@@ -52,6 +56,15 @@ internal class CsvRowDecoder(
             fields[names[index].name] = inferCell(text)
         }
         return ObjectNode.from(fields)
+    }
+
+    /**
+     * 平坦 CSV 的固定深度：根数组 `1`、行对象 `2`、单元格 `3`。
+     */
+    private fun checkRowDepth() {
+        if (maxDepth > 0 && maxDepth < 3) {
+            throw CsvParseException("CSV row depth 3 exceeds maxDepth $maxDepth")
+        }
     }
 
     private fun readColumns(record: CSVRecord): List<CsvColumn> {
@@ -75,6 +88,11 @@ internal class CsvRowDecoder(
         val segments = column.split('.')
         if (segments.any { it.isEmpty() }) {
             throw CsvParseException("Invalid nested CSV column '$column'")
+        }
+        // 根数组 1 + 行对象 2 + 每段一层（最深层为标量值：2 + 段数）。
+        val depth = segments.size + 2
+        if (maxDepth > 0 && depth > maxDepth) {
+            throw CsvParseException("Nested CSV column '$column' depth $depth exceeds maxDepth $maxDepth")
         }
         return segments
     }
@@ -160,7 +178,7 @@ internal class CsvRowDecoder(
             val trimmed = text.trim()
             if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
                 return try {
-                    CsvJsonCodec.parse(trimmed)
+                    CsvJsonCodec.parse(trimmed, cellNestingLimit())
                 } catch (e: CsvParseException) {
                     throw CsvParseException("Invalid nested JSON in CSV cell: ${e.message}", e)
                 }
@@ -168,6 +186,12 @@ internal class CsvRowDecoder(
         }
         return inferScalar(text)
     }
+
+    /**
+     * 单元格相对嵌套上限：单元格根在整体树中深度为 `3`，因此可用相对深度为
+     * `maxDepth - 2`；`0` 或负数交给 [CsvJsonCodec] 表示不限制。
+     */
+    private fun cellNestingLimit(): Int = if (maxDepth > 0) maxDepth - 2 else 0
 
     private fun inferScalar(text: String): Node = when (text) {
         "true" -> BooleanNode.of(true)

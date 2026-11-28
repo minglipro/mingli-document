@@ -21,6 +21,7 @@ public class XmlConfigBuilder {
     private var itemsKey = XmlConfig.DEFAULT_ITEMS_KEY
     private var contentKey = XmlConfig.DEFAULT_CONTENT_KEY
     private var mixedContentPolicy = XmlMixedContentPolicy.PRESERVE
+    private var maxDepth = XmlConfig.DEFAULT_MAX_DEPTH
 
     /**
      * 为指定字段绑定转换器。
@@ -187,6 +188,22 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 设置解析最大 XML 元素嵌套深度，默认 [XmlConfig.DEFAULT_MAX_DEPTH]（512）。
+     *
+     * 根元素深度为 `1`；超限时解析抛出
+     * [com.mingliqiye.document.format.xml.exception.XmlParseException]。
+     *
+     * @param maxDepth 最大嵌套深度，必须为正数
+     * @return 当前构建器
+     * @throws IllegalArgumentException `maxDepth` 小于等于 0 时抛出
+     */
+    public fun maxDepth(maxDepth: Int): XmlConfigBuilder {
+        require(maxDepth > 0) { "maxDepth must be positive, but was $maxDepth" }
+        this.maxDepth = maxDepth
+        return this
+    }
+
+    /**
      * 注册多态子类型。
      *
      * @param baseClass 基类/接口
@@ -278,6 +295,7 @@ public class XmlConfigBuilder {
             itemsKey,
             contentKey,
             mixedContentPolicy,
+            maxDepth,
         )
     }
 }

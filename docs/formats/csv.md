@@ -613,6 +613,19 @@ val restored = mapper.parse(text, DocumentTypeReference.listType(User::class.jav
 check(restored[0].name == "小于")
 ```
 
+## 深度限制
+
+```kotlin
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .maxDepth(512)
+        .build(),
+)
+```
+
+默认 `512`；统计数组、行对象、嵌套 Schema/点分列名与 JSON 单元格深度。
+超过限制抛 `CsvParseException`，`parseStream` 同样生效。
+
 ## 边界、限制与常见错误
 
 | 场景 | 行为 |

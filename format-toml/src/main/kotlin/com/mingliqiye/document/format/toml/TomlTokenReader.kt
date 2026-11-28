@@ -3,9 +3,7 @@ package com.mingliqiye.document.format.toml
 import com.mingliqiye.document.format.toml.exception.TomlParseException
 import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.DocumentTokenType
-import org.tomlj.Toml
 import org.tomlj.TomlArray
-import org.tomlj.TomlParseError
 import org.tomlj.TomlTable
 import java.math.BigDecimal
 import java.time.LocalDate
@@ -17,10 +15,20 @@ import java.time.OffsetDateTime
  * TOML 原生 Token 读取器。
  *
  * 直接遍历 tomlj 的 [TomlTable] / [TomlArray] 生成 Token 流，不构建 Node 树。
+ *
+ * 解析深度复用 [TomlParser]：默认 [TomlMapper.DEFAULT_MAX_DEPTH]（512），超限抛
+ * [TomlParseException]；[TomlParser] 已保证结果树深度不超过 [maxDepth]，因此这里的
+ * 递归生成最多 [maxDepth] 层，不会 StackOverflow。
+ *
+ * @param source TOML 文本
+ * @param maxDepth 最大嵌套深度；`0` 或负数表示不限制
  */
-internal class TomlTokenReader(source: String) : DocumentTokenReader {
+internal class TomlTokenReader(
+    source: String,
+    private val maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH,
+) : DocumentTokenReader {
 
-    private val tokens: List<Token> = buildTokens(source)
+    private val tokens: List<Token> = buildTokens(source, maxDepth)
     private var index = -1
     private var current: Token? = null
 
@@ -46,17 +54,8 @@ internal class TomlTokenReader(source: String) : DocumentTokenReader {
         return current!!.type
     }
 
-    private fun buildTokens(source: String): List<Token> {
-        val result = try {
-            Toml.parse(source)
-        } catch (e: TomlParseError) {
-            throw parseException(e)
-        } catch (e: RuntimeException) {
-            throw TomlParseException("Invalid TOML: ${e.message}", e)
-        }
-        if (result.hasErrors()) {
-            throw parseException(result.errors().first())
-        }
+    private fun buildTokens(source: String, maxDepth: Int): List<Token> {
+        val result = TomlParser.parse(source, maxDepth)
         val tokens = ArrayList<Token>()
         appendTable(result, tokens)
         return tokens
@@ -100,14 +99,6 @@ internal class TomlTokenReader(source: String) : DocumentTokenReader {
             throw TomlParseException("TOML NaN/Infinity numbers are not supported")
         }
         return BigDecimal.valueOf(value).toPlainString()
-    }
-
-    private fun parseException(error: TomlParseError): TomlParseException {
-        val position = error.position()
-        return TomlParseException(
-            "Invalid TOML at line ${position.line()}, column ${position.column()}: ${error.message}",
-            error,
-        )
     }
 
     private data class Token(

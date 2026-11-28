@@ -6,11 +6,13 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 
 > 本页说明 `mingli-document` 在 Java 平台模块系统（JPMS / Project Jigsaw）下的支持方式。
 >
-> 结论先行：**`annotation` / `exception` / `core` / `schema` / `schema-registry` 五个模块的
-> 主 jar 已经是 Multi-Release JAR：JDK 9+ 会读到真正的显式 `module-info.class`
-> （`jar --describe-module --release 9` 不再显示 `automatic`），JDK 8 仍然只看到原来的
-> JDK 8 字节码（class file 52），完全按 classpath 使用。其余可发布模块（`serialization`、
-> `format-*` 等）依赖的第三方 jar 模块名不合法，暂时仍以「自动模块」方式提供，原因见
+> 结论先行：**`annotation` / `exception` / `core` / `schema` / `schema-registry` /
+> `serialization` / `jdbc` / `validation` / `jpa` 九个模块的主 jar 已经是 Multi-Release JAR：
+> JDK 9+ 会读到真正的显式 `module-info.class`（`jar --describe-module --release 9` 不再显示
+> `automatic`），JDK 8 仍然只看到原来的 JDK 8 字节码（class file 52），完全按 classpath
+> 使用。其余可发布模块（`format-*`、`serialization-kotlin`、`codegen`、`openapi`、
+> `jpa-hibernate`）仍是「自动模块」。上游 `alias-for` 已在 1.0.4 提供合法模块名
+> `com.mingliqiye.utils.aliasfor`，不再是阻塞项；剩余自动模块与相关限制见
 > [限制](#限制)。**
 >
 > 版本基线：`gradle.properties` 的 `projectVersion=2.3.0`、`jvmVersion=8`。主 classes 仍由
@@ -31,8 +33,8 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 
 | 产物 | 形态 | 说明 |
 |---|---|---|
-| `annotation` / `exception` / `core` / `schema` / `schema-registry` 的主 jar | ✅ 显式模块（Multi-Release） | JDK 9+ 读取 `META-INF/versions/9/module-info.class`；JDK 8 看不到该目录 |
-| 其余可发布模块的主 jar（`serialization`、`serialization-kotlin`、`format-*`、`codegen`、`openapi`、`jdbc`、`validation` 等） | ⚠️ 自动模块 | 只有 `Automatic-Module-Name`，`jar --describe-module` 会显示 `automatic` |
+| `annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` 的主 jar | ✅ 显式模块（Multi-Release） | JDK 9+ 读取 `META-INF/versions/9/module-info.class`；JDK 8 看不到该目录 |
+| 其余可发布模块的主 jar（`serialization-kotlin`、`format-*`、`codegen`、`openapi`、`jpa-hibernate` 等） | ⚠️ 自动模块 | 只有 `Automatic-Module-Name`，`jar --describe-module` 会显示 `automatic` |
 | `javadoc` / `kotlindoc` classifier jar | ❌ 不参与 module path | 文档 jar 不参与模块解析 |
 | `bom`（`mingli-document-bom`） | ❌ | `java-platform`，没有 jar |
 | 根项目 `mingli-document`、`benchmarks`、`fuzz` | ❌ | 聚合/非发布模块，不写自动模块名 |
@@ -64,6 +66,10 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 | `core` | `com.mingliqiye.document:core` | `com.mingliqiye.document.core` |
 | `schema` | `com.mingliqiye.document:schema` | `com.mingliqiye.document.schema` |
 | `schema-registry` | `com.mingliqiye.document:schema-registry` | `com.mingliqiye.document.schema.registry` |
+| `serialization` | `com.mingliqiye.document:serialization` | `com.mingliqiye.document.serialization` |
+| `jdbc` | `com.mingliqiye.document:jdbc` | `com.mingliqiye.document.jdbc` |
+| `validation` | `com.mingliqiye.document:validation` | `com.mingliqiye.document.validation` |
+| `jpa` | `com.mingliqiye.document:jpa` | `com.mingliqiye.document.jpa` |
 
 ### 仍为自动模块的模块
 
@@ -71,13 +77,11 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 
 | 模块 | 模块名 |
 |---|---|
-| `serialization` | `com.mingliqiye.document.serialization` |
 | `serialization-kotlin` | `com.mingliqiye.document.serialization.kotlin` |
 | `codegen` | `com.mingliqiye.document.codegen` |
 | `codegen-test` | `com.mingliqiye.document.codegen.test` |
 | `openapi` | `com.mingliqiye.document.openapi` |
-| `jdbc` | `com.mingliqiye.document.jdbc` |
-| `validation` | `com.mingliqiye.document.validation` |
+| `jpa-hibernate` | `com.mingliqiye.document.jpa.hibernate` |
 | `format-json` | `com.mingliqiye.document.format.json` |
 | `format-yaml` | `com.mingliqiye.document.format.yaml` |
 | `format-xml` | `com.mingliqiye.document.format.xml` |
@@ -126,8 +130,9 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
    - `--patch-module <模块名>=<主 classes 目录>`：把已编译的主 classes 挂到待编译模块上，
      否则单独编译 `module-info.java` 时 javac 会报 `package ... is empty or does not exist`；
    - `--module-path`：由 `compileClasspath` 用 `artifactView` 重新选择 `LibraryElements=jar`
-     变体得到——同构建内的依赖模块使用打好的 Multi-Release jar（各自已带显式描述），第三方
-     依赖使用普通 jar（`kotlin.stdlib` 是显式模块，`mingli.exception` 是自动模块）；
+     变体得到——同构建内的依赖模块使用打好的 Multi-Release jar（各自已带显式描述）；第三方
+     依赖使用普通 jar：`kotlin.stdlib`、`jakarta.validation`、`jakarta.persistence` 是显式
+     模块，`mingli.exception`、`alias-for` 是自动模块；
    - `-encoding UTF-8`、`-proc:none`。
 3. 模块的 `jar` 任务把编译结果放进 `META-INF/versions/9/module-info.class`，并在清单写入
    `Multi-Release: true`；同时校验 `module-info.java` 中声明的模块名必须与
@@ -148,6 +153,10 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
 | `com.mingliqiye.document.core` | `com.mingliqiye.document.core` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.exception` |
 | `com.mingliqiye.document.schema` | `com.mingliqiye.document.schema` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core` |
 | `com.mingliqiye.document.schema.registry` | `com.mingliqiye.document.registry`、`com.mingliqiye.document.registry.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.schema` |
+| `com.mingliqiye.document.serialization` | `com.mingliqiye.document.serialization`、`.serialization.codegen`、`.serialization.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.annotation`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`com.mingliqiye.utils.aliasfor`（自动模块）、`mingli.exception`（自动模块）、`java.desktop`、`java.sql` |
+| `com.mingliqiye.document.jdbc` | `com.mingliqiye.document.jdbc`、`com.mingliqiye.document.jdbc.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.serialization`、`com.mingliqiye.document.exception`、`transitive java.sql` |
+| `com.mingliqiye.document.validation` | `com.mingliqiye.document.validation` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.serialization`、`transitive jakarta.validation` |
+| `com.mingliqiye.document.jpa` | `com.mingliqiye.document.jpa`、`com.mingliqiye.document.jpa.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.serialization`、`com.mingliqiye.document.exception`、`transitive jakarta.persistence`、`java.desktop`、`java.sql` |
 
 说明：
 
@@ -157,16 +166,36 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
 - `mingli.exception` 没有显式 `module-info`，模块名由文件名推导
   （`mingli-exception-1.1.1-Final.jar` → `mingli.exception`）。`exception` 模块只做普通
   `requires`；如果消费方直接使用 `MingLiBaseException` 的 API，需要自行
-  `requires mingli.exception`。
+  `requires mingli.exception`。`serialization` 也保留一条普通 `requires mingli.exception`
+  （与 `exception` 模块保持一致；普通 `requires` 只影响本模块可读性，消费方仍需自行声明）。
+- `alias-for` 1.0.4 起带 `Automatic-Module-Name: com.mingliqiye.utils.aliasfor`，因此可被
+  `requires`（仍是自动模块）。`serialization` 只在模块内部用 `AnnotationGetter` 读取注解，
+  消费方一般不需要直接读取它，所以用普通 `requires`。
 - `core` 的公开 API 会抛出 `DocumentTypeException`，`schema-registry` 的公开 API 会抛出
   `DocumentException` 家族异常，因此对 `exception` 使用 `requires transitive`，与 Gradle 的
   `api(project(":exception"))` 语义一致。
 - `schema` 的当前实现没有直接引用 `core` 类型，但构建声明了 `api(project(":core"))`；
   `module-info` 保留 `requires transitive com.mingliqiye.document.core`，避免消费方从
   classpath 迁移到 module path 时行为变化。
-- 每个模块只导出公共 API 包。`Default*` 实现类与公共 API 在同一个包里（Kotlin `internal`
-  在字节码层仍是 public，这一点与自动模块相同）；真正隐藏实现需要拆分 internal 包，属于后续
-  工作。
+- `serialization` / `jdbc` / `jpa` 对 Gradle 里声明为 `api(...)` 的依赖使用
+  `requires transitive`（`core`、`exception`、`annotation`、`serialization`、`java.sql`、
+  `jakarta.persistence`），这样消费方 `requires` 这些模块后就能直接使用公开 API 里出现的
+  `Node`、`DocumentMapper`、`ResultSet`、JPA 注解等类型；自动模块（`aliasfor`、
+  `mingli.exception`）按上面的约定只用普通 `requires`。
+- `serialization` 与 `jpa` 需要 `java.desktop`：无参 Bean/实体属性读取使用
+  `java.beans.Introspector`（`java.beans` 在 `java.desktop` 模块里）。`serialization` 的日期
+  时间转换器还直接引用 `java.sql.Date` / `java.sql.Timestamp`，因此需要 `java.sql`；`jpa` 的
+  `@Temporal` 转换也使用 `java.sql.Date/Time/Timestamp`。`jdbc` 的公开 API 直接以
+  `java.sql.ResultSet` / `java.sql.Types` 为参数，因此对 `java.sql` 使用 `requires transitive`。
+- `jakarta.validation-api-3.0.2.jar` 与 `jakarta.persistence-api-3.1.0.jar` 都是**显式模块**，
+  模块名分别为 `jakarta.validation`、`jakarta.persistence`。`validation` 的公开构造器直接接收
+  `jakarta.validation.Validator`，因此对 `jakarta.validation` 用 `requires transitive`；
+  `jpa` 只在映射内部读取 JPA 注解，但构建把它声明为 `api(...)`，所以对
+  `jakarta.persistence` 也用 `requires transitive`。
+- 每个模块只导出公共 API 包。`jdbc.internal`、`jpa.internal` 是内部实现包，**不导出**；
+  `serialization` 的 `codegen` 包里有公开类（`DocumentAccessorCodegen` 等），因此导出。
+  Kotlin `internal` 类在字节码层仍是 public，这一点与自动模块相同；真正隐藏实现需要继续
+  拆分 internal 包，属于后续工作。
 
 ## 在 module path 上使用
 
@@ -231,16 +260,138 @@ com.mingliqiye.document.exception requires kotlin.stdlib file:///.../lib/kotlin-
 com.mingliqiye.document.exception requires mingli.exception file:///.../lib/mingli-exception-1.1.1-Final.jar automatic
 ```
 
+### serialization / jdbc / validation / jpa smoke（实测）
+
+`serialization` / `jdbc` / `validation` / `jpa` 四个模块也可以用同样的方式在 JDK 17 module
+path 上使用。一个覆盖四个模块的最小消费方：
+
+```java
+// src/smoke.app/module-info.java
+open module smoke.app {
+    requires com.mingliqiye.document.serialization;
+    requires com.mingliqiye.document.jdbc;
+    requires com.mingliqiye.document.validation;
+    requires com.mingliqiye.document.jpa;
+}
+```
+
+```java
+// src/smoke.app/smoke/Main.java（节选：serialization 与 jpa 的简单映射）
+package smoke;
+
+import java.sql.Types;
+import java.util.Collections;
+
+import com.mingliqiye.document.annotation.DocumentName;
+import com.mingliqiye.document.core.Node;
+import com.mingliqiye.document.core.ObjectNode;
+import com.mingliqiye.document.jdbc.JdbcColumn;
+import com.mingliqiye.document.jpa.JpaDocumentMapper;
+import com.mingliqiye.document.serialization.DocumentMapper;
+import com.mingliqiye.document.validation.JakartaDocumentBeanValidator;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.validation.ConstraintViolation;
+
+public final class Main {
+    public static final class UserBean {
+        @DocumentName("user_name")
+        public String userName;
+        public int age;
+    }
+
+    @Entity
+    public static final class UserEntity {
+        @Id
+        public Long id;
+        @Column(name = "user_name")
+        public String userName;
+    }
+
+    static final class TreeMapper extends DocumentMapper {
+        TreeMapper() {
+            super(
+                    "smoke",
+                    (String text) -> { throw new UnsupportedOperationException("no parser"); },
+                    (Node node, Boolean pretty) -> "");
+        }
+    }
+
+    public static void main(String[] args) {
+        TreeMapper mapper = new TreeMapper();
+        UserBean bean = new UserBean();
+        bean.userName = "jpms";
+        bean.age = 7;
+        ObjectNode node = mapper.toNode(bean).asObject();
+        UserBean back = mapper.fromNode(node, UserBean.class);
+        System.out.println("serialization: type=" + node.getType()
+                + ", fields=" + node.getSize() + ", roundtrip=" + back.userName + "/" + back.age);
+
+        UserEntity entity = new UserEntity();
+        entity.id = 1L;
+        entity.userName = "jpa";
+        JpaDocumentMapper jpa = new JpaDocumentMapper();
+        System.out.println("jpa: keys=" + jpa.toNode(entity).getKeys());
+
+        JdbcColumn column = new JdbcColumn(1, "user_name", Types.VARCHAR, "java.lang.String");
+        System.out.println("jdbc: " + column);
+
+        System.out.println("validation: " + JakartaDocumentBeanValidator.message(
+                Collections.<ConstraintViolation<?>>emptyList(), null));
+    }
+}
+```
+
+`lib/` 需要本库的 `annotation` / `exception` / `core` / `serialization` / `jdbc` /
+`validation` / `jpa` jar，以及 `kotlin-stdlib-2.0.0.jar`、
+`mingli-exception-1.1.1-Final.jar`、`alias-for-1.0.4.jar`、
+`jakarta.validation-api-3.0.2.jar`、`jakarta.persistence-api-3.1.0.jar`。
+
+```bash
+javac --module-path lib -d out src/smoke.app/module-info.java src/smoke.app/smoke/Main.java
+java --module-path "lib;out" -m smoke.app/smoke.Main
+# serialization: type=OBJECT, fields=2, roundtrip=jpms/7
+# jpa: keys=[id, user_name, age]
+# jdbc: JdbcColumn(index=1, label='user_name', sqlType=VARCHAR, columnClassName=java.lang.String)
+# validation: Bean validation failed:
+# JPMS smoke OK
+```
+
+JDK 17 `--show-module-resolution` 中可以看到四个模块的 `requires` 都被逐个解析：
+
+```text
+smoke.app requires com.mingliqiye.document.jpa file:///.../lib/jpa-2.3.0.jar
+smoke.app requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.3.0.jar
+smoke.app requires com.mingliqiye.document.jdbc file:///.../lib/jdbc-2.3.0.jar
+smoke.app requires com.mingliqiye.document.validation file:///.../lib/validation-2.3.0.jar
+com.mingliqiye.document.jpa requires jakarta.persistence file:///.../lib/jakarta.persistence-api-3.1.0.jar
+com.mingliqiye.document.jpa requires java.desktop jrt:/java.desktop
+com.mingliqiye.document.jpa requires java.sql jrt:/java.sql
+com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.4.jar automatic
+com.mingliqiye.document.serialization requires mingli.exception file:///.../lib/mingli-exception-1.1.1-Final.jar automatic
+com.mingliqiye.document.validation requires jakarta.validation file:///.../lib/jakarta.validation-api-3.0.2.jar
+com.mingliqiye.document.jdbc requires java.sql jrt:/java.sql
+```
+
 ### 显式模块与自动模块的解析差异
 
 - 自动模块会「抱团」进入模块图：`requires` 一个自动模块时，module path 上其它自动模块会一起
   解析。**显式模块不会**：只按 `requires` / `requires transitive` 逐个解析。
-- 五个模块变成显式模块后，module path 上必须同时提供它们声明的依赖：
+- 九个模块变成显式模块后，module path 上必须同时提供它们声明的依赖：
   `com.mingliqiye.document.exception`（`core` / `schema-registry` 需要）、
-  `mingli.exception`（`exception` 需要）、`kotlin.stdlib`（全部需要）。缺任何一个都会在
+  `com.mingliqiye.document.annotation` / `com.mingliqiye.document.core`（`serialization` 需要）、
+  `com.mingliqiye.utils.aliasfor`（`serialization` 需要）、
+  `mingli.exception`（`exception` / `serialization` 需要）、`kotlin.stdlib`（全部需要）、
+  `jakarta.validation`（`validation` 需要）、`jakarta.persistence`（`jpa` 需要）。缺任何一个都会在
   编译或启动解析阶段失败。
 - `requires transitive` 让消费方无需重复声明：`requires com.mingliqiye.document.core` 时，
   `com.mingliqiye.document.exception`（以及 `kotlin.stdlib`）自动可读。
+- **`format-*` 等自动模块的显式模块依赖不会自动带上**：例如只 `requires
+  com.mingliqiye.document.format.json`（自动模块），其父类 `serialization.DocumentMapper`
+  所在的显式模块不会被解析，编译会报 `找不到 ... DocumentMapper 的类文件`，运行期则会
+  `NoClassDefFoundError`。此时要显式补上 `requires com.mingliqiye.document.serialization;`
+  （见下文[混合使用注意](#混合使用注意)）。
 
 ### JDK 8 行为不变
 
@@ -254,6 +405,22 @@ java -cp "out8;lib/*" smoke.Main
 # JDK8 classpath smoke OK: node=jpms, schema=smoke, fields=1
 ```
 
+`serialization`（含 Bean 映射与注解读取）/ `jdbc` / `validation` 在 JDK 8 classpath 上同样
+实测通过（`jpa` 不在 JDK 8 范围，原因见下面的 warning）：
+
+```text
+serialization: fields=2, roundtrip=jpms8/8
+jdbc: JdbcColumn(index=1, label='user_name', sqlType=VARCHAR, columnClassName=java.lang.String)
+validation: Bean validation failed:
+JDK8 classpath smoke OK: java=1.8.0_492
+```
+
+::: warning jpa 运行期需要 JDK 11+
+`jpa` 依赖的 `jakarta.persistence-api-3.1.0.jar` 主 classes 是 class file 55（Java 11），
+`serialization` / `jdbc` / `validation` 的依赖仍是 Java 8 字节码。因此 `jpa` 走 module path
+（或以 classpath 加载 JPA 注解类）时要求 JDK 11+；JDK 8/9/10 只能使用不含 `jpa` 的模块。
+:::
+
 ### 建议的 requires 组合
 
 | 场景 | 需要的模块名 | 形态 |
@@ -261,26 +428,51 @@ java -cp "out8;lib/*" smoke.Main
 | 只用 Node 树 | `com.mingliqiye.document.core` | 显式模块 |
 | Schema / Schema Registry | `com.mingliqiye.document.schema`、`.schema.registry` | 显式模块 |
 | 注解（`@DocumentName` 等） | `com.mingliqiye.document.annotation` | 显式模块 |
-| Bean 映射 | `com.mingliqiye.document.serialization` | 自动模块 |
+| Bean 映射 | `com.mingliqiye.document.serialization` | 显式模块 |
+| JDBC | `com.mingliqiye.document.jdbc` | 显式模块 |
+| Bean Validation | `com.mingliqiye.document.validation` | 显式模块 |
+| JPA 注解映射 | `com.mingliqiye.document.jpa` | 显式模块 |
 | Kotlin data class | `com.mingliqiye.document.serialization.kotlin` | 自动模块 |
-| JSON / YAML / ... | `com.mingliqiye.document.format.json` 等 | 自动模块 |
+| JSON / YAML / ... | `com.mingliqiye.document.format.json` 等 | 自动模块（还需显式 requires 其 `core` / `serialization` 等依赖） |
 | KSP 代码生成 | `com.mingliqiye.document.codegen`（注解处理器场景一般走 classpath） | 自动模块 |
 
-::: warning 混合使用注意
-`serialization` / `format-*` 仍是自动模块。自动模块会导出全部包，并且 `requires` 它们时会
-把 module path 上其它自动模块一并拉入模块图；与本库的显式模块混用时，显式模块的依赖仍需
-逐个提供（见[限制](#限制)）。
+### 混合使用注意
+
+::: warning
+`format-*` / `serialization-kotlin` / `codegen` / `openapi` / `jpa-hibernate` 仍是自动模块。
+自动模块会导出全部包，并且 `requires` 一个自动模块时会把 module path 上其它自动模块一并
+拉入模块图；但它们**不会**把显式模块拉入模块图。与本库的显式模块混用时：
+
+```java
+// 只 requires 自动模块 format-json 不够：javac 报
+//   cannot access DocumentMapper
+//   class file for com.mingliqiye.document.serialization.DocumentMapper not found
+module smoke.format {
+    requires com.mingliqiye.document.format.json;
+    requires com.mingliqiye.document.serialization; // 显式补上显式模块依赖
+}
+```
+
+补齐后 `JsonMapper` 可正常使用（实测输出 `{"k":"v"}`）。使用其它格式模块时同理，按格式
+模块 `build.gradle.kts` 里声明的 `api(project(...))` 逐个补 `requires`；它们的依赖仍需在
+module path 上提供。
 :::
 
 ## 验证方式
 
-下面命令不需要跑全量测试。构建五个模块 jar：
+下面命令不需要跑全量测试。构建九个模块 jar：
 
 ```bash
-gradle :annotation:jar :exception:jar :core:jar :schema:jar :schema-registry:jar
+gradle :annotation:jar :exception:jar :core:jar :schema:jar :schema-registry:jar \
+  :serialization:jar :jdbc:jar :validation:jar :jpa:jar
 # 需要连同测试/ktlint/dokka 一起验证时：
-gradle :annotation:build :exception:build :core:build :schema:build :schema-registry:build
+gradle :annotation:build :exception:build :core:build :schema:build :schema-registry:build \
+  :serialization:build :jdbc:build :validation:build :jpa:build
 ```
+
+> 本次改动实测（JDK 17 + Gradle 8.14.7）：
+> `:serialization:build :jdbc:build :validation:build :jpa:build` 全部通过
+> （含各模块测试、ktlint、Dokka），四个 `compileJava9ModuleInfo` 任务均执行。
 
 ### 1. 查看模块描述（确认是显式模块）
 
@@ -305,13 +497,56 @@ requires kotlin.stdlib transitive
 - 若省略 `--release 9`，JDK 17 的 `jar` 会提示「没有模块描述符，请指定 --release」
   （基版本本来就没有 `module-info.class`）。
 
+新增四个模块的实际输出（节选）：
+
+```text
+# serialization
+exports com.mingliqiye.document.serialization
+exports com.mingliqiye.document.serialization.codegen
+exports com.mingliqiye.document.serialization.exception
+requires com.mingliqiye.document.annotation transitive
+requires com.mingliqiye.document.core transitive
+requires com.mingliqiye.document.exception transitive
+requires com.mingliqiye.utils.aliasfor
+requires java.desktop
+requires java.sql
+requires kotlin.stdlib transitive
+requires mingli.exception
+
+# jdbc
+exports com.mingliqiye.document.jdbc
+exports com.mingliqiye.document.jdbc.exception
+requires com.mingliqiye.document.core transitive
+requires com.mingliqiye.document.exception
+requires com.mingliqiye.document.serialization transitive
+requires java.sql transitive
+requires kotlin.stdlib transitive
+
+# validation
+exports com.mingliqiye.document.validation
+requires com.mingliqiye.document.serialization transitive
+requires jakarta.validation transitive
+requires kotlin.stdlib transitive
+
+# jpa
+exports com.mingliqiye.document.jpa
+exports com.mingliqiye.document.jpa.exception
+requires com.mingliqiye.document.core transitive
+requires com.mingliqiye.document.exception
+requires com.mingliqiye.document.serialization transitive
+requires jakarta.persistence transitive
+requires java.desktop
+requires java.sql
+requires kotlin.stdlib transitive
+```
+
 ### 2. 校验 Multi-Release jar
 
 ```bash
 jar --validate --file core/build/libs/core-2.3.0.jar
 ```
 
-命令无输出且退出码为 0 表示 jar 结构合法。
+命令无输出且退出码为 0 表示 jar 结构合法（四个新模块的 jar 同样实测通过）。
 
 ### 3. 检查 jar 内容与清单
 
@@ -330,6 +565,15 @@ Get-Content tmp\META-INF\MANIFEST.MF | Select-String 'Multi-Release|Automatic-Mo
 # Multi-Release: true
 ```
 
+四个新模块的清单同样保留 `Automatic-Module-Name`（模块名与上表一致）并写入
+`Multi-Release: true`。
+
+> 备注：当前 jar 的 `META-INF/versions/9/` 下除 `module-info.class` 外还有一个
+> `previous-compilation-data.bin`，它是 Gradle `JavaCompile` 的增量编译缓存文件，会被
+> `compileJava9ModuleInfo` 的输出目录带入 jar。JDK 不读取该文件，不影响模块解析与
+> `jar --validate`；更干净的 jar 需要后续在根构建里显式排除，不属于模块 `module-info` 的
+> 范围。
+
 ### 4. 主 classes 仍是 JDK 8 字节码
 
 ```bash
@@ -339,69 +583,89 @@ javap -verbose -cp core/build/libs/core-2.3.0.jar com.mingliqiye.document.core.S
 ```
 
 `META-INF/versions/9/module-info.class` 的 class file 版本是 53，只对 JDK 9+ 生效。
+四个新模块实测：主 classes `major version: 52`，`module-info.class` `major version: 53`。
 
 ### 5. JDK 17 module path smoke
 
-见上文[端到端示例](#端到端示例jdk-17)：用 `javac --module-path lib` 编译、`java -m` 运行，
-输出 `JPMS-MR smoke OK: ...`。
+见上文[端到端示例](#端到端示例jdk-17)与上文「serialization / jdbc / validation / jpa smoke
+（实测）」小节：用 `javac --module-path lib` 编译、`java -m` 运行，输出 `JPMS smoke OK`。
 
-### 6. jlink（仅对没有自动模块依赖的模块可用）
+### 6. JDK 8 classpath smoke
+
+用 Zulu JDK 8 编译消费方源码（去掉 `module-info.java` 与 `jpa` 相关代码，
+`-cp "lib/*"`）并运行，`serialization` / `jdbc` / `validation` 输出
+`JDK8 classpath smoke OK: java=1.8.0_492`，证明 Multi-Release 结构对 JDK 8 完全透明。
+
+### 7. jdeps 一致性检查（可选）
+
+```bash
+jdeps --multi-release 9 --module-path lib --check com.mingliqiye.document.jpa
+```
+
+退出码 0，说明 `module-info` 声明的 `requires` 都能在 module path 上解析、没有缺失依赖。
+`jdeps` 的「Suggested module descriptor」只把未在公开 API 中直接暴露的模块降为普通
+`requires`，本库选择与 Gradle `api(...)` 一致的 `requires transitive`，属于有意的差异。
+
+### 8. jlink（仅对没有自动模块依赖的模块可用）
 
 ```bash
 jlink --module-path lib --add-modules com.mingliqiye.document.annotation --output image
 # 成功：annotation 只依赖 kotlin.stdlib（显式模块），可以进入自定义运行时镜像
 ```
 
-`core` / `schema` / `schema-registry` 因为依赖自动模块 `mingli.exception`，`jlink` 仍会失败
-（见[限制](#限制)）。
+`core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa`
+的依赖链里都有自动模块（`mingli.exception`，`serialization` 还有 `aliasfor`），`jlink` 只接受
+显式模块，因此仍不能为这些模块生成自定义运行时镜像（见[限制](#限制)）。
 
 ## 限制
 
-1. **只有五个模块是显式模块**：`serialization` / `format-*` / `codegen` / `openapi` / `jdbc` /
-   `validation` 等仍为自动模块。原因是它们的运行时依赖
-   `com.mingliqiye.utils.aliasfor:alias-for:1.0.3` 没有 `Automatic-Module-Name`，按文件名
-   推导出的模块名是 `alias.for`——`for` 是 Java 关键字。JDK 17 初始化 module path 时直接失败：
-
-   ```text
-   java.lang.module.FindException: Unable to derive module descriptor for alias-for-1.0.3.jar
-   Caused by: java.lang.IllegalArgumentException:
-       alias.for: Invalid module name: 'for' is not a Java identifier
-   ```
-
-   需要先给该 jar 补一个合法的模块名（或等上游发布新版本），才能给这些模块补显式
-   `module-info`。
-2. **`mingli.exception` 是自动模块**：模块名由文件名推导，不受本库控制；`exception` 模块对它只做
-   普通 `requires`（不使用 `requires transitive`），消费方直接使用 `MingLiBaseException` 时需
+1. **九个模块是显式模块，其余仍是自动模块**：`serialization-kotlin` / `format-*` /
+   `codegen` / `openapi` / `jpa-hibernate` 等没有 `src/main/java9/module-info.java`，只带
+   `Automatic-Module-Name`。`alias-for` 1.0.4 修复模块名后，这些模块补 `module-info` 已不再
+   被上游阻塞，属于后续批次工作（需要逐个梳理第三方自动模块依赖与公开 API）。自动模块不能
+   再「带上」本库的显式模块依赖，混用时必须显式 `requires`（见
+   [混合使用注意](#混合使用注意)）。
+2. **`mingli.exception` 是自动模块**：模块名由文件名推导，不受本库控制；`exception` 与
+   `serialization` 模块对它只做普通 `requires`，消费方直接使用 `MingLiBaseException` 时需
    自行 `requires mingli.exception`。
-3. **`jlink` 仅 `annotation` 可用**：`core` / `schema` / `schema-registry` 的依赖链里有自动模块
-   `mingli.exception`，`jlink` 只接受显式模块，因此仍不能生成自定义运行时镜像。
-4. **没有 `uses` / `provides`**：本批五个模块没有服务提供者。`codegen` 的注解处理器日常仍建议
-   走 classpath，而不是 module path。
-5. **Kotlin 消费方的 JPMS 支持有限**：Kotlin 编译器不编译 `module-info.kt`，Kotlin + Java
+3. **`alias-for` 仍是自动模块**：1.0.4 起带合法 `Automatic-Module-Name`，可正常参与模块解析，
+   但自动模块导出全部包、也没有显式 `requires`，后续可推动上游提供显式 `module-info`。
+4. **`jlink` 仅 `annotation` 可用**：`core` / `schema` / `schema-registry` / `serialization` /
+   `jdbc` / `validation` / `jpa` 的依赖链里有自动模块（`mingli.exception` 等），`jlink` 只接受
+   显式模块，因此仍不能生成自定义运行时镜像。
+5. **jpa 的 module path 运行期要求 JDK 11+**：`jakarta.persistence-api:3.1.0` 主 classes 是
+   class file 55；JDK 9/10 无法加载这些类。`serialization` / `jdbc` / `validation` 及其它依赖
+   仍是 Java 8 字节码，可在 JDK 9+ 使用。
+6. **没有 `uses` / `provides`**：这批九个模块没有服务提供者。`codegen` 的注解处理器日常仍
+   建议走 classpath，而不是 module path。
+7. **Kotlin 消费方的 JPMS 支持有限**：Kotlin 编译器不编译 `module-info.kt`，Kotlin + Java
    混合模块需要由 Java 侧 `module-info.java` 承担模块描述；Kotlin 2.0 对 module path 上消费
    Kotlin 库的支持仍在演进。
-6. **依赖必须同时放在 module path 上**：显式模块不会自动带上兄弟模块，`kotlin-stdlib` 与
-   `mingli-exception` 必须提供；命名模块默认读不到 classpath（unnamed module）里的类。
-7. **split package 仍需注意**：五个模块已改为显式 `exports`，但自动模块（其余模块）导出全部包；
-   混用时若消费方或其它依赖声明了同名包，模块解析会报错或出现可见性冲突。新增模块时应保证包
-   名不重叠（本库现有模块已按包名核对）。
-8. **JDK 8 没有模块化收益**：JDK 8 忽略 `Multi-Release` 与模块描述，仍按 classpath 使用；
-   新增的 `module-info.class` 对 JDK 8 不可见。
-9. **模块名不可随意变更**：显式模块名与 `Automatic-Module-Name` 必须一致（构建脚本会校验），
-   改名属于破坏性变更。
-10. **构建工具链要求**：编译 module-info 需要 JDK 9+（本仓库固定 JDK 17）工具链。只装 JDK 8
-    的环境需要让 Gradle 自动下载/指定 JDK 17，否则五个模块的 `jar` 任务会失败。
+8. **依赖必须同时放在 module path 上**：显式模块不会自动带上兄弟模块，`kotlin-stdlib`、
+   `mingli-exception`、`alias-for`、`jakarta.validation`、`jakarta.persistence` 等必须提供；
+   命名模块默认读不到 classpath（unnamed module）里的类。
+9. **split package 仍需注意**：九个模块已改为显式 `exports`，但自动模块（其余模块）导出全部
+   包；混用时若消费方或其它依赖声明了同名包，模块解析会报错或出现可见性冲突。新增模块时应
+   保证包名不重叠（本库现有模块已按包名核对）。
+10. **JDK 8 没有模块化收益**：JDK 8 忽略 `Multi-Release` 与模块描述，仍按 classpath 使用；
+    新增的 `module-info.class` 对 JDK 8 不可见。
+11. **模块名不可随意变更**：显式模块名与 `Automatic-Module-Name` 必须一致（构建脚本会校验），
+    改名属于破坏性变更。
+12. **构建工具链要求**：编译 module-info 需要 JDK 9+（本仓库固定 JDK 17）工具链。只装 JDK 8
+    的环境需要让 Gradle 自动下载/指定 JDK 17，否则这九个模块的 `jar` 任务会失败。
 
 ## 后续计划
 
-1. **`alias-for` 模块名**：向上游反馈或在本库测试/打包流程中提供补好
-   `Automatic-Module-Name` 的版本，之后给 `serialization` / `format-*` 等模块补
-   `src/main/java9/module-info.java`。
-2. **`mingli-exception` 显式模块化**：建议上游提供 `module-info` 或合法自动模块名，解除
-   `jlink` 与 `requires transitive` 限制。
+1. **剩余模块的显式 `module-info`**：`serialization-kotlin`（`kotlin.reflect`）、`format-*`
+   （Jackson / SnakeYAML / Xerces / Avro / Protobuf 等第三方模块名需逐个核对）、`openapi`、
+   `jpa-hibernate`。`alias-for` 1.0.4 已合法，可按批次逐个补
+   `src/main/java9/module-info.java`，并同步更新本页与 README。
+2. **`mingli-exception` 显式模块化**：建议上游提供 `module-info`，解除 `jlink` 与
+   `requires transitive` 限制。
 3. **服务声明**：为 `codegen` 的注解处理器补 `provides javax.annotation.processing.Processor`，
    并评估各格式模块的 `uses`。
 4. **内部包拆分**：把 `internal` 实现移到独立包并由 `exports` 真正隐藏，而不是依赖 Kotlin
-   `internal` 的字节码可见性。
-5. **CI 校验**：在 CI 中增加 JDK 17 module path smoke、`jar --validate` 与
-   `jar --describe-module --release 9` 的断言，防止 Multi-Release 打包回归。
+   `internal` 的字节码可见性（`jdbc.internal` / `jpa.internal` 已经不导出，可先作为模板）。
+5. **CI 校验**：在 CI 中增加 JDK 17 module path smoke、`jar --validate`、
+   `jar --describe-module --release 9` 与 `jdeps --check` 的断言，防止 Multi-Release 打包与
+   `requires` 漂移回归。

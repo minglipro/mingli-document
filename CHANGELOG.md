@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.4.0（未发布）
+
+### 新增
+
+- `jpa-hibernate` 模块：Hibernate 代理、懒加载、Session/EntityManager 集成
+- Avro 完整 logical type：date/time/timestamp/decimal/uuid/duration
+- XML / Properties / TOML / CSV `maxDepth` 安全深度限制
+- TOML 注释保留便捷 API：`TomlMapper.parseCommented` / `formatCommented`
+- `serialization` / `jdbc` / `validation` / `jpa` 显式 MR-JAR `module-info`
+- `alias-for` 升级 1.0.4（增加 `Automatic-Module-Name`）
+
 ## 2.3.0
 
 ### 新增

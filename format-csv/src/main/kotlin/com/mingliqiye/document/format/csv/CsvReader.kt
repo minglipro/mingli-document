@@ -19,16 +19,23 @@ import org.apache.commons.csv.CSVParser
  *
  * 整段解析适合中小输入；大文件请使用 [CsvMapper.parseStream] 逐行解析。
  *
+ * 解析深度：根数组深度为 `1`、行对象为 `2`、单元格标量为 `3`；点分列名（
+ * [CsvNestedMode.COLUMNS]）与 JSON 文本单元格内部嵌套都会累加深度。超过 [maxDepth]
+ * 时抛出 [CsvParseException]。默认安全上限 [CsvConfig.DEFAULT_MAX_DEPTH]（512）。
+ *
  * @param source CSV 文本
  * @param delimiter 字段分隔符
  * @param header 是否使用首行作为表头
  * @param nestedMode 嵌套值读写方式
+ * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]；
+ *   `0` 或负数表示不限制（显式关闭保护）
  */
 public class CsvReader(
     private val source: String,
     private val delimiter: Char = DEFAULT_CSV_DELIMITER,
     private val header: Boolean = DEFAULT_CSV_HEADER,
     private val nestedMode: CsvNestedMode? = null,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     /**
@@ -55,7 +62,7 @@ public class CsvReader(
         if (!records.hasNext()) {
             return ArrayNode.EMPTY
         }
-        val decoder = CsvRowDecoder(nestedMode)
+        val decoder = CsvRowDecoder(nestedMode, maxDepth)
         if (header) {
             decoder.readHeader(records.next())
         }
@@ -75,16 +82,20 @@ public class CsvReader(
          * @param delimiter 字段分隔符
          * @param header 是否使用首行作为表头
          * @param nestedMode 嵌套值读写方式
+         * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]
          * @return 文档树
-         * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突或嵌套 JSON 非法时抛出
+         * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突、嵌套 JSON 非法或
+         *   嵌套深度超限时抛出
          */
         @JvmStatic
+        @JvmOverloads
         public fun parse(
             source: String,
             delimiter: Char = DEFAULT_CSV_DELIMITER,
             header: Boolean = DEFAULT_CSV_HEADER,
             nestedMode: CsvNestedMode? = null,
-        ): Node = CsvReader(source, delimiter, header, nestedMode).read()
+            maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+        ): Node = CsvReader(source, delimiter, header, nestedMode, maxDepth).read()
     }
 }
 
@@ -94,11 +105,14 @@ public class CsvReader(
  * @param delimiter 字段分隔符
  * @param header 是否使用首行作为表头
  * @param nestedMode 嵌套值读写方式
+ * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]
  * @return 文档树
- * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突或嵌套 JSON 非法时抛出
+ * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突、嵌套 JSON 非法或
+ *   嵌套深度超限时抛出
  */
 public fun String.toCsvNode(
     delimiter: Char = DEFAULT_CSV_DELIMITER,
     header: Boolean = DEFAULT_CSV_HEADER,
     nestedMode: CsvNestedMode? = null,
-): Node = CsvReader(this, delimiter, header, nestedMode).read()
+    maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+): Node = CsvReader(this, delimiter, header, nestedMode, maxDepth).read()

@@ -19,10 +19,13 @@ import org.apache.commons.csv.CSVRecord
  *
  * @param schema CSV Schema
  * @param nestedMode 嵌套值读写方式；默认 `null` 表示不支持通用嵌套
+ * @param maxDepth 解析最大嵌套深度（根数组为 `1`、行对象为 `2`、单元格标量为 `3`，
+ *   嵌套对象/JSON 单元格继续累加）；`0` 或负数表示不限制
  */
 internal class CsvSchemaRowDecoder(
     private val schema: CsvSchema,
     private val nestedMode: CsvNestedMode?,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     private var layout: RowLayout? = null
@@ -125,6 +128,7 @@ internal class CsvSchemaRowDecoder(
         cells: RowCells,
         rowIndex: Int,
     ): ObjectNode {
+        checkDepth(2 + prefix.size, "CSV row object")
         val fields = LinkedHashMap<String, Node>(schema.fields.size)
         for (field in schema.fields) {
             val path = prefix + field.name
@@ -151,10 +155,27 @@ internal class CsvSchemaRowDecoder(
                 }
                 continue
             }
+            checkDepth(3 + prefix.size, "CSV column '${path.joinToString(".")}'")
             fields[field.name] = parseCell(field, schema.nestedArrays[field.name], cells.text(path), rowIndex, path)
         }
         return ObjectNode.from(fields)
     }
+
+    /**
+     * 校验单个节点深度；超限抛 [CsvParseException]。
+     */
+    private fun checkDepth(depth: Int, what: String) {
+        if (maxDepth > 0 && depth > maxDepth) {
+            throw CsvParseException("$what depth $depth exceeds maxDepth $maxDepth")
+        }
+    }
+
+    /**
+     * JSON 单元格相对嵌套上限：单元格根节点在整体树中深度为 `3 + prefix.size`，
+     * 因此可用相对深度为 `maxDepth - 2 - prefix.size`；`0` 或负数交给
+     * [CsvJsonCodec] 表示不限制（此处单元格值深度已单独校验过）。
+     */
+    private fun cellNestingLimit(prefix: List<String>): Int = if (maxDepth > 0) maxDepth - 2 - prefix.size else 0
 
     private fun hasAnyColumn(schema: CsvSchema, prefix: List<String>, cells: RowCells): Boolean {
         for (column in schema.columns) {
@@ -189,10 +210,11 @@ internal class CsvSchemaRowDecoder(
         path: List<String>,
     ): Node {
         val column = path.joinToString(".")
+        val cellLimit = cellNestingLimit(path.dropLast(1))
         if (text.isNotEmpty()) {
             when (field.type) {
-                SchemaType.OBJECT -> return parseObjectCell(field, text, rowIndex, column)
-                SchemaType.ARRAY -> return parseArrayCell(field, element, text, rowIndex, column)
+                SchemaType.OBJECT -> return parseObjectCell(field, text, rowIndex, column, cellLimit)
+                SchemaType.ARRAY -> return parseArrayCell(field, element, text, rowIndex, column, cellLimit)
                 else -> Unit
             }
         }
@@ -203,11 +225,11 @@ internal class CsvSchemaRowDecoder(
         }
     }
 
-    private fun parseObjectCell(field: SchemaField, text: String, rowIndex: Int, column: String): Node {
+    private fun parseObjectCell(field: SchemaField, text: String, rowIndex: Int, column: String, cellLimit: Int): Node {
         if (nestedMode != CsvNestedMode.JSON) {
             throw unsupportedNested(field, SchemaType.OBJECT)
         }
-        val node = parseJsonCell(text, column, rowIndex)
+        val node = parseJsonCell(text, column, rowIndex, cellLimit)
         return node.asObjectOrNull() ?: throw CsvParseException(
             "CSV column '$column' in record ${rowIndex + 1} must be a JSON object but was ${node.type}",
         )
@@ -219,16 +241,22 @@ internal class CsvSchemaRowDecoder(
         text: String,
         rowIndex: Int,
         column: String,
+        cellLimit: Int,
     ): Node {
         if (element == null && nestedMode != CsvNestedMode.JSON) {
             throw unsupportedNested(field, SchemaType.ARRAY)
         }
-        val node = parseJsonCell(text, column, rowIndex)
+        val node = parseJsonCell(text, column, rowIndex, cellLimit)
         val array = node.asArrayOrNull() ?: throw CsvParseException(
             "CSV column '$column' in record ${rowIndex + 1} must be a JSON array but was ${node.type}",
         )
         if (element == null) {
             return array
+        }
+        if (maxDepth > 0 && cellLimit < 2) {
+            throw CsvParseException(
+                "CSV column '$column' in record ${rowIndex + 1} array element depth exceeds maxDepth $maxDepth",
+            )
         }
         val elements = ArrayList<Node>(array.size)
         for (index in 0 until array.size) {
@@ -242,8 +270,8 @@ internal class CsvSchemaRowDecoder(
         return ArrayNode.from(elements)
     }
 
-    private fun parseJsonCell(text: String, column: String, rowIndex: Int): Node = try {
-        CsvJsonCodec.parse(text)
+    private fun parseJsonCell(text: String, column: String, rowIndex: Int, cellLimit: Int): Node = try {
+        CsvJsonCodec.parse(text, cellLimit)
     } catch (e: CsvParseException) {
         throw CsvParseException(
             "Cannot parse JSON value for column '$column' in record ${rowIndex + 1}: ${e.message}",

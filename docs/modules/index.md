@@ -69,6 +69,7 @@
 | [`validation`](./validation.md) | `com.mingliqiye.document:validation` | Jakarta Bean Validation 集成 | `serialization`、`jakarta.validation-api` |
 | [`jdbc`](./jdbc.md) | `com.mingliqiye.document:jdbc` | JDBC ResultSet / PreparedStatement 集成 | `core`、`serialization` |
 | [`jpa`](./jpa.md) | `com.mingliqiye.document:jpa` | JPA / Hibernate 实体注解映射 | `core`、`serialization`、`jakarta.persistence-api` |
+| [`jpa-hibernate`](./jpa-hibernate.md) | `com.mingliqiye.document:jpa-hibernate` | Hibernate 代理/懒加载运行期集成 | `jpa`、`hibernate-core` |
 
 ### 格式模块
 

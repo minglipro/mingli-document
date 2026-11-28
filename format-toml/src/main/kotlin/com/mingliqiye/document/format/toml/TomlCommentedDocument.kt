@@ -62,11 +62,14 @@ public class TomlCommentedDocument internal constructor(
          * 解析保留注释的 TOML 文本。
          *
          * @param source TOML 文本
+         * @param maxDepth 解析最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]
          * @return 保留注释的文档
-         * @throws com.mingliqiye.document.format.toml.exception.TomlParseException TOML 文本非法时抛出
+         * @throws com.mingliqiye.document.format.toml.exception.TomlParseException TOML 文本非法或
+         *   嵌套深度超过 [maxDepth] 时抛出
          */
         @JvmStatic
-        public fun parse(source: String): TomlCommentedDocument = TomlCommentPreservingReader(source).read()
+        @JvmOverloads
+        public fun parse(source: String, maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH): TomlCommentedDocument = TomlCommentPreservingReader(source, maxDepth).read()
 
         /**
          * 从文档树创建不带注释与空行信息的文档。
@@ -84,7 +87,9 @@ public class TomlCommentedDocument internal constructor(
 /**
  * 解析保留注释的 TOML 文本。
  *
+ * @param maxDepth 解析最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]
  * @return 保留注释的文档
- * @throws com.mingliqiye.document.format.toml.exception.TomlParseException TOML 文本非法时抛出
+ * @throws com.mingliqiye.document.format.toml.exception.TomlParseException TOML 文本非法或
+ *   嵌套深度超过 [maxDepth] 时抛出
  */
-public fun String.toTomlCommentedDocument(): TomlCommentedDocument = TomlCommentPreservingReader(this).read()
+public fun String.toTomlCommentedDocument(maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH): TomlCommentedDocument = TomlCommentPreservingReader(this, maxDepth).read()

@@ -45,7 +45,7 @@
 ## 阶段 2：格式协议完整性
 
 - [x] Avro：非默认 codec、`appendTo`
-- [ ] Avro：完整 logical type
+- [x] Avro：完整 logical type
 - [x] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
 - [x] CBOR sequence
@@ -57,7 +57,7 @@
 - [x] CSV：嵌套结构 / 多级 Schema
 - [x] Smile：多消息流
 
-> 未完成项：Avro 完整 logical type、TOML 注释保留。
+> Avro logical type 与 TOML 注释保留均已完成。
 
 ## 阶段 3：性能与流式
 
@@ -85,7 +85,7 @@
 - [x] Avro 解析器 `maxDepth`
 - [x] Ion 解析器 `maxDepth`
 - [x] YAML 解析器 `maxDepth`
-- [ ] XML / Properties / TOML / CSV `maxDepth`
+- [x] XML / Properties / TOML / CSV `maxDepth`
 - [x] 全格式 `maxInputSize`
 - [x] Node 树 `maxStringLength`
 - [x] YAML alias 扩张限制
@@ -106,9 +106,9 @@
 - [x] OpenAPI 3.0 生成
 - [x] Bean Validation 集成
 - [x] JPA 实体注解映射（`jpa` 模块）
-- [ ] Hibernate Session / EntityManager 运行期集成
+- [x] Hibernate Session / EntityManager 运行期集成
 
-> 已完成：Schema Registry、Bean Validation、JPA 注解映射；Hibernate 运行期会话集成仍待定。
+> Schema Registry、Bean Validation、JPA 注解映射、Hibernate 运行期集成均已完成。
 
 ## 阶段 6：构建与发布
 
@@ -122,11 +122,12 @@
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`）
 - [x] JPMS `module-info`（Multi-Release jar：`annotation` / `exception` / `core` /
-  `schema` / `schema-registry`；其余模块待上游依赖修复模块名，见
-  [JPMS 指南](../guide/jpms.md)）
+  `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` 九个模块；
+  其余 `format-*` / `serialization-kotlin` / `codegen` / `openapi` / `jpa-hibernate` 仍为
+  自动模块，见 [JPMS 指南](../guide/jpms.md)）
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
-> 未完成项：Gitea CI、其余模块的 JPMS `module-info`、Maven Central 实际发布。
+> 未完成项：Gitea CI、`format-*` 等剩余模块的 JPMS `module-info`、Maven Central 实际发布。
 
 ## 批次计划
 
@@ -263,7 +264,7 @@
 | 对象池 / 零拷贝 | ✅ |
 | Schema Registry / Bean Validation | ✅ |
 | JDBC / JPA 注解映射 | ✅ |
-| JPMS 自动模块名 + 5 个显式 MR-JAR 模块 | ✅ |
+| JPMS 自动模块名 + 9 个显式 MR-JAR 模块 | ✅ |
 | GraalVM Native Image | ✅ 实测 |
 | 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
 | Maven Central 实际发布 | ⏳ 等额度/凭据 |
@@ -273,7 +274,7 @@
 | 序号 | 待办 | 阶段 |
 |---|---|---|
 | 1 | Hibernate Session / EntityManager 运行期集成 | 阶段 5 |
-| 2 | serialization / format-* / jdbc / validation / jpa 的显式 module-info（alias-for 模块名阻塞） | 阶段 6 |
+| 2 | `format-*` / `serialization-kotlin` / `codegen` / `openapi` / `jpa-hibernate` 的显式 module-info（`serialization` / `jdbc` / `validation` / `jpa` 已完成；`alias-for` 1.0.4 已解除阻塞） | 阶段 6 |
 | 3 | Maven Central 实际发布（需额度/凭据） | 阶段 6 |
 | 4 | Avro 完整 logical type | 阶段 2 |
 | 5 | XML / Properties / TOML / CSV `maxDepth` | 阶段 4 |

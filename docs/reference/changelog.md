@@ -8,6 +8,7 @@
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
+| `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info |
 | `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
 | `2.2.0` | 数据库与扩展 | `jdbc`、`schema-registry`、`validation`、TOML 注释保留、JPMS 自动模块名 |
 | `2.1.0` | 流式与安全 | JSON Lines/数组、CSV 流式、`ByteArrayPool`、零拷贝、流式写出 |
@@ -20,6 +21,17 @@
 | `1.0.0` | 初始发布 | core/annotation/exception/schema/serialization/serialization-kotlin + 11 格式 + BOM |
 
 发布标签：`1.0.0`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v2.0.0`、`v2.1.0`、`v2.2.0`、`v2.3.0`。
+
+## 2.4.0
+
+### 新增
+
+- `jpa-hibernate` 模块：Hibernate 代理解包、懒加载初始化、Session/EntityManager 集成
+- Avro 完整 logical type：date/time/timestamp/decimal/uuid/duration
+- XML / Properties / TOML / CSV `maxDepth`
+- TOML 注释便捷 API：`TomlMapper.parseCommented` / `formatCommented`
+- `serialization` / `jdbc` / `validation` / `jpa` 显式 MR-JAR `module-info`
+- `alias-for` 1.0.4
 
 ## 2.3.0
 

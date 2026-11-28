@@ -36,12 +36,16 @@ import java.util.Properties
  * @param maxNodeDepth Node 树最大深度；0 表示不限制
  * @param maxNodeCount Node 树最大节点数；0 表示不限制
  * @param maxStringLength 字段名与字符串值最大长度；0 表示不限制
+ * @param maxDepth 解析最大嵌套深度（根对象深度为 `1`，即 key 路径段数 + 1），
+ *   默认 [PropertiesMapper.DEFAULT_MAX_DEPTH]；超限抛 [PropertiesParseException]，
+ *   `0` 或负数表示不限制
  */
 internal class PropertiesTokenReader(
     source: String,
     maxNodeDepth: Int = 0,
     maxNodeCount: Long = 0,
     maxStringLength: Int = 0,
+    private val maxDepth: Int = PropertiesMapper.DEFAULT_MAX_DEPTH,
 ) : DocumentTokenReader {
 
     private val limits = TokenLimits(maxNodeDepth, maxNodeCount, maxStringLength)
@@ -82,12 +86,26 @@ internal class PropertiesTokenReader(
         var root: Any? = null
         for (name in properties.stringPropertyNames().sorted()) {
             val segments = PropertiesPath.parse(name)
+            checkDepth(segments, name)
             val value = inferScalar(properties.getProperty(name))
             root = insert(root, segments, 0, value, name)
         }
         val tokens = ArrayList<DocumentToken>()
         appendNode(root ?: LinkedHashMap<String, Any?>(), 1, tokens)
         return tokens
+    }
+
+    /**
+     * 在插入前校验 key 路径深度，避免超深路径导致递归构建/输出 StackOverflow。
+     */
+    private fun checkDepth(segments: List<PropertiesPathSegment>, name: String) {
+        if (maxDepth <= 0) {
+            return
+        }
+        val depth = segments.size + 1
+        if (depth > maxDepth) {
+            throw PropertiesParseException("Properties key path '$name' depth $depth exceeds maxDepth $maxDepth")
+        }
     }
 
     @Suppress("UNCHECKED_CAST")

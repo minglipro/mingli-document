@@ -28,11 +28,14 @@ import java.util.Base64
  * @param delimiter 字段分隔符
  * @param header 是否写出表头
  * @param nestedMode 嵌套值读写方式
+ * @param maxDepth 解析/写出最大嵌套深度（用于限制 JSON 文本单元格内部嵌套）；
+ *   `0` 或负数表示不限制
  */
 internal class CsvWriter(
     private val delimiter: Char = DEFAULT_CSV_DELIMITER,
     private val header: Boolean = DEFAULT_CSV_HEADER,
     private val nestedMode: CsvNestedMode? = null,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     /**
@@ -166,11 +169,17 @@ internal class CsvWriter(
         is BooleanNode -> node.value.toString()
         is BinaryNode -> Base64.getEncoder().encodeToString(node.value)
         is ObjectNode, is ArrayNode -> if (nestedMode == CsvNestedMode.JSON) {
-            CsvJsonCodec.write(node)
+            CsvJsonCodec.write(node, cellNestingLimit())
         } else {
             throw CsvException("Nested CSV cell values are not supported: ${node.type}")
         }
     }
+
+    /**
+     * JSON 单元格相对嵌套上限：单元格根在整体树中深度为 `3`，可用相对深度为
+     * `maxDepth - 2`；`0` 或负数表示不限制。
+     */
+    private fun cellNestingLimit(): Int = if (maxDepth > 0) maxDepth - 2 else 0
 }
 
 /**
@@ -179,6 +188,8 @@ internal class CsvWriter(
  * @param delimiter 字段分隔符
  * @param header 是否写出表头
  * @param nestedMode 嵌套值读写方式
+ * @param maxDepth 写出时 JSON 文本单元格内允许的最大嵌套深度，默认
+ *   [CsvConfig.DEFAULT_MAX_DEPTH]
  * @return CSV 文本
  * @throws CsvException 根节点类型错误、嵌套列冲突或单元格不是标量时抛出
  */
@@ -186,4 +197,5 @@ public fun Node.toCsvString(
     delimiter: Char = DEFAULT_CSV_DELIMITER,
     header: Boolean = DEFAULT_CSV_HEADER,
     nestedMode: CsvNestedMode? = null,
-): String = CsvWriter(delimiter, header, nestedMode).write(this)
+    maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+): String = CsvWriter(delimiter, header, nestedMode, maxDepth).write(this)

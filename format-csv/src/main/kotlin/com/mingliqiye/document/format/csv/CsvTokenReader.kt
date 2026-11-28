@@ -13,11 +13,17 @@ import java.math.BigDecimal
  *
  * 直接从 CSV 记录流生成 `数组 -> 对象 -> 字段/值` Token，不构建完整 Node 树。
  * 字段类型推断规则与 [CsvReader] 一致：true/false、数字、字符串。
+ *
+ * 平坦 CSV 的固定深度为：根数组 `1`、行对象 `2`、单元格 `3`；[maxDepth] 小于该结构
+ * 深度时在读取到数据行后抛出 [CsvParseException]。
+ *
+ * @param maxDepth 解析最大嵌套深度；`0` 或负数表示不限制
  */
 internal class CsvTokenReader(
     source: String,
     delimiter: Char,
     private val header: Boolean,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) : DocumentTokenReader {
 
     private val parser: CSVParser = try {
@@ -72,6 +78,9 @@ internal class CsvTokenReader(
             expectField = true
             if (!header) {
                 columns = defaultColumns(row!!.size())
+            }
+            if (maxDepth in 1..2) {
+                throw CsvParseException("CSV row depth 3 exceeds maxDepth $maxDepth")
             }
             return set(DocumentTokenType.START_OBJECT, null)
         }

@@ -29,13 +29,19 @@ import java.util.Base64
  *
  * 解析与 [XmlReader] 共用 [XmlDom]，XXE 防护一致（禁用 DOCTYPE 与外部实体）。
  *
+ * 元素嵌套深度与 [XmlReader] 共用迭代校验（[XmlReader.checkDepth]）：超过 [maxDepth]
+ * 时在生成 Token 前抛出 [XmlParseException]，不会因超深输入 StackOverflow。
+ *
  * @param source XML 文本
+ * @param maxDepth 最大 XML 元素嵌套深度（根元素深度为 `1`），默认
+ *   [XmlConfig.DEFAULT_MAX_DEPTH]；`0` 或负数表示不限制
  */
 internal class XmlTokenReader(
     source: String,
+    private val maxDepth: Int = XmlConfig.DEFAULT_MAX_DEPTH,
 ) : DocumentTokenReader {
 
-    private val tokens: List<DocumentToken> = buildTokens(source)
+    private val tokens: List<DocumentToken> = buildTokens(source, maxDepth)
     private var index = -1
     private var current: DocumentToken? = null
 
@@ -70,9 +76,11 @@ internal class XmlTokenReader(
         private const val TEXT_KEY = XmlConfig.DEFAULT_TEXT_KEY
         private const val ITEMS_KEY = XmlConfig.DEFAULT_ITEMS_KEY
 
-        private fun buildTokens(source: String): List<DocumentToken> {
+        private fun buildTokens(source: String, maxDepth: Int): List<DocumentToken> {
+            val root = XmlDom.parse(source)
+            XmlReader.checkDepth(root, maxDepth)
             val tokens = ArrayList<DocumentToken>()
-            appendElement(XmlDom.parse(source), tokens)
+            appendElement(root, tokens)
             return tokens
         }
 

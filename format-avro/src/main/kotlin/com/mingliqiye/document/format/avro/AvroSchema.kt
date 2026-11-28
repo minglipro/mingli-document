@@ -132,6 +132,10 @@ public class AvroSchema(
      * - [SchemaType.OBJECT] 映射为以 `<记录名>_<字段名>` 命名的空嵌套 record
      * - [SchemaType.DECIMAL] 映射为不含 precision/scale 的 `bytes`
      *
+     * 通用 [SchemaType] 也不携带 logical type 属性，需要 date/time/timestamp/
+     * decimal precision-scale/uuid/duration 等完整逻辑类型时，应直接使用 Apache
+     * Avro Schema 构造 [AvroMapper]。
+     *
      * 需要完整嵌套类型（自定义子 record、enum、fixed、非 string 元素）时，
      * 应直接使用 Apache Avro Schema 构造 [AvroMapper]。
      *
@@ -189,6 +193,12 @@ public class AvroSchema(
          * - `float` 归一为 [SchemaType.DOUBLE]
          * - `enum` 归一为 [SchemaType.STRING]
          * - `fixed` 归一为 [SchemaType.BYTES]（decimal 逻辑类型归一为 [SchemaType.DECIMAL]）
+         * - 其它已知 logical type 只保留底层类型：`date`/`time-millis` 归一为
+         *   [SchemaType.INT]，`time-micros`/`timestamp-millis`/`timestamp-micros`/
+         *   `local-timestamp-millis`/`local-timestamp-micros` 归一为
+         *   [SchemaType.LONG]，`uuid` 归一为 [SchemaType.STRING]，`duration`
+         *   归一为 [SchemaType.BYTES]；完整逻辑类型信息请直接查看 Apache Avro
+         *   Schema 或 [AvroLogicalType.fromSchema]
          * - 含多个分支的 union 只保留第一个非 null 分支
          * - 嵌套 record 归一为 [SchemaType.OBJECT]
          *

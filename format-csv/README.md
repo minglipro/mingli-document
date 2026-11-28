@@ -200,6 +200,38 @@ name,address.city,address.zip,address.geo.lat,address.geo.lon,members
 - 嵌套对象上的额外字段忽略；`failOnUnknownColumns` 控制顶层未声明列与数组元素 Schema
   内部的未知字段。
 
+## 深度限制（maxDepth）
+
+默认解析上限为 512（根数组深度为 `1`、行对象为 `2`、单元格标量为 `3`），防止超深嵌套
+Schema / JSON 文本单元格耗尽调用栈：
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvConfig
+import com.mingliqiye.document.format.csv.CsvMapper
+import com.mingliqiye.document.format.csv.CsvNestedMode
+
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .nestedMode(CsvNestedMode.JSON)
+        .maxDepth(64) // 默认 CsvConfig.DEFAULT_MAX_DEPTH = 512，必须为正数
+        .build(),
+)
+
+// 独立读取器入口同样可配置
+val node = com.mingliqiye.document.format.csv.CsvReader(csv, maxDepth = 64).read()
+```
+
+- 点分列名（`COLUMNS`）每多一层加 `1`；嵌套 Schema 的对象/数组元素每层加 `1`；
+  JSON 文本单元格内部嵌套从单元格根深度 `3` 起算；
+- Tree / Token / Bean 三条解析路径与 `parseStream` 流式解析都会在超限时抛出
+  `com.mingliqiye.document.format.csv.exception.CsvParseException`；
+- JSON 文本单元格的解析与写出都是带深度校验的递归下降，超深输入/节点不会
+  `StackOverflowError`；写出侧同样受 `maxDepth` 限制（超限抛 `CsvException`）；
+- 通用 `DocumentMapperConfig.maxNodeDepth` 保持 Node 限制语义（回退 Node 路径后由
+  NodeLimits 校验，超限抛 `DocumentSerializationException`）；
+- `CsvReader` / `CsvSchemaReader` / `CsvWriter` / `CsvSchemaWriter` 的 `maxDepth` 显式传
+  `0` 或负数表示关闭保护。
+
 ## 特性
 
 - 平坦表格
@@ -212,6 +244,7 @@ name,address.city,address.zip,address.geo.lat,address.geo.lon,members
 - 大文件流式逐行解析（`CsvMapper.parseStream`，支持 `maxRows` 与 Schema/嵌套复用）
 - Token 直读 Bean
 - 原生 CSV Token Reader
+- 解析深度限制（默认 512，可配置，覆盖嵌套 Schema 与 JSON 单元格）
 
 ## 限制
 

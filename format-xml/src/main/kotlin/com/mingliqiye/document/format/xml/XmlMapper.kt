@@ -34,6 +34,11 @@ import java.io.OutputStreamWriter
  * `parse(String)` 默认通过原生 [XmlTokenReader] 直接消费 Token，不构建 Node 树；
  * 非默认读取配置（属性映射、命名空间、自定义键名、有序/拒绝混合内容）或配置了
  * Node 树限制/`resolveReferences` 时回退 [NodeTokenReader] 路径。
+ *
+ * 解析深度限制：默认安全上限为 [XmlConfig.DEFAULT_MAX_DEPTH]（512，根元素深度为 `1`），
+ * 可用 [XmlConfig.maxDepth] 或通用 `DocumentMapperConfig.maxNodeDepth` 调整；两者同时
+ * 设置时取较小值。Tree/Token/Bean 三条解析路径都会在超限时抛出
+ * [com.mingliqiye.document.format.xml.exception.XmlParseException]。
  */
 public open class XmlMapper internal constructor(
     serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
@@ -43,7 +48,7 @@ public open class XmlMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "xml",
-    { source -> XmlReader.from(source, config as? XmlConfig, config.maxNodeDepth).read() },
+    { source -> XmlReader.from(source, config as? XmlConfig, resolveMaxDepth(config)).read() },
     { node, pretty -> XmlWriter.from(config as? XmlConfig).write(node, pretty) },
     serializers,
     deserializers,
@@ -54,6 +59,7 @@ public open class XmlMapper internal constructor(
 
     private val xmlConfig: XmlConfig? = config as? XmlConfig
     private val mapperConfig: DocumentMapperConfig = config
+    private val maxDepth: Int = resolveMaxDepth(config)
 
     /**
      * 创建默认 XML 映射器。
@@ -121,9 +127,9 @@ public open class XmlMapper internal constructor(
      */
     override fun createTextTokenReader(source: String): DocumentTokenReader {
         if (usesNativeTokenReader()) {
-            return XmlTokenReader(source)
+            return XmlTokenReader(source, maxDepth)
         }
-        val node = XmlReader.from(source, xmlConfig, mapperConfig.maxNodeDepth).read()
+        val node = XmlReader.from(source, xmlConfig, maxDepth).read()
         validateNodeLimits(node)
         return NodeTokenReader(node)
     }
@@ -152,4 +158,24 @@ public open class XmlMapper internal constructor(
         @JvmStatic
         public fun builder(): XmlMapperBuilder = XmlMapperBuilder()
     }
+}
+
+/**
+ * 计算 XML 解析最大嵌套深度。
+ *
+ * 取 [XmlConfig.maxDepth]（配置了 [XmlConfig] 时）与通用
+ * [DocumentMapperConfig.maxNodeDepth]（大于 `0` 时）的较小正值；都未设置时使用
+ * [XmlConfig.DEFAULT_MAX_DEPTH]。两者都是“上限”，较小者优先，保证任一显式配置都能
+ * 收紧限制。
+ */
+private fun resolveMaxDepth(config: DocumentMapperConfig): Int {
+    val xmlConfig = config as? XmlConfig
+    val candidates = ArrayList<Int>(2)
+    if (xmlConfig != null) {
+        candidates.add(xmlConfig.maxDepth)
+    }
+    if (config.maxNodeDepth > 0) {
+        candidates.add(config.maxNodeDepth)
+    }
+    return candidates.minOrNull() ?: XmlConfig.DEFAULT_MAX_DEPTH
 }

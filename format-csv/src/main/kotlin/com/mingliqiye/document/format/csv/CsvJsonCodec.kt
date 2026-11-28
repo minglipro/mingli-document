@@ -18,12 +18,11 @@ import java.util.Base64
  * 只服务于 CSV 嵌套单元格：读取时把 `{...}` / `[...]` 文本还原为节点树，写出时把节点树
  * 编码为紧凑 JSON 文本。二进制节点按 Base64 字符串编码。
  *
- * 解析失败抛出 [CsvParseException]，写出失败抛出 [CsvException]，与 CSV 其它错误保持一致。
+ * 嵌套深度由 [maxDepth] 控制（相对于单元格根，单元格根相对深度为 `1`；`0` 或负数表示
+ * 不限制）。解析失败抛出 [CsvParseException]，写出失败抛出 [CsvException]，与 CSV 其它
+ * 错误保持一致。
  */
 internal object CsvJsonCodec {
-
-    /** 嵌套 JSON 最大深度。 */
-    private const val MAX_DEPTH = 128
 
     private const val HEX = "0123456789abcdef"
 
@@ -31,12 +30,13 @@ internal object CsvJsonCodec {
      * 解析 JSON 文本。
      *
      * @param text JSON 文本
+     * @param maxDepth 相对单元格根的最大嵌套深度；`0` 或负数表示不限制
      * @return 文档树节点
-     * @throws CsvParseException 文本不是合法 JSON 时抛出
+     * @throws CsvParseException 文本不是合法 JSON 或嵌套深度超限时抛出
      */
-    fun parse(text: String): Node {
-        val parser = Parser(text)
-        val node = parser.parseValue(0)
+    fun parse(text: String, maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH): Node {
+        val parser = Parser(text, maxDepth)
+        val node = parser.parseValue(1)
         parser.skipWhitespace()
         if (!parser.atEnd()) {
             throw CsvParseException("Invalid nested JSON: unexpected trailing content at index ${parser.index}")
@@ -48,18 +48,19 @@ internal object CsvJsonCodec {
      * 将节点编码为紧凑 JSON 文本。
      *
      * @param node 文档树节点
+     * @param maxDepth 相对单元格根的最大嵌套深度；`0` 或负数表示不限制
      * @return JSON 文本
      * @throws CsvException 节点深度超过上限时抛出
      */
-    fun write(node: Node): String {
+    fun write(node: Node, maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH): String {
         val builder = StringBuilder()
-        writeNode(node, builder, 0)
+        writeNode(node, builder, 1, maxDepth)
         return builder.toString()
     }
 
-    private fun writeNode(node: Node, builder: StringBuilder, depth: Int) {
-        if (depth > MAX_DEPTH) {
-            throw CsvException("Nested CSV value exceeds max depth $MAX_DEPTH")
+    private fun writeNode(node: Node, builder: StringBuilder, depth: Int, maxDepth: Int) {
+        if (maxDepth > 0 && depth > maxDepth) {
+            throw CsvException("Nested CSV value depth $depth exceeds maxDepth $maxDepth")
         }
         when (node) {
             is NullNode -> builder.append("null")
@@ -77,7 +78,7 @@ internal object CsvJsonCodec {
                     first = false
                     writeString(entry.key, builder)
                     builder.append(':')
-                    writeNode(entry.value, builder, depth + 1)
+                    writeNode(entry.value, builder, depth + 1, maxDepth)
                 }
                 builder.append('}')
             }
@@ -90,7 +91,7 @@ internal object CsvJsonCodec {
                         builder.append(',')
                     }
                     first = false
-                    writeNode(element, builder, depth + 1)
+                    writeNode(element, builder, depth + 1, maxDepth)
                 }
                 builder.append(']')
             }
@@ -124,7 +125,10 @@ internal object CsvJsonCodec {
     }
 
     /** 递归下降 JSON 解析器。 */
-    private class Parser(private val text: String) {
+    private class Parser(
+        private val text: String,
+        private val maxDepth: Int,
+    ) {
 
         var index: Int = 0
             private set
@@ -138,8 +142,8 @@ internal object CsvJsonCodec {
         }
 
         fun parseValue(depth: Int): Node {
-            if (depth > MAX_DEPTH) {
-                throw fail("nesting exceeds max depth $MAX_DEPTH")
+            if (maxDepth > 0 && depth > maxDepth) {
+                throw fail("nesting exceeds maxDepth $maxDepth")
             }
             skipWhitespace()
             if (atEnd()) {

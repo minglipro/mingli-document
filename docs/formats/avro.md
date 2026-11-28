@@ -521,7 +521,41 @@ val error = runCatching { guarded.parse(bytes, Node::class.java) }.exceptionOrNu
 check(error is AvroParseException)
 ```
 
-### 14. Java 示例
+### 14. Logical type
+
+支持 Apache Avro 常用 logical type：
+
+| logicalType | 读取 Node | 写出 |
+|---|---|---|
+| `date` | `2024-01-02` | ISO 字符串 / epoch days |
+| `time-millis` / `time-micros` | ISO 时间 | ISO / epoch |
+| `timestamp-millis` / `timestamp-micros` | UTC ISO 时间戳 | ISO / epoch |
+| `local-timestamp-*` | 无时区 ISO | ISO / epoch |
+| `decimal` | 保留 scale 的 NumberNode | 数字 / 十进制字符串 |
+| `uuid` | UUID 字符串 | UUID 字符串 |
+| `duration` | `{months,days,millis}` | 对象 / 12 字节 BinaryNode |
+
+示例：
+
+```kotlin
+val schema = Schema.Parser().parse(
+    """
+    {"type":"record","name":"Event","fields":[
+      {"name":"at","type":{"type":"long","logicalType":"timestamp-millis"}},
+      {"name":"id","type":{"type":"string","logicalType":"uuid"}}
+    ]}
+    """.trimIndent(),
+)
+
+val mapper = AvroMapper(schema)
+val bytes = mapper.formatBytes(mapOf("at" to "2024-01-02T03:04:05.123Z", "id" to "550e8400-e29b-41d4-a716-446655440000"))
+val node = mapper.parse(bytes)
+```
+
+未知 logicalType 回退底层 Avro 类型；已知 logicalType 但 schema 结构非法会抛
+`AvroParseException` / `AvroException`。
+
+### 15. Java 示例
 
 ```java
 import com.mingliqiye.document.format.avro.AvroMapper;

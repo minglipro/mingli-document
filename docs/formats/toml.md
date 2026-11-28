@@ -402,6 +402,37 @@ println(mapper.format(node))
 // users = [ { name = "小于" }, { name = "阿明" } ]
 ```
 
+## 深度限制
+
+```kotlin
+val mapper = TomlMapper.builder()
+    .maxDepth(512)
+    .build()
+```
+
+默认 `512`，统计表/数组/内联 table 嵌套；超限抛 `TomlParseException`。
+`TomlReader` / `TomlTokenReader` / `TomlCommentPreservingReader` 也支持 `maxDepth`。
+
+## 注释保留
+
+```kotlin
+val mapper = TomlMapper()
+val document = mapper.parseCommented(source)
+
+document.root // ObjectNode
+document.comments // List<TomlComment>
+document.toTomlString()
+```
+
+写出：
+
+```kotlin
+val text = mapper.formatCommented(document)
+```
+
+注释按表/键路径关联，支持表头注释、键前注释、行尾注释、文件头/尾注释；
+完整模型和孤立注释策略见 `TomlCommentedDocument` / `TomlCommentConfig`。
+
 ## 边界、限制与常见错误
 
 | 场景 | 行为 |

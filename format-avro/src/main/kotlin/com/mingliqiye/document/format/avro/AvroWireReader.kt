@@ -14,6 +14,10 @@ import org.apache.avro.io.DecoderFactory
  * 字节截断、存在尾随字节、Schema 不匹配或无法演进统一抛出 [AvroParseException]；
  * Avro `float`/`double` 的 NaN、Infinity 无法由
  * [com.mingliqiye.document.core.NumberNode] 表达，同样抛出 [AvroParseException]。
+ *
+ * datum → Node 转换按 reader Schema 进行，因此声明在 reader Schema 上的 logical
+ * type（date / time / timestamp / local-timestamp / decimal / uuid / duration）
+ * 会生效，见 [AvroLogicalType] 与 [AvroLogicalValues]。
  */
 internal class AvroWireReader(
     private val writerSchema: Schema,
@@ -26,7 +30,7 @@ internal class AvroWireReader(
      *
      * @param source Avro binary 编码
      * @return 文档树
-     * @throws AvroParseException 字节非法、存在尾随字节或 Schema 不匹配时抛出
+     * @throws AvroParseException 字节非法、存在尾随字节、Schema 不匹配或逻辑类型非法时抛出
      */
     fun read(source: ByteArray): Node {
         val decoder = DecoderFactory.get().binaryDecoder(source, null)
@@ -41,6 +45,6 @@ internal class AvroWireReader(
         } catch (e: Exception) {
             throw AvroParseException("Failed to parse Avro binary data: ${e.message}", e)
         }
-        return AvroDatumConverter.toNode(datum, maxDepth)
+        return AvroDatumConverter.toNode(datum, readerSchema, maxDepth)
     }
 }

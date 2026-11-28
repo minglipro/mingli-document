@@ -45,6 +45,8 @@ import java.util.Base64
  * @param itemsKey 带属性数组的数组字段名，默认 `#items`
  * @param mixedContentPolicy 混合内容策略
  * @param contentKey 有序混合内容的数组字段名，默认 `#content`
+ * @param maxDepth 最大 XML 元素嵌套深度（根元素深度为 `1`），默认
+ *   [XmlConfig.DEFAULT_MAX_DEPTH]；`0` 或负数表示不限制（显式关闭保护）
  */
 public class XmlReader(
     private val source: String,
@@ -55,7 +57,7 @@ public class XmlReader(
     private val itemsKey: String = XmlConfig.DEFAULT_ITEMS_KEY,
     private val mixedContentPolicy: XmlMixedContentPolicy = XmlMixedContentPolicy.PRESERVE,
     private val contentKey: String = XmlConfig.DEFAULT_CONTENT_KEY,
-    private val maxDepth: Int = 0,
+    private val maxDepth: Int = XmlConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     init {
@@ -82,33 +84,13 @@ public class XmlReader(
     /**
      * 解析并返回文档树。
      *
-     * @throws XmlParseException XML 格式非法或混合内容被拒绝时抛出
+     * @throws XmlParseException XML 格式非法、混合内容被拒绝或元素嵌套深度超过
+     *   [maxDepth] 时抛出
      */
     public fun read(): Node {
         val root = XmlDom.parse(source, namespaceAware)
-        checkDepth(root)
+        checkDepth(root, maxDepth)
         return toNode(root)
-    }
-
-    private fun checkDepth(root: Element) {
-        if (maxDepth <= 0) {
-            return
-        }
-        val stack = ArrayDeque<Pair<org.w3c.dom.Node, Int>>()
-        stack.addLast(root to 1)
-        while (stack.isNotEmpty()) {
-            val (current, depth) = stack.removeLast()
-            if (depth > maxDepth) {
-                throw XmlParseException("XML nesting depth $depth exceeds maxDepth $maxDepth")
-            }
-            val children = current.childNodes
-            for (index in 0 until children.length) {
-                val child = children.item(index)
-                if (child.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
-                    stack.addLast(child to depth + 1)
-                }
-            }
-        }
     }
 
     private fun toNode(element: Element): Node {
@@ -389,6 +371,33 @@ public class XmlReader(
         private const val XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/"
 
         /**
+         * 迭代校验 DOM 元素嵌套深度（根元素深度为 `1`），超限抛 [XmlParseException]。
+         *
+         * 使用显式栈而不是递归，保证超深输入不会 StackOverflow；供 [XmlReader] 与
+         * [XmlTokenReader] 共用。[maxDepth] 小于等于 `0` 时不做限制（显式关闭保护）。
+         */
+        internal fun checkDepth(root: Element, maxDepth: Int) {
+            if (maxDepth <= 0) {
+                return
+            }
+            val stack = ArrayDeque<Pair<org.w3c.dom.Node, Int>>()
+            stack.addLast(root to 1)
+            while (stack.isNotEmpty()) {
+                val (current, depth) = stack.removeLast()
+                if (depth > maxDepth) {
+                    throw XmlParseException("XML nesting depth $depth exceeds maxDepth $maxDepth")
+                }
+                val children = current.childNodes
+                for (index in 0 until children.length) {
+                    val child = children.item(index)
+                    if (child.nodeType == org.w3c.dom.Node.ELEMENT_NODE) {
+                        stack.addLast(child to depth + 1)
+                    }
+                }
+            }
+        }
+
+        /**
          * 解析 XML 字符串。
          *
          * @param source XML 文本
@@ -405,7 +414,7 @@ public class XmlReader(
          * @param xmlConfig XML 配置；`null` 时使用默认行为
          * @return XML 读取器
          */
-        internal fun from(source: String, xmlConfig: XmlConfig?, maxDepth: Int = 0): XmlReader = XmlReader(
+        internal fun from(source: String, xmlConfig: XmlConfig?, maxDepth: Int = XmlConfig.DEFAULT_MAX_DEPTH): XmlReader = XmlReader(
             source,
             xmlConfig?.attributePrefix,
             xmlConfig?.namespaceAware == true,

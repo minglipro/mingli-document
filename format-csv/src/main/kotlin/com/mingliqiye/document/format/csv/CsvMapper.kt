@@ -35,6 +35,12 @@ import java.nio.charset.Charset
  *
  * 大文件流式读取使用 [parseStream]：逐行解析并逐条回调，不把整个输入读成 String，
  * 表头、类型推断、嵌套与 Schema 规则与整段解析一致。
+ *
+ * 解析深度限制：默认安全上限 [CsvConfig.DEFAULT_MAX_DEPTH]（512，根数组深度为 `1`、
+ * 行对象为 `2`、单元格标量为 `3`），可用 [CsvConfig.maxDepth] 调整。Tree / Token /
+ * Bean 三条路径都会在超限时抛出
+ * [com.mingliqiye.document.format.csv.exception.CsvParseException]；通用
+ * `maxNodeDepth` 等 Node 限制仍按原语义生效（回退 Node 路径后由 NodeLimits 校验）。
  */
 public open class CsvMapper internal constructor(
     serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
@@ -44,8 +50,8 @@ public open class CsvMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "csv",
-    { source -> parseCsv(source, config) },
-    { node, _ -> writeCsv(node, config) },
+    { source -> parseCsv(source, config, resolveMaxDepth(config)) },
+    { node, _ -> writeCsv(node, config, resolveMaxDepth(config)) },
     serializers,
     deserializers,
     objectInstantiator,
@@ -55,6 +61,7 @@ public open class CsvMapper internal constructor(
 
     private val mapperConfig: DocumentMapperConfig = config
     private val fileCharset: Charset = config.fileCharset
+    private val maxDepth: Int = resolveMaxDepth(config)
 
     /**
      * 创建默认 CSV 映射器。
@@ -98,8 +105,13 @@ public open class CsvMapper internal constructor(
 
     override fun createTextTokenReader(source: String): DocumentTokenReader {
         val csvConfig = mapperConfig as? CsvConfig
-        if (csvConfig?.schema != null || csvConfig?.nestedMode != null) {
-            val node = parseCsv(source, mapperConfig)
+        if (mapperConfig.maxNodeDepth > 0 ||
+            mapperConfig.maxNodeCount > 0 ||
+            mapperConfig.maxStringLength > 0 ||
+            csvConfig?.schema != null ||
+            csvConfig?.nestedMode != null
+        ) {
+            val node = parseCsv(source, mapperConfig, maxDepth)
             validateNodeLimits(node)
             return NodeTokenReader(node)
         }
@@ -107,6 +119,7 @@ public open class CsvMapper internal constructor(
             source,
             csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER,
             csvConfig?.header ?: DEFAULT_CSV_HEADER,
+            maxDepth,
         )
     }
 
@@ -218,6 +231,7 @@ public open class CsvMapper internal constructor(
             header = csvConfig?.header ?: DEFAULT_CSV_HEADER,
             nestedMode = csvConfig?.nestedMode,
             schema = schema,
+            maxDepth = maxDepth,
         )
         var delivered = 0L
         while (maxRows < 0 || delivered < maxRows) {
@@ -239,26 +253,36 @@ public open class CsvMapper internal constructor(
     }
 }
 
-private fun parseCsv(source: String, config: DocumentMapperConfig): Node {
+private fun parseCsv(source: String, config: DocumentMapperConfig, maxDepth: Int): Node {
     val csvConfig = config as? CsvConfig
     val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
     val nestedMode = csvConfig?.nestedMode
     val schema = csvConfig?.schema
     return if (schema != null) {
-        CsvSchemaReader(source, schema, delimiter, nestedMode).read()
+        CsvSchemaReader(source, schema, delimiter, nestedMode, maxDepth).read()
     } else {
-        CsvReader(source, delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode).read()
+        CsvReader(source, delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode, maxDepth).read()
     }
 }
 
-private fun writeCsv(node: Node, config: DocumentMapperConfig): String {
+private fun writeCsv(node: Node, config: DocumentMapperConfig, maxDepth: Int): String {
     val csvConfig = config as? CsvConfig
     val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
     val nestedMode = csvConfig?.nestedMode
     val schema = csvConfig?.schema
     return if (schema != null) {
-        CsvSchemaWriter(schema, delimiter, nestedMode).write(node)
+        CsvSchemaWriter(schema, delimiter, nestedMode, maxDepth).write(node)
     } else {
-        CsvWriter(delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode).write(node)
+        CsvWriter(delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode, maxDepth).write(node)
     }
 }
+
+/**
+ * 计算 CSV 解析最大嵌套深度：配置了 [CsvConfig] 时用其 [CsvConfig.maxDepth]，
+ * 否则使用 [CsvConfig.DEFAULT_MAX_DEPTH]。
+ *
+ * 通用 `DocumentMapperConfig.maxNodeDepth` 不参与该计算：它保持 NodeLimits 语义
+ * （超限抛 [com.mingliqiye.document.serialization.exception.DocumentSerializationException]），
+ * 与格式解析深度是两层独立限制。
+ */
+private fun resolveMaxDepth(config: DocumentMapperConfig): Int = (config as? CsvConfig)?.maxDepth ?: CsvConfig.DEFAULT_MAX_DEPTH

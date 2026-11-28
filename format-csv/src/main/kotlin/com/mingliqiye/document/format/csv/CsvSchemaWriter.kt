@@ -24,11 +24,14 @@ import java.io.StringWriter
  * @param schema CSV Schema
  * @param delimiter 字段分隔符
  * @param nestedMode 嵌套值读写方式；默认 `null` 表示不支持通用嵌套
+ * @param maxDepth 写出时嵌套深度的上限（用于限制 JSON 文本单元格内部嵌套）；
+ *   `0` 或负数表示不限制
  */
 public class CsvSchemaWriter(
     private val schema: CsvSchema,
     private val delimiter: Char = DEFAULT_CSV_DELIMITER,
     private val nestedMode: CsvNestedMode? = null,
+    private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
 ) {
 
     /**
@@ -88,7 +91,7 @@ public class CsvSchemaWriter(
             }
         }
         val values = ArrayList<String>(schema.columnNames.size)
-        appendObjectCells(schema, row, present = true, values)
+        appendObjectCells(schema, row, present = true, values, depth = 0)
         return values
     }
 
@@ -99,18 +102,20 @@ public class CsvSchemaWriter(
      * @param source 当前层对象节点；`null` 表示父对象缺席
      * @param present 当前层对象是否真实存在，false 时跳过必填校验
      * @param values 输出单元格列表
+     * @param depth 当前对象相对行对象的嵌套层数（行对象为 `0`）
      */
     private fun appendObjectCells(
         schema: CsvSchema,
         source: ObjectNode?,
         present: Boolean,
         values: MutableList<String>,
+        depth: Int,
     ) {
         for (field in schema.fields) {
             val value = if (source == null) null else source[field.name]
             val nested = schema.nestedObjects[field.name]
             if (nested == null) {
-                values.add(cellOf(schema, field, value, present))
+                values.add(cellOf(schema, field, value, present, depth))
                 continue
             }
             when {
@@ -122,7 +127,7 @@ public class CsvSchemaWriter(
                 }
 
                 value is NullNode -> appendEmptyCells(nested, values)
-                value is ObjectNode -> appendObjectCells(nested, value, present = true, values)
+                value is ObjectNode -> appendObjectCells(nested, value, present = true, values, depth = depth + 1)
                 else -> throw CsvException(
                     "CSV column '${field.name}' must be an object but was ${value.type} for schema '${schema.name}'",
                 )
@@ -141,6 +146,7 @@ public class CsvSchemaWriter(
         field: SchemaField,
         value: Node?,
         present: Boolean,
+        depth: Int,
     ): String {
         if (value == null) {
             if (present && field.required) {
@@ -152,11 +158,17 @@ public class CsvSchemaWriter(
             return ""
         }
         return when (field.type) {
-            SchemaType.OBJECT -> jsonObjectCell(schema, field, value)
-            SchemaType.ARRAY -> jsonArrayCell(schema, field, value)
+            SchemaType.OBJECT -> jsonObjectCell(schema, field, value, cellNestingLimit(depth))
+            SchemaType.ARRAY -> jsonArrayCell(schema, field, value, cellNestingLimit(depth))
             else -> scalarCell(schema, field, value)
         }
     }
+
+    /**
+     * JSON 单元格相对嵌套上限：单元格根在整体树中深度为 `3 + depth`，可用相对深度为
+     * `maxDepth - 2 - depth`；`0` 或负数表示不限制。
+     */
+    private fun cellNestingLimit(depth: Int): Int = if (maxDepth > 0) maxDepth - 2 - depth else 0
 
     private fun scalarCell(schema: CsvSchema, field: SchemaField, value: Node): String = try {
         CsvCells.textOf(value)
@@ -167,17 +179,17 @@ public class CsvSchemaWriter(
         )
     }
 
-    private fun jsonObjectCell(schema: CsvSchema, field: SchemaField, value: Node): String {
+    private fun jsonObjectCell(schema: CsvSchema, field: SchemaField, value: Node, cellLimit: Int): String {
         if (nestedMode != CsvNestedMode.JSON) {
             throw unsupportedNested(schema, field, SchemaType.OBJECT)
         }
         val objectNode = value.asObjectOrNull() ?: throw CsvException(
             "CSV column '${field.name}' must be an object but was ${value.type} for schema '${schema.name}'",
         )
-        return CsvJsonCodec.write(objectNode)
+        return CsvJsonCodec.write(objectNode, cellLimit)
     }
 
-    private fun jsonArrayCell(schema: CsvSchema, field: SchemaField, value: Node): String {
+    private fun jsonArrayCell(schema: CsvSchema, field: SchemaField, value: Node, cellLimit: Int): String {
         val element = schema.nestedArrays[field.name]
         if (element == null && nestedMode != CsvNestedMode.JSON) {
             throw unsupportedNested(schema, field, SchemaType.ARRAY)
@@ -186,7 +198,12 @@ public class CsvSchemaWriter(
             "CSV column '${field.name}' must be an array but was ${value.type} for schema '${schema.name}'",
         )
         if (element == null) {
-            return CsvJsonCodec.write(array)
+            return CsvJsonCodec.write(array, cellLimit)
+        }
+        if (maxDepth > 0 && cellLimit < 2) {
+            throw CsvException(
+                "CSV column '${field.name}' array element depth exceeds maxDepth $maxDepth for schema '${schema.name}'",
+            )
         }
         val elements = ArrayList<Node>(array.size)
         for (index in 0 until array.size) {
@@ -196,7 +213,7 @@ public class CsvSchemaWriter(
                 },
             )
         }
-        return CsvJsonCodec.write(ArrayNode.from(elements))
+        return CsvJsonCodec.write(ArrayNode.from(elements), cellLimit)
     }
 
     private fun unsupportedNested(schema: CsvSchema, field: SchemaField, type: SchemaType): CsvException {
@@ -221,6 +238,8 @@ public class CsvSchemaWriter(
  * @param schema CSV Schema
  * @param delimiter 字段分隔符
  * @param nestedMode 嵌套值读写方式
+ * @param maxDepth 写出时 JSON 文本单元格内允许的最大嵌套深度，默认
+ *   [CsvConfig.DEFAULT_MAX_DEPTH]
  * @return CSV 文本
  * @throws CsvException 根节点类型错误、缺少必填列、存在未声明列或单元格不是标量时抛出
  */
@@ -228,4 +247,5 @@ public fun Node.toCsvString(
     schema: CsvSchema,
     delimiter: Char = DEFAULT_CSV_DELIMITER,
     nestedMode: CsvNestedMode? = null,
-): String = CsvSchemaWriter(schema, delimiter, nestedMode).write(this)
+    maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+): String = CsvSchemaWriter(schema, delimiter, nestedMode, maxDepth).write(this)

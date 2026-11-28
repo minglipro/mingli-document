@@ -15,6 +15,10 @@ TomlMapper / TomlMapperBuilder        Bean <-> TOML 映射
 TomlReader / TomlWriter               文档树 <-> TOML 文本
 TomlTokenReader                       原生 Token 读取
 
+TomlMapper.DEFAULT_MAX_DEPTH          默认解析深度上限（512）
+TomlMapper.parseCommented             读取保留注释的文档（便捷入口）
+TomlMapper.formatCommented            写出保留注释的文档（便捷入口）
+
 TomlCommentPreservingReader           保留注释读取
 TomlCommentPreservingWriter           保留注释写出
 TomlCommentedDocument                 文档树 + 注释 + 空行 + 表结构
@@ -39,11 +43,66 @@ val user = mapper.parse(toml, User::class.java)
 val text = mapper.format(user)
 ```
 
+## 深度限制（maxDepth）
+
+默认解析上限为 512 层（根表深度为 `1`），防止超深数组/内联 table 耗尽调用栈：
+
+```kotlin
+import com.mingliqiye.document.format.toml.TomlMapper
+
+// 默认 TomlMapper.DEFAULT_MAX_DEPTH = 512
+val strict = TomlMapper.builder().maxDepth(64).build()
+
+// 构造器显式指定
+val custom = TomlMapper(config, maxDepth = 64)
+
+// 独立读取器 / 注释保留读取器
+val node = com.mingliqiye.document.format.toml.TomlReader(source, maxDepth = 64).read()
+val document = com.mingliqiye.document.format.toml.TomlCommentPreservingReader(source, maxDepth = 64).read()
+```
+
+- 解析前先做词法预扫描拒绝超深数组/内联 table，解析后再对结果树做迭代深度校验，
+  超限统一抛 `com.mingliqiye.document.format.toml.exception.TomlParseException`，
+  不会 `StackOverflowError`；
+- Tree / Token / Bean 三条解析路径以及 `parseCommented` 都生效；
+- 通用 `DocumentMapperConfig.maxNodeDepth` 保持 Node 限制语义：超限抛
+  `com.mingliqiye.document.serialization.exception.DocumentSerializationException`；
+- `TomlReader` / `TomlTokenReader` / `TomlCommentPreservingReader` 的 `maxDepth`
+  显式传 `0` 或负数表示关闭保护。
+
 ## 注释保留
 
 tomlj 的解析结果只有表/值、不含注释，因此本模块用独立的行扫描器读取注释与空行，
 再用独立的写出器把注释按关联位置放回。该能力与现有的 `TomlReader` / `TomlWriter` /
 `TomlMapper` 完全独立，不改变它们的行为。
+
+从 `TomlMapper` 直接使用（推荐，解析深度沿用 Mapper 配置）：
+
+```kotlin
+import com.mingliqiye.document.format.toml.TomlCommentConfig
+import com.mingliqiye.document.format.toml.TomlMapper
+
+val mapper = TomlMapper.builder().maxDepth(64).build()
+
+// 读取：文档树 + 注释 + 空行 + 表结构
+val document = mapper.parseCommented(source)
+println(document.comments.first().kind)
+
+// 写出：可按注释配置调整孤立注释/空行策略
+val text = mapper.formatCommented(document, TomlCommentConfig.builder().build())
+```
+
+等价的独立 API：
+
+```kotlin
+import com.mingliqiye.document.format.toml.TomlCommentPreservingReader
+import com.mingliqiye.document.format.toml.TomlCommentPreservingWriter
+import com.mingliqiye.document.format.toml.toTomlCommentedDocument
+
+val document = TomlCommentPreservingReader.parse(source)
+val same = source.toTomlCommentedDocument()
+val text = TomlCommentPreservingWriter().write(document)
+```
 
 ```kotlin
 import com.mingliqiye.document.core.ObjectNode
@@ -166,7 +225,8 @@ val text = document.toTomlString(config)
 - 文件/流读写
 - Token 直读 Bean
 - 原生 TOML Token Reader
-- 注释/空行保留 round-trip（独立 API）
+- 解析深度限制（默认 512，可配置，含词法预扫描保护）
+- 注释/空行保留 round-trip（独立 API + Mapper 便捷入口）
 
 ## 限制
 
@@ -176,7 +236,10 @@ val text = document.toTomlString(config)
 - TOML 没有 null 类型
 - 根节点固定为对象
 - tomlj 1.0.0 只支持 TOML 0.5：数组元素必须同类型；且无法回读内联 table/数组中的空数组
-- `TomlMapper` 的 Bean 映射不保留注释：注释保留 API 独立于 Mapper 使用
+- `TomlMapper` 的 Bean 映射不保留注释：注释保留 API 独立于 Mapper 使用；
+  `parseCommented` / `formatCommented` 只是便捷入口，不改变 Bean 映射语义
+- 显式把 `maxDepth` 设为 `0` 或负数会关闭保护，此时超深输入可能由 tomlj 内部
+  栈溢出降级为受控的 `TomlParseException`（不保证与显式上限同样的深度定位）
 
 注释保留：
 

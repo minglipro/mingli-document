@@ -416,6 +416,17 @@ val bytes = gbkMapper.formatBytes(user)               // GBK 编码
 val restored = gbkMapper.parse(bytes, User::class.java)
 ```
 
+## 深度限制
+
+```kotlin
+val mapper = PropertiesMapper.builder()
+    .maxDepth(512)
+    .build()
+```
+
+默认 `512`，按 key 路径段数计算；超过限制抛 `PropertiesParseException`。
+`PropertiesReader` / `PropertiesTokenReader` 也支持直接传入 `maxDepth`。
+
 ## 边界、限制与常见错误
 
 | 场景 | 行为 |

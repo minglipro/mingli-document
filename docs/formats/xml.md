@@ -570,6 +570,19 @@ val node = mapper.parse(
 println(node.asObject()["@xmlns"]?.asString())   // urn:default
 ```
 
+## 深度限制
+
+```kotlin
+val mapper = XmlMapper(
+    XmlConfig.builder()
+        .maxDepth(512)
+        .build(),
+)
+```
+
+默认 `512`；超过限制抛 `XmlParseException`，Node/Token/Bean 路径都生效。
+显式传 `0` 表示关闭保护（不推荐）。
+
 ## 边界、限制与常见错误
 
 | 场景 | 行为 |

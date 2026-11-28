@@ -14,6 +14,7 @@ public class CsvConfigBuilder {
     private var header: Boolean = DEFAULT_CSV_HEADER
     private var schema: CsvSchema? = null
     private var nestedMode: CsvNestedMode? = null
+    private var maxDepth = CsvConfig.DEFAULT_MAX_DEPTH
 
     /**
      * 为指定字段绑定转换器。
@@ -103,6 +104,23 @@ public class CsvConfigBuilder {
     }
 
     /**
+     * 设置解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]（512）。
+     *
+     * 根数组深度为 `1`、行对象为 `2`、单元格标量为 `3`；点分列名/嵌套 Schema 每多一层
+     * 加 `1`，JSON 文本单元格内部嵌套从 `3` 起算。超限抛
+     * [com.mingliqiye.document.format.csv.exception.CsvParseException]。
+     *
+     * @param maxDepth 最大嵌套深度，必须为正数
+     * @return 当前构建器
+     * @throws IllegalArgumentException `maxDepth` 小于等于 0 时抛出
+     */
+    public fun maxDepth(maxDepth: Int): CsvConfigBuilder {
+        require(maxDepth > 0) { "maxDepth must be positive, but was $maxDepth" }
+        this.maxDepth = maxDepth
+        return this
+    }
+
+    /**
      * 注册多态子类型。
      *
      * @param baseClass 基类/接口
@@ -166,5 +184,5 @@ public class CsvConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema, nestedMode)
+    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema, nestedMode, maxDepth)
 }
