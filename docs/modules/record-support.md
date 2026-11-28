@@ -17,7 +17,7 @@ record 映射。
 ## 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document:record-support:2.5.0") // 2.5.0 起提供（未发布）
+implementation("com.mingliqiye.document:record-support:2.5.0") // JDK 17+
 ```
 
 - group：`com.mingliqiye.document`；artifactId：`record-support`；
@@ -101,5 +101,4 @@ gradle :record-support:ktlintFormat
 ```
 
 相关文档：[serialization](./serialization.md) ·
-[serialization README](../../serialization/README.md) ·
-[record-support README](../../record-support/README.md)
+[serialization 模块](./serialization.md) · [record-support 模块](./record-support.md)

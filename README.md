@@ -616,10 +616,10 @@ gradle publish
 - Java record：需要 JDK 17+ 运行时 + `record-support` 模块；未引入时按普通 Bean 处理
 - JPMS：全部 26 个可发布模块提供 Multi-Release 显式 `module-info`（JDK 9+），没有本库的
   自动模块；主 classes 仍是 JDK 8 字节码（`record-support` 为 JDK 17 字节码，仅 JDK 17+），
-  JDK 8 按 classpath 使用；`record-support` / `codegen` 通过 `provides` 声明服务；`jlink`
-  仍受第三方自动模块（`mingli.exception`、`alias-for`、KSP API 等）限制，目前仅 `annotation`
-  可用；`jpa` / `jpa-hibernate` 走 module path 需要 JDK 11+；`format-json` 在 module path
-  上写 `Double` 需要 `--add-exports`。详见 [docs/guide/jpms.md](docs/guide/jpms.md)
+  JDK 8 按 classpath 使用；`record-support` / `codegen` 通过 `provides` 声明服务；`format-json` 依赖链已支持
+  `jlink`（`:format-json:jlinkImage`），其余模块仍受第三方自动模块限制；
+  `jpa` / `jpa-hibernate` 走 module path 需要 JDK 11+；`format-json` 写 `Double` 在
+  module path 上不需要 `--add-exports`。详见 [docs/guide/jpms.md](docs/guide/jpms.md)
 - 文本 Token Reader：YAML/XML/Properties/TOML/CSV 通过 `NodeTokenReader` 适配
 - CSV 只支持平坦表格
 - TOML 日期时间映射为字符串

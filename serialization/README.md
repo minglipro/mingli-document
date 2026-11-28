@@ -588,7 +588,7 @@ public record User(
 
 ```kotlin
 // 依赖：serialization（或任一格式模块）+ record-support，运行在 JDK 17+
-implementation("com.mingliqiye.document:record-support:2.5.0") // 2.5.0 未发布
+implementation("com.mingliqiye.document:record-support:2.5.0") // JDK 17+
 
 val node = mapper.toNode(User("小于", 18, Address("杭州", 310000)))
 // {"display_name":"小于","age":18,"address":{"city":"杭州","zipCode":310000}}

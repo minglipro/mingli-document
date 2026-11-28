@@ -15,7 +15,7 @@ Java record 支持模块（JDK 17+）。
 ## Maven
 
 ```kotlin
-// 2.5.0 起提供（未发布）
+// JDK 17+
 implementation("com.mingliqiye.document:record-support:2.5.0")
 ```
 

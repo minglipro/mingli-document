@@ -346,7 +346,7 @@ record 组件访问器是 `name()` 而不是 `getName()`。引入可选的 `reco
 Mapper 会自动识别 record 组件：
 
 ```kotlin
-// 依赖（2.5.0 未发布）：serialization（或任一格式模块）+ record-support
+// 依赖：serialization（或任一格式模块）+ record-support（JDK 17+）
 implementation("com.mingliqiye.document:record-support:2.5.0")
 ```
 
@@ -378,7 +378,7 @@ val user = mapper.fromNode(node, User::class.java)
 - `@DocumentIgnore` 的组件既不写出，也不从文档读取。
 
 详见 [record-support 模块](../modules/record-support.md) 与
-[record-support README](../../record-support/README.md)。
+[record-support 模块](../modules/record-support.md)。
 
 ## 只读属性
 

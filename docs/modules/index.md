@@ -25,7 +25,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 当前版本 | `2.5.0`（根 `gradle.properties` 的 `projectVersion`）；`record-support` 为 `2.5.0` 新增（未发布） |
+| 当前版本 | `2.5.0`（根 `gradle.properties` 的 `projectVersion`）；`record-support` 为 2.5.0 新增 |
 | 目标字节码 | JDK 8（`jvmVersion=8`）；`record-support` 为 JDK 17 |
 | 构建 Kotlin | 2.5.0（根 `build.gradle.kts`） |
 | KSP | `2.0.0-1.0.21`（仅 `codegen` 与使用方需要） |

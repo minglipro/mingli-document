@@ -2,13 +2,13 @@
 
 本页是 `CHANGELOG.md` 的站点版，记录 `mingli-document` 各版本的公开能力变化。
 当前文档对应 `2.5.0`；最新条目之后的 `dev` 分支提交见文末
-[未发布的 dev 变更](#未发布的-dev-变更)。
+[后续 dev 变更](#后续-dev-变更)。
 
 ## 版本速览
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
-| `2.5.0`（未发布） | record 支持独立模块、JPA 剩余映射细节 | `record-support` 模块、`JavaRecordSupport` SPI、record 测试迁移、JPA `@Convert(attributeName)`/关系转换/实体 Map 键、Hibernate 复合主键引用解析 |
+| `2.5.0` | record 支持独立模块、JPA 剩余映射细节 | `record-support` 模块、`JavaRecordSupport` SPI、record 测试迁移、JPA `@Convert(attributeName)`/关系转换/实体 Map 键、Hibernate 复合主键引用解析 |
 | `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info、对象映射便捷 API |
 | `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
 | `2.2.0` | 数据库与扩展 | `jdbc`、`schema-registry`、`validation`、TOML 注释保留、JPMS 自动模块名 |
@@ -286,9 +286,9 @@
 - Maven BOM
 - GPG 签名发布
 
-## 未发布的 dev 变更
+## 后续 dev 变更
 
-`2.4.0` 发布之后 `dev` 分支的未发布变更统一记入上方的「2.5.0（未发布）」小节
+`2.5.0` 发布之后 `dev` 分支的新变更统一记入本小节
 （核心是 `record-support` 模块与 `JavaRecordSupport` SPI）。
 
 `2.4.0` 之前 dev 分支的流式写出、Protobuf Descriptor 等提交已随 2.4.0 发布归档，
@@ -345,7 +345,7 @@
 ## 文档来源
 
 - 本页内容整理自仓库根目录 `CHANGELOG.md`；
-- `dev` 未发布变更整理自 `git log`（2.4.0 发布后进入 2.5.0 开发）；
+- `dev` 变更整理自 `git log`（2.5.0 发布后继续开发）；
 - 迁移细节整理自根目录 `MIGRATION.md`；
 - 版本号以根 `gradle.properties` 的 `projectVersion` 为准。
 

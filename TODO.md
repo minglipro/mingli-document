@@ -16,7 +16,7 @@
 - 对象映射便捷 API
 - reified 扩展迁移到 serialization-kotlin
 
-## 已完成（2.5.0 未发布）
+## 已完成（2.5.0）
 
 - Java record 支持独立为 `record-support` 模块（JDK 17+）：`JavaRecordSupport` SPI +
   `ServiceLoader`，JDK 8-15 / 无 provider 时安全降级

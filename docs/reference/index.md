@@ -4,7 +4,7 @@
 变更与路线图。与「模块」章节的区别是：模块章节按模块讲职责与用法，参考章节按**主题**
 做全库索引，方便查签名、查行为、查异常。
 
-- 文档对应版本：`2.5.0`（`2.5.0` 开发中，新增 `record-support`）
+- 文档对应版本：`2.5.0`（新增 `record-support`）
 - 源码基线：`dev` 分支（文档编写时的仓库状态；`gradle.properties` 中
   `projectVersion=2.5.0`）
 - 目标平台：JDK 8+（Java record 支持需要 JDK 17+ 运行时 + `record-support` 模块）

@@ -262,7 +262,7 @@
 
 ---
 
-## dev 开发状态（未发布）
+## dev 开发状态
 
 - JPMS：全部 26 个可发布模块（含本批 `serialization-kotlin` / `record-support` / `codegen` /
   `codegen-test` / `openapi`）为 Multi-Release JAR，JDK 9+ 使用显式 `module-info`，不再有

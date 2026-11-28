@@ -5,7 +5,7 @@
 多态、构造器/Builder 实例化、合并、`$ref`、Token 与流式读写、安全限制等能力。
 
 - 坐标：`com.mingliqiye.document:serialization`
-- 当前版本：`2.5.0`（`2.5.0` 开发中）
+- 当前版本：`2.5.0`
 - 包名：`com.mingliqiye.document.serialization`
 - 目标字节码：JDK 8
 - 公开依赖：`core`、`exception`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3`；Java record 额外依赖可选模块 `record-support`（JDK 17+，2.5.0 起）
