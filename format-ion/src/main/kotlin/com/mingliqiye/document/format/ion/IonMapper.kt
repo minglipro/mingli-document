@@ -5,8 +5,10 @@ import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
+import com.mingliqiye.document.serialization.DocumentTokenWriter
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
+import java.io.OutputStream
 
 /**
  * Ion 文档映射器。
@@ -46,6 +48,7 @@ public open class IonMapper internal constructor(
 ) {
 
     private val preserveTypes: Boolean = config.ionPreserveTypes
+    private val mapperConfig: DocumentMapperConfig = config
 
     /**
      * 创建默认 Ion 映射器。
@@ -103,6 +106,8 @@ public open class IonMapper internal constructor(
     } else {
         IonTokenReader(source)
     }
+
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter = IonTextTokenWriter(output, pretty, mapperConfig.fileCharset)
 
     public companion object {
 

@@ -26,6 +26,7 @@ private val NULL_BYTES = "null".toByteArray(Charsets.US_ASCII)
  */
 internal class JsonUtf8StreamWriter(
     private val output: OutputStream = ByteArrayOutputStream(32 * 1024),
+    private val pretty: Boolean = false,
 ) : DocumentTokenWriter {
 
     private val buffer = output as? ByteArrayOutputStream
@@ -87,7 +88,12 @@ internal class JsonUtf8StreamWriter(
     }
 
     override fun endObject() {
-        pop()
+        val index = depth - 1
+        val empty = firstElements[index]
+        depth--
+        if (pretty && !empty) {
+            newlineAndIndent()
+        }
         output.write('}'.code)
         expectingValue = false
     }
@@ -99,7 +105,12 @@ internal class JsonUtf8StreamWriter(
     }
 
     override fun endArray() {
-        pop()
+        val index = depth - 1
+        val empty = firstElements[index]
+        depth--
+        if (pretty && !empty) {
+            newlineAndIndent()
+        }
         output.write(']'.code)
         expectingValue = false
     }
@@ -109,9 +120,15 @@ internal class JsonUtf8StreamWriter(
         if (!firstElements[index]) {
             output.write(','.code)
         }
+        if (pretty) {
+            newlineAndIndent()
+        }
         firstElements[index] = false
         appendString(name)
         output.write(':'.code)
+        if (pretty) {
+            output.write(' '.code)
+        }
         expectingValue = true
     }
 
@@ -154,7 +171,18 @@ internal class JsonUtf8StreamWriter(
         if (!firstElements[index]) {
             output.write(','.code)
         }
+        if (pretty) {
+            newlineAndIndent()
+        }
         firstElements[index] = false
+    }
+
+    private fun newlineAndIndent() {
+        output.write('\n'.code)
+        var count = depth * 2
+        while (count-- > 0) {
+            output.write(' '.code)
+        }
     }
 
     private fun push() {

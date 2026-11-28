@@ -85,7 +85,7 @@ public open class JsonMapper internal constructor(
 
     override fun prettyOutputEnabled(): Boolean = prettyOutput
 
-    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty) null else JsonUtf8StreamWriter(output)
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter = JsonUtf8StreamWriter(output, pretty)
 
     /**
      * 将任意值序列化为 UTF-8 编码的 JSON 字节数组。

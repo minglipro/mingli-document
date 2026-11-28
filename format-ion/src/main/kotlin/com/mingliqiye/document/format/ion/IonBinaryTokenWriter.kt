@@ -5,6 +5,8 @@ import com.amazon.ion.IonType
 import com.amazon.ion.system.IonSystemBuilder
 import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.io.ByteArrayOutputStream
+import java.io.FilterOutputStream
+import java.io.OutputStream
 
 /**
  * 基于 ion-java 二进制写出器的流式 Token 写出器。
@@ -16,10 +18,18 @@ import java.io.ByteArrayOutputStream
  * 数字复用 [writeIonNumber] 规则（int / decimal）；[writeBinary] 写出为
  * Ion blob。输出以 `$ion_1_0` 二进制版本标记开头。
  */
-internal class IonBinaryTokenWriter : DocumentTokenWriter {
+internal class IonBinaryTokenWriter(
+    target: OutputStream = ByteArrayOutputStream(),
+) : DocumentTokenWriter {
 
-    private val output = ByteArrayOutputStream()
-    private val writer = ION_SYSTEM.newBinaryWriter(output)
+    private val output = target as? ByteArrayOutputStream
+    private val writer = ION_SYSTEM.newBinaryWriter(
+        object : FilterOutputStream(target) {
+            override fun close() {
+                flush()
+            }
+        },
+    )
     private var closed = false
 
     override fun startObject() {
@@ -80,7 +90,12 @@ internal class IonBinaryTokenWriter : DocumentTokenWriter {
      */
     fun toByteArray(): ByteArray {
         close()
-        return output.toByteArray()
+        return output?.toByteArray()
+            ?: throw IllegalStateException("toByteArray is only available for the in-memory constructor")
+    }
+
+    override fun flush() {
+        close()
     }
 
     private companion object {

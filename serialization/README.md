@@ -408,8 +408,7 @@ gradle :serialization:recordTest
 
 ```text
 format(value, OutputStream) 会优先通过 DocumentTokenWriter 直接写出
-当前实现：JSON（紧凑）、CBOR（默认模式）、Smile
-其他格式或 pretty 输出会回退到先构造 String/ByteArray
+当前实现：JSON（紧凑/pretty）、Ion 文本（紧凑/pretty）、CBOR（默认模式）、Smile
+其他格式或暂不支持的组合会回退到先构造 String/ByteArray
 OutputStream/Writer 由调用方关闭；本库只 flush
 ```
-'
