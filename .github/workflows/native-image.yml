@@ -1,0 +1,75 @@
+name: native-image
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'graalvm/**'
+      - 'format-json/**'
+      - 'serialization/**'
+      - 'record-support/**'
+      - 'core/**'
+      - 'annotation/**'
+      - 'exception/**'
+      - '.github/workflows/native-image.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: native-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          cache: gradle
+
+      - name: Build classpath
+        run: |
+          set -euo pipefail
+          ./gradlew -q printNativeSmokeClasspath --console=plain --no-daemon | tail -n 1 > native-smoke.cp
+          test -s native-smoke.cp
+          mkdir -p graalvm/native-smoke/build/classes
+          cp -R graalvm/native-smoke/META-INF graalvm/native-smoke/build/classes/
+          javac -encoding UTF-8 --release 17 \
+            -cp "$(cat native-smoke.cp)" \
+            -d graalvm/native-smoke/build/classes \
+            graalvm/native-smoke/NativeSmoke.java
+
+      - name: Build native image
+        run: |
+          set -euo pipefail
+          CLASS_PATH="graalvm/native-smoke/build/classes:$(cat native-smoke.cp)"
+          native-image \
+            -cp "$CLASS_PATH" \
+            -H:Name=graalvm/native-smoke/build/native-smoke \
+            --no-fallback \
+            -H:+ReportExceptionStackTraces \
+            com.mingliqiye.document.graalvm.smoke.NativeSmoke
+
+      - name: Run native smoke
+        run: |
+          set -euo pipefail
+          OUTPUT="$(graalvm/native-smoke/build/native-smoke)"
+          printf '%s\n' "$OUTPUT"
+          printf '%s\n' "$OUTPUT" | grep -q 'SMOKE OK'
+
+      - name: Upload native smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-smoke
+          path: |
+            graalvm/native-smoke/build/native-smoke
+            graalvm/native-smoke/build/classes/META-INF
+          if-no-files-found: ignore

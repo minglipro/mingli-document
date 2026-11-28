@@ -317,6 +317,7 @@
 - JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
   `@MapKeyJoinColumn` 实体 Map 键（含 `@EmbeddedId`/`@IdClass` 复合主键文本）、
   jpa-hibernate 复合主键关联引用解析；classpath 扫描评估为不实现（保持显式注册）
+- native-image CI：`.github/workflows/native-image.yml`（GraalVM JDK 21 / Linux runner）
 - `format-json` 增加 `:format-json:jlinkImage`；`alias-for` 1.0.5 与
   `mingli-exception` 1.1.2-Final 提供显式模块，JSON 依赖链可 jlink
 - 全量构建 1630 tests 通过

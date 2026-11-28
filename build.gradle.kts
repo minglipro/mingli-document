@@ -4,6 +4,7 @@ import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.plugins.signing.SigningExtension
@@ -303,6 +304,28 @@ tasks.register("buildAll") {
     group = "build"
     description = "Builds all subprojects."
     dependsOn(subprojects.map { "${it.path}:build" })
+}
+
+tasks.register("printNativeSmokeClasspath") {
+    group = "verification"
+    description = "Prints the runtime classpath used by the native-image smoke build."
+    dependsOn(":format-json:jar", ":record-support:jar")
+    doLast {
+        val formatJson = project(":format-json")
+        val runtimeJars = formatJson.configurations.getByName("runtimeClasspath").incoming.artifactView {
+            attributes {
+                attribute(
+                    LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                    objects.named(LibraryElements::class.java, LibraryElements.JAR),
+                )
+            }
+        }.files
+        val jars = LinkedHashSet<File>()
+        jars.addAll(runtimeJars.files.filter { it.extension == "jar" })
+        jars.add(formatJson.tasks.named<Jar>("jar").get().archiveFile.get().asFile)
+        jars.add(project(":record-support").tasks.named<Jar>("jar").get().archiveFile.get().asFile)
+        println(jars.joinToString(File.pathSeparator) { it.absolutePath })
+    }
 }
 
 tasks.register("generateChecksums") {

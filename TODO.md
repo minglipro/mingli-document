@@ -30,6 +30,7 @@
 - JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
   `@MapKeyJoinColumn` 实体 Map 键（含复合主键标识符文本）、jpa-hibernate
   `fromNode` 关联引用解析支持 `@EmbeddedId`/`@IdClass` 复合主键
+- native-image CI：`.github/workflows/native-image.yml`（GraalVM JDK21 / Linux）
 
 ## 已放弃
 
@@ -40,4 +41,4 @@
 
 ## 保留待办
 
-- [ ] native-image 构建接入 CI
+- [ ] 2.5.0 发布

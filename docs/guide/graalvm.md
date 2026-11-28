@@ -88,10 +88,27 @@ native ：GraalVM JDK 21 + VS BuildTools + Windows SDK 通过
 输出   ：SMOKE OK
 ```
 
+## CI
+
+native-image 构建已接入 GitHub Actions：
+
+```text
+.github/workflows/native-image.yml
+```
+
+CI 使用 GraalVM JDK 21，在 Ubuntu runner 上完成：
+
+```text
+编译 NativeSmoke
+native-image 构建
+运行并断言 SMOKE OK
+上传产物
+```
+
 ## 限制
 
 ```text
-CI 中尚未接入 native-image 构建
+Windows 本地构建需要 Visual Studio C++ Build Tools + Windows SDK
 Kotlin reflect / validation / Jakarta Provider 需要额外配置
 字符集/Locale/时区默认裁剪
 ```

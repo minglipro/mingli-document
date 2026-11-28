@@ -124,6 +124,7 @@
   JDK 17 字节码并提供 `provides JavaRecordSupport`，`codegen` 通过 `provides` 声明 KSP
   处理器，见 [JPMS 指南](../guide/jpms.md)）
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
+- [x] native-image CI（GitHub Actions，GraalVM JDK 21 / Linux）
 
 > 已放弃：Gitea CI、Maven Central 发布。
 > 未完成项：第三方自动模块的显式模块化（Avro / Ion / TOML / Protobuf / commons-csv /
