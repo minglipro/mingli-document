@@ -269,8 +269,8 @@
   本库自动模块；JDK 8 字节码、classpath 用法与自动模块名保持不变。`record-support` 为
   JDK 17 字节码并通过 `provides JavaRecordSupport` 提供 record 支持；`codegen` 通过
   `provides SymbolProcessorProvider` 声明 KSP 处理器（依赖自动模块
-  `symbol.processing.api`）。`format-json` 写 `Double` 在 module path 上需要
-  `--add-exports`（jackson-core 内部包），详见 [docs/guide/jpms.md](docs/guide/jpms.md)
+  `symbol.processing.api`）。`format-json` 写 `Double` 使用 JDK `Double.toString`，
+  module path 与 classpath 都不需要 `--add-exports`。
 
 ---
 

@@ -11,8 +11,8 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 > JDK 8 仍然只看到原来的 JDK 8 字节码（class file 52），完全按 classpath 使用。
 > 其中 `record-support` 是 JDK 17 字节码（class file 61）的可选增强模块，只在 JDK 17+
 > 运行期使用（record 映射依赖它）；`record-support` / `codegen` 还通过 `provides` 声明了
-> `JavaRecordSupport` 服务与 KSP 处理器。已知限制：`format-json` 写 `Double` 时引用了
-> jackson-core 未导出的内部包，module path 上需要消费方加 `--add-exports`，详见[限制](#限制)。**
+> `JavaRecordSupport` 服务与 KSP 处理器。`format-json` 已改用 JDK `Double.toString`，
+> module path 上写 `Double` 不再需要 `--add-exports`。**
 
 >
 > 版本基线：`gradle.properties` 的 `projectVersion=2.4.0`、`jvmVersion=8`。主 classes 仍由
@@ -165,7 +165,7 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
 | `com.mingliqiye.document.format.cbor` | `.format.cbor`、`.format.cbor.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.fasterxml.jackson.core`、`com.fasterxml.jackson.databind`、`com.fasterxml.jackson.dataformat.cbor` |
 | `com.mingliqiye.document.format.csv` | `.format.csv`、`.format.csv.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.schema`、`transitive com.mingliqiye.document.serialization`、`org.apache.commons.csv`（自动模块） |
 | `com.mingliqiye.document.format.ion` | `.format.ion`、`.format.ion.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.amazon.ion`（自动模块） |
-| `com.mingliqiye.document.format.json` | `.format.json`、`.format.json.exception`、`.format.json.schema` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.fasterxml.jackson.core` |
+| `com.mingliqiye.document.format.json` | `.format.json`、`.format.json.exception`、`.format.json.schema` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`（无第三方依赖） |
 | `com.mingliqiye.document.format.properties` | `.format.properties`、`.format.properties.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`（无第三方依赖） |
 | `com.mingliqiye.document.format.protobuf` | `.format.protobuf`、`.format.protobuf.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.schema`、`transitive com.mingliqiye.document.serialization`、`com.google.protobuf`（自动模块） |
 | `com.mingliqiye.document.format.smile` | `.format.smile`、`.format.smile.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.fasterxml.jackson.core`、`com.fasterxml.jackson.dataformat.smile` |
@@ -238,15 +238,8 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
   `org.w3c.dom`、`org.xml.sax` 都在 JDK 的 `java.xml` 模块里（JDK 9+ 不再默认导出给具名
   模块）。它通过 `implementation(project(":annotation"))` 使用 `annotation` 模块，因此只有
   普通 `requires`。
-- `format-json` 的已知限制：主代码通过 jackson-core 的**内部包**
-  `com.fasterxml.jackson.core.io.schubfach.DoubleToDecimal` 输出最短浮点表示，而
-  jackson-core 2.15.3 的 `module-info` 没有 `exports` 该包。module path 上写出 `Double`
-  时会抛 `IllegalAccessError`，需要消费方在启动参数追加
-  `--add-exports com.fasterxml.jackson.core/com.fasterxml.jackson.core.io.schubfach=com.mingliqiye.document.format.json`
-  （实测可恢复）；整数、字符串等其它类型与 classpath 使用不受影响。补显式 `module-info`
-  之前（自动模块形态）这条路径同样不可用（当时报 `ClassNotFoundException`，因为
-  jackson-core 没有进入模块图），因此不是本次升级引入的回归，彻底修复需要 format-json
-  主源码不再引用 jackson 内部包，属于后续工作。
+- `format-json` 的 `Double` 输出使用 JDK `Double.toString`，module path 与 classpath
+  行为一致，不需要 `--add-exports`。
 - `jpa-hibernate` 的公开 API 暴露 `JpaConfig` / `JpaDocumentMapper` / `Node` /
   `jakarta.persistence.EntityManager` / `org.hibernate.Session`，因此 `jpa`、`core`、
   `jakarta.persistence`、`kotlin.stdlib` 用 `requires transitive`；`exception`（公开异常
@@ -514,17 +507,13 @@ jar + `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`、
 ```text
 root smoke.json file:///.../out/
 smoke.json requires com.mingliqiye.document.format.json file:///.../lib/format-json-2.4.0.jar
-com.mingliqiye.document.format.json requires com.fasterxml.jackson.core file:///.../lib/jackson-core-2.15.3.jar
 com.mingliqiye.document.format.json requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.4.0.jar
 com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.4.jar automatic
 ```
 
-::: warning format-json 写 Double 需要 --add-exports
-module path 上 `JsonMapper.format(...)` 遇到 `Double` 会抛 `IllegalAccessError`（根因是
-jackson-core 未导出内部包 `com.fasterxml.jackson.core.io.schubfach`，见[限制](#限制)）。
-追加
-`--add-exports com.fasterxml.jackson.core/com.fasterxml.jackson.core.io.schubfach=com.mingliqiye.document.format.json`
-后实测输出 `json double format: {"double":1.5}`。
+::: tip format-json Double
+module path 上写 `Double` 使用 JDK `Double.toString`，不需要 `--add-exports`；
+实测输出 `json double format: {"double":1.5}`。
 :::
 
 另外用 `java --validate-modules --module-path lib` 校验 31 个 jar（11 个格式模块 +
@@ -883,7 +872,6 @@ com.mingliqiye.document.format.json jar:file:///.../format-json-2.4.0.jar!/META-
 exports com.mingliqiye.document.format.json
 exports com.mingliqiye.document.format.json.exception
 exports com.mingliqiye.document.format.json.schema
-requires com.fasterxml.jackson.core
 requires com.mingliqiye.document.core transitive
 requires com.mingliqiye.document.exception transitive
 requires com.mingliqiye.document.serialization transitive
@@ -1089,13 +1077,8 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
    解析（`requires` / `--add-modules`）后 `provides JavaRecordSupport` 才会被
    `ServiceLoader` 发现。除此之外，**所有 26 个可发布模块都已显式化**，不存在「本库的
    自动模块」。
-2. **`format-json` 在 module path 上写 `Double` 需要 `--add-exports`**：主代码引用
-   jackson-core 的内部包 `com.fasterxml.jackson.core.io.schubfach.DoubleToDecimal`，而
-   jackson-core 2.15.3 的 `module-info` 没有导出该包，运行期会抛 `IllegalAccessError`
-   （classpath 使用不受影响）。消费方启动参数需追加
-   `--add-exports com.fasterxml.jackson.core/com.fasterxml.jackson.core.io.schubfach=com.mingliqiye.document.format.json`。
-   这不是本次显式模块化引入的回归（自动模块形态下该路径本就不可用），彻底修复需要
-   format-json 主源码去掉对 jackson 内部包的依赖，属于后续工作。
+2. **`format-json` 的 `Double` 已使用 JDK `Double.toString`**：module path 与 classpath
+   行为一致，不需要 `--add-exports`。
 3. **部分第三方依赖仍是自动模块**：`org.apache.avro`、`com.amazon.ion`、
    `tomlj`（以及它依赖的 `antlr4-runtime`）、`org.apache.commons.csv`、
    `com.google.protobuf` 没有显式 `module-info`；`codegen` 依赖的
@@ -1165,9 +1148,6 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
    以及 Avro / Ion / TOML / commons-csv / protobuf-java、`hibernate-core` 上游提供（或升级到
    带显式 `module-info` 的）版本，解除 `jlink` 与「自动模块抱团」限制。本库 26 个可发布模块
    已全部显式化；仍阻塞 `jlink` 的只剩这些第三方自动模块。
-2. **去掉 format-json 对 jackson 内部包的依赖**：把
-   `com.fasterxml.jackson.core.io.schubfach.DoubleToDecimal` 换成公开 API 或本库自带的
-   最短浮点输出实现，解除 module path 上的 `--add-exports` 限制。
 3. **第三方依赖显式模块化**：推动 `mingli-exception`、`alias-for`、Avro / Ion / TOML /
    commons-csv / protobuf-java、`hibernate-core` 上游提供（或升级到带显式 `module-info` 的）
    版本，解除 `jlink` 与「自动模块抱团」限制；Ion 的 `ion-java` 后续版本、Hibernate 7 等

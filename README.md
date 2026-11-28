@@ -142,9 +142,8 @@ Avro / Ion / TOML / commons-csv / protobuf-java 仍是自动模块；`hibernate-
 `jakarta.persistence-api:3.1.0` 与 Hibernate 6.5 是 class file 55）；`record-support` 要求
 JDK 17+（class file 61）；`serialization` / `jdbc` / `validation` / `serialization-kotlin` /
 `openapi` / 格式模块没有这两个限制。
-另外 `format-json` 在 module path 上写 `Double` 时引用了 jackson-core 未导出的内部包，
-需要消费方追加 `--add-exports com.fasterxml.jackson.core/com.fasterxml.jackson.core.io.schubfach=com.mingliqiye.document.format.json`；
-classpath 使用不受影响（详见 JPMS 指南的限制章节）。
+`format-json` 写 `Double` 使用 JDK `Double.toString`，module path 与 classpath 都不需要
+`--add-exports`。
 
 ```java
 module my.app {

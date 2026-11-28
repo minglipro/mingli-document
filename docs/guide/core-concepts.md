@@ -1,6 +1,6 @@
----
+   
 title: 核心概念
----
+   
 
 # 核心概念
 
@@ -9,21 +9,21 @@ title: 核心概念
 
 ## 目录
 
-- [三层模型](#三层模型)
-- [Node 类型总览](#node-类型总览)
-- [Node 接口能力](#node-接口能力)
-- [各节点类型详解](#各节点类型详解)
-- [Node 的不可变性](#node-的不可变性)
-- [Node 与 Bean 如何选择](#node-与-bean-如何选择)
-- [DocumentMapper 是什么](#documentmapper-是什么)
-- [Mapper 类层次](#mapper-类层次)
-- [文本格式与二进制格式](#文本格式与二进制格式)
-- [Mapper 的生命周期与线程安全](#mapper-的生命周期与线程安全)
-- [DocumentTypeReference 泛型类型](#documenttypereference-泛型类型)
-- [一次解析发生了什么](#一次解析发生了什么)
-- [Token 流概览](#token-流概览)
-- [异常体系](#异常体系)
-- [综合示例](#综合示例)
+  [三层模型](#三层模型)
+  [Node 类型总览](#node 类型总览)
+  [Node 接口能力](#node 接口能力)
+  [各节点类型详解](#各节点类型详解)
+  [Node 的不可变性](#node 的不可变性)
+  [Node 与 Bean 如何选择](#node 与 bean 如何选择)
+  [DocumentMapper 是什么](#documentmapper 是什么)
+  [Mapper 类层次](#mapper 类层次)
+  [文本格式与二进制格式](#文本格式与二进制格式)
+  [Mapper 的生命周期与线程安全](#mapper 的生命周期与线程安全)
+  [DocumentTypeReference 泛型类型](#documenttypereference 泛型类型)
+  [一次解析发生了什么](#一次解析发生了什么)
+  [Token 流概览](#token 流概览)
+  [异常体系](#异常体系)
+  [综合示例](#综合示例)
 
 ## 三层模型
 
@@ -43,9 +43,9 @@ title: 核心概念
 
 关键点：
 
-- **Node 树是唯一的中间表示**。所有格式最终都解析成 Node，所有写出都从 Node 开始。
-- **格式 Mapper 之间可互换**：同一个 Node 树可以写成 JSON、YAML、XML、CBOR……
-- **实体映射与格式无关**：`serialization` 模块只负责「实体 ↔ Node」，不关心格式。
+  **Node 树是唯一的中间表示**。所有格式最终都解析成 Node，所有写出都从 Node 开始。
+  **格式 Mapper 之间可互换**：同一个 Node 树可以写成 JSON、YAML、XML、CBOR……
+  **实体映射与格式无关**：`serialization` 模块只负责「实体 ↔ Node」，不关心格式。
 
 因此同一套注解、同一套配置语义可以作用于所有格式。
 
@@ -54,7 +54,7 @@ title: 核心概念
 `Node` 是密封接口（`sealed interface`），实现只有七种：
 
 | 接口 | `NodeType` | 内容 | 创建方式 |
-|---|---|---|---|
+|   |   |   |   |
 | `ObjectNode` | `OBJECT` | 有序字段集合 `Map<String, Node>` | `ObjectNode.of(...)` / `ObjectNode.from(map)` |
 | `ArrayNode` | `ARRAY` | 有序元素列表 | `ArrayNode.of(...)` / `ArrayNode.from(iterable)` |
 | `StringNode` | `STRING` | 字符串 | `StringNode.of("x")` |
@@ -72,7 +72,7 @@ OBJECT, ARRAY, NUMBER, STRING, BOOLEAN, BINARY, NULL
 不同格式映射到 Node 的方式：
 
 | 格式概念 | Node 表示 |
-|---|---|
+|   |   |
 | JSON/YAML/TOML 对象、XML 元素、Protobuf message、Avro record | `ObjectNode` |
 | JSON/YAML 数组、CSV 行集合、Avro array、Protobuf repeated | `ArrayNode` |
 | 字符串、日期时间（TOML/Ion timestamp） | `StringNode` |
@@ -152,11 +152,11 @@ val copy = ObjectNode.from(user.asMap())
 
 细节：
 
-- `keys` 保持插入顺序（内部 `LinkedHashMap`）。
-- `ObjectNode.of("a" to ..., "a" to ...)` 重复 key **以后出现的值为准**。
-- `get` 返回 `Node?`；注意区分「key 不存在」与「key 存在但值是 `NullNode`」，
+  `keys` 保持插入顺序（内部 `LinkedHashMap`）。
+  `ObjectNode.of("a" to ..., "a" to ...)` 重复 key **以后出现的值为准**。
+  `get` 返回 `Node?`；注意区分「key 不存在」与「key 存在但值是 `NullNode`」，
   后者请用 `containsKey` 判断。
-- `ObjectNode.EMPTY` 是空对象单例。
+  `ObjectNode.EMPTY` 是空对象单例。
 
 ### ArrayNode
 
@@ -217,12 +217,12 @@ toBigDecimal  BigDecimal
 
 约束与语义：
 
-- `NaN` / `Infinity` 无法表示：`NumberNode.of(Double.NaN)` 会抛 `IllegalArgumentException`，
+  `NaN` / `Infinity` 无法表示：`NumberNode.of(Double.NaN)` 会抛 `IllegalArgumentException`，
   各二进制格式（CBOR/Smile/Avro/Smile/Protobuf）也拒绝非有限浮点。
-- `equals` 按**数值**比较：`NumberNode.ofRaw("1.0") == NumberNode.ofRaw("1.00")` 为 true；
+  `equals` 按**数值**比较：`NumberNode.ofRaw("1.0") == NumberNode.ofRaw("1.00")` 为 true；
   `hashCode` 基于 `stripTrailingZeros`。
-- `value` 惰性解析：解析阶段只保存 `raw`，真正需要 `BigDecimal` 时才计算。
-- JSON 的 Double 写出使用最短表示（Schubfach），数字解析不丢精度。
+  `value` 惰性解析：解析阶段只保存 `raw`，真正需要 `BigDecimal` 时才计算。
+  JSON 的 Double 写出使用最短表示（Schubfach），数字解析不丢精度。
 
 ### BooleanNode
 
@@ -263,9 +263,9 @@ JSON/Node 中「字段值为 null」与「字段不存在」是两种状态，�
 
 `Node` 是不可变对象：
 
-- `ObjectNode` / `ArrayNode` 的 `asMap()` / `asList()` 返回不可修改视图；
-- `BinaryNode` 输入输出都复制字节；
-- 没有 `put` / `add` / `remove` 之类修改 API。
+  `ObjectNode` / `ArrayNode` 的 `asMap()` / `asList()` 返回不可修改视图；
+  `BinaryNode` 输入输出都复制字节；
+  没有 `put` / `add` / `remove` 之类修改 API。
 
 要「修改」一棵树，只能重建受影响的部分：
 
@@ -288,7 +288,7 @@ Node 树本身允许构造环（例如同一个 `ObjectNode` 放进自己的字�
 ## Node 与 Bean 如何选择
 
 | 场景 | 建议 |
-|---|---|
+|   |   |
 | 结构固定、有明确业务类型 | Bean / Kotlin data class |
 | 结构未知、动态字段、插件式数据 | `Node` / `Map` / `List` |
 | 多格式转换、中间处理 | `Node` |
@@ -301,9 +301,9 @@ Node 树本身允许构造环（例如同一个 `ObjectNode` 放进自己的字�
 ```kotlin
 val mapper = JsonMapper()
 
-val node: Node = mapper.toNode(user)             // Bean -> Node
-val again: User = mapper.fromNode(node, User::class.java) // Node -> Bean
-val other: Order = mapper.convert(user, Order::class.java) // Bean -> Bean
+val node: Node = mapper.toNode(user)             // Bean  > Node
+val again: User = mapper.fromNode(node, User::class.java) // Node  > Bean
+val other: Order = mapper.convert(user, Order::class.java) // Bean  > Bean
 ```
 
 `convert` 的实现是 `fromNode(toNode(source))`，属于「先树后类型」的转换。
@@ -314,23 +314,23 @@ val other: Order = mapper.convert(user, Order::class.java) // Bean -> Bean
 格式 Mapper 都继承它。可以把它理解为「面向 Node 树的 ObjectMapper」：
 
 | 方法 | 作用 |
-|---|---|
-| `toNode(value)` | 实体 / 集合 / Map / 数组 / 已有 Node -> `Node` |
-| `fromNode(node, Class)` | `Node` -> 实体 |
-| `fromNode(node, DocumentTypeReference)` | `Node` -> 泛型实体 |
-| `parse(source: String, Class)` | 格式文本 -> 实体 |
-| `parse(source: String, DocumentTypeReference)` | 格式文本 -> 泛型实体 |
-| `parse(source: ByteArray, Class)` | 格式字节 -> 实体 |
-| `format(value): String` | 实体 -> 格式文本 |
-| `formatPretty(value): String` | 实体 -> 格式化文本 |
-| `formatBytes(value): ByteArray` | 实体 -> 格式字节 |
-| `parse(file/path/inputStream/reader, Class)` | 文件/流 -> 实体 |
-| `format(value, file/path/outputStream/writer)` | 实体 -> 文件/流 |
-| `formatPretty(value, file/path/outputStream/writer)` | 实体 -> 格式化文件/流 |
-| `convert(source, Class)` | 实体或 Node -> 另一种类型 |
+|   |   |
+| `toNode(value)` | 实体 / 集合 / Map / 数组 / 已有 Node  > `Node` |
+| `fromNode(node, Class)` | `Node`  > 实体 |
+| `fromNode(node, DocumentTypeReference)` | `Node`  > 泛型实体 |
+| `parse(source: String, Class)` | 格式文本  > 实体 |
+| `parse(source: String, DocumentTypeReference)` | 格式文本  > 泛型实体 |
+| `parse(source: ByteArray, Class)` | 格式字节  > 实体 |
+| `format(value): String` | 实体  > 格式文本 |
+| `formatPretty(value): String` | 实体  > 格式化文本 |
+| `formatBytes(value): ByteArray` | 实体  > 格式字节 |
+| `parse(file/path/inputStream/reader, Class)` | 文件/流  > 实体 |
+| `format(value, file/path/outputStream/writer)` | 实体  > 文件/流 |
+| `formatPretty(value, file/path/outputStream/writer)` | 实体  > 格式化文件/流 |
+| `convert(source, Class)` | 实体或 Node  > 另一种类型 |
 | `merge(node, target)` / `merge(node, target, policy)` | 文档树合并进已有对象 |
-| `fromTokens(reader, Class)` | Token 流 -> 实体 |
-| `readFrom(valueReader, DocumentTypeReference)` | 格式流 -> 实体 |
+| `fromTokens(reader, Class)` | Token 流  > 实体 |
+| `readFrom(valueReader, DocumentTypeReference)` | 格式流  > 实体 |
 | `formatName` | 格式名，如 `"json"`、`"yaml"` |
 
 另外每个格式 Mapper 都有 `builder()`，返回该格式的 Builder，用于注册模块、转换器、
@@ -362,7 +362,7 @@ DocumentMapper（抽象类，实体 ↔ Node，文本/二进制钩子）
 ## 文本格式与二进制格式
 
 | | 文本格式 | 二进制格式 |
-|---|---|---|
+|   |   |   |
 | 代表 | JSON、YAML、XML、Properties、TOML、CSV、Ion 文本 | CBOR、Smile、Ion 二进制、Avro、Protobuf |
 | `parse(String)` / `format()` | ✅ | ❌ 抛 `DocumentSerializationException` |
 | `parse(ByteArray)` / `formatBytes()` | ✅（按字符集解码/编码） | ✅ |
@@ -391,11 +391,11 @@ val jsonMapper: JsonMapper = JsonMapper.builder()
     .build()
 ```
 
-- 配置对象（`DocumentMapperConfig` / 各格式 Config）构建后不可变；
-- Mapper 内部使用 `ConcurrentHashMap` 缓存属性描述、构造器、转换器等元数据，
+  配置对象（`DocumentMapperConfig` / 各格式 Config）构建后不可变；
+  Mapper 内部使用 `ConcurrentHashMap` 缓存属性描述、构造器、转换器等元数据，
   多线程并发调用是安全的；
-- 自定义转换器会在 Mapper 内缓存，**必须无状态**；
-- 不要在多线程间共享「被序列化的实体对象」的可变状态——这是业务侧责任。
+  自定义转换器会在 Mapper 内缓存，**必须无状态**；
+  不要在多线程间共享「被序列化的实体对象」的可变状态——这是业务侧责任。
 
 ## DocumentTypeReference 泛型类型
 
@@ -426,7 +426,7 @@ mapper.parse(json, users);
 ```
 
 `parse` / `fromNode` / `convert` 都有接受 `DocumentTypeReference` 的重载；
-Kotlin 的 reified 扩展位于 `serialization-kotlin` 模块的
+Kotlin 的 reified 扩展位于 `serialization kotlin` 模块的
 `com.mingliqiye.document.serialization.kotlin` 包，需要添加该依赖并导入。
 
 ## 一次解析发生了什么
@@ -436,12 +436,12 @@ Kotlin 的 reified 扩展位于 `serialization-kotlin` 模块的
 1. **输入大小检查**：`maxInputSize > 0` 且文本长度超限时抛
    `DocumentSerializationException`。
 2. **选择解析路径**：
-   - 优先使用格式的**原生 Token Reader**（例如 `JsonTokenReader`）直读实体；
-   - 格式没有 Token Reader、或配置要求 Node 语义时，先解析成 `Node` 再 `fromNode`。
+     优先使用格式的**原生 Token Reader**（例如 `JsonTokenReader`）直读实体；
+     格式没有 Token Reader、或配置要求 Node 语义时，先解析成 `Node` 再 `fromNode`。
 3. **反序列化**：
-   - 解析 `Node` 路径时，会先做 Node 树限制校验（深度/节点数/字符串长度）；
-   - `resolveReferences(true)` 时先展开本地 `$ref`；
-   - 按目标类型选择：标量转换、集合/Map 递归、Bean 属性/构造参数注入、
+     解析 `Node` 路径时，会先做 Node 树限制校验（深度/节点数/字符串长度）；
+     `resolveReferences(true)` 时先展开本地 `$ref`；
+     按目标类型选择：标量转换、集合/Map 递归、Bean 属性/构造参数注入、
      `@DocumentCreator` / Builder / record / Kotlin data class 实例化、多态分派。
 4. **错误包装**：字段级失败会带 JSON Pointer 风格路径（如 `$.address.city`），
    抛 `DocumentSerializationException`。
@@ -450,7 +450,7 @@ Kotlin 的 reified 扩展位于 `serialization-kotlin` 模块的
 
 ```text
 format(value)
-  → toNode(value)                 // 实体 -> Node
+  → toNode(value)                 // 实体  > Node
   → NodeLimits.validate(...)      // 深度/节点数/字符串长度
   → 格式写出（可 Token 流式）
 ```
@@ -473,11 +473,11 @@ START_OBJECT END_OBJECT START_ARRAY END_ARRAY
 FIELD_NAME STRING NUMBER BOOLEAN NULL BINARY
 ```
 
-- 原生 Token Reader：JSON、YAML、XML（默认配置）、Properties、TOML、CSV、Ion、CBOR、Smile；
-- 文本格式暂时没有原生实现时，用 `NodeTokenReader` 把 Node 树适配成 Token 流；
-- 二进制格式（CBOR/Smile/Ion）的 Token 路径可以跳过完整 Node 树，直接映射 Bean。
+  原生 Token Reader：JSON、YAML、XML（默认配置）、Properties、TOML、CSV、Ion、CBOR、Smile；
+  文本格式暂时没有原生实现时，用 `NodeTokenReader` 把 Node 树适配成 Token 流；
+  二进制格式（CBOR/Smile/Ion）的 Token 路径可以跳过完整 Node 树，直接映射 Bean。
 
-详见 [Token 流式 API](./token-stream.md)。
+详见 [Token 流式 API](./token stream.md)。
 
 ## 异常体系
 
@@ -486,7 +486,7 @@ com.mingliqiye.exception（外部异常根，社区异常体系）
    ↑
 DocumentException                com.mingliqiye.document.exception
    ├── DocumentTypeException      Node 类型断言失败
-   └── 各格式异常基类（如 format-json 的 JsonException）
+   └── 各格式异常基类（如 format json 的 JsonException）
           ├── JsonParseException
           └── JsonSchemaException
 
@@ -497,9 +497,9 @@ DocumentSerializationException    com.mingliqiye.document.serialization.exceptio
 典型归属：
 
 | 场景 | 异常 |
-|---|---|
+|   |   |
 | `node.asString()` 但节点是数字 | `DocumentTypeException` |
-| JSON 语法错误 | `JsonParseException`（继承 `JsonException` -> `DocumentException`） |
+| JSON 语法错误 | `JsonParseException`（继承 `JsonException`  > `DocumentException`） |
 | 缺字段且 `MissingFieldPolicy.FAIL` | `DocumentSerializationException` |
 | 超过 `maxInputSize` / `maxNodeDepth` | `DocumentSerializationException` |
 | 二进制格式调用 `parse(String)` | `DocumentSerializationException` |

@@ -31,7 +31,7 @@ implementation("com.mingliqiye.document.format:json:2.4.0")
 - **解析深度限制**：对象与数组统一计数，默认 512；
 - **Token 直读**：`parse(String)` / `parse(ByteArray)` 走内部 `JsonTokenReader`，直接把 Token 解码为 Bean，不构建完整 Node 树；
 - **紧凑字节写出**：`formatBytes` 通过 `JsonUtf8StreamWriter` 直接输出 UTF-8 字节，不经过中间 `String`；
-- **Double 最短表示**：紧凑/格式化写出使用 Schubfach 算法输出最短可往返的十进制文本；
+- **Double 最短表示**：紧凑/格式化写出使用 JDK `Double.toString` 输出最短可往返的十进制文本；
 - **JSON Schema**：内置常用 draft-07 子集校验器；
 - **文件/流读写**：`File`、`Path`、`InputStream`、`Reader`、`OutputStream`、`Writer` 全覆盖；
 - **流式写出到 `OutputStream`**：`format(value, outputStream)` 直接边遍历边写。
@@ -223,7 +223,7 @@ val node = mapper.parse(text, com.mingliqiye.document.core.Node::class.java)
 val nodeText = node.toJsonString(pretty = true)
 ```
 
-> `Node.toJsonString` 由 `JsonWriter` 实现，数字按 `NumberNode.raw` 原样写出；Mapper 的 `format` 路径使用 `JsonStreamWriter`，`Double` 使用最短表示。两者输出都是合法 JSON。
+> `Node.toJsonString` 由 `JsonWriter` 实现，数字按 `NumberNode.raw` 原样写出；Mapper 的 `format` 路径使用 `JsonStreamWriter`，`Double` 使用 JDK `Double.toString` 的最短可往返表示。两者输出都是合法 JSON。
 
 ## 类型映射
 

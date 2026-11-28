@@ -32,10 +32,11 @@
   `ServiceLoader` 接入
 - `serialization` 新增公共 SPI：`JavaRecordSupport` / `JavaRecordComponentInfo`
 - JPMS：26 个可发布模块全部为显式 MR-JAR module-info
-  （serialization-kotlin / ecord-support / codegen / codegen-test / openapi 补齐）；
+  （serialization-kotlin / record-support / codegen / codegen-test / openapi 补齐）
   内部 `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级
   （`ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`
+- `format-json` 的 `Double` 写出改用 JDK `Double.toString`，移除 jackson-core 内部包依赖
 
 ### 变更
 

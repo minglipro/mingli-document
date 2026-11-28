@@ -34,7 +34,6 @@
 
 ## 保留待办
 
-- [ ] format-json 去掉 jackson 内部包 `DoubleToDecimal` 依赖
 - [ ] Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn`
 - [ ] `jlink` 支持
 - [ ] native-image 构建接入 CI

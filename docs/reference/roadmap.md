@@ -242,7 +242,6 @@
 仍延后：
 
 - 2.4.0 代码与发布（当前暂停）
-- `format-json` 去除 Jackson 内部包 `DoubleToDecimal` 依赖
 - Gitea CI、Maven Central 发布（已放弃）
 
 ## 当前状态（2.4.0）
@@ -274,7 +273,6 @@
 
 | 序号 | 待办 | 阶段 |
 |---|---|---|
-| 1 | `format-json` 去除 Jackson 内部包依赖（module path 写 Double 需 `--add-exports`） | 阶段 6 |
 | 2 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
 | 3 | `jlink` 支持（当前仅 `annotation` 可 jlink，受第三方自动模块限制） | 阶段 6 |
 
