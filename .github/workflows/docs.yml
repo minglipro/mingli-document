@@ -21,6 +21,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,10 +39,10 @@ jobs:
           version: 11
 
       - name: Install dependencies
-        run: pnpm install --dir docs --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build docs
-        run: pnpm --dir docs run docs:build
+        run: pnpm run docs:build
 
       - name: Upload pages artifact
         uses: actions/upload-pages-artifact@v3
