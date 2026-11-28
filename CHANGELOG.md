@@ -1,5 +1,38 @@
 # Changelog
 
+## 2.0.0
+
+### 新增
+
+- KSP 编译期代码生成：`@DocumentEnumCodec`、枚举转换器、`DocumentModule`
+- 运行期 Bean 编解码器：`DocumentRuntimeCodecFactory`
+- Java record 支持（JDK 16+ 运行时）
+- 只读属性与字段 merge/update
+- CBOR sequence、Smile 多消息流
+- Kotlin value class / sealed class
+- CSV 嵌套结构 / 多级 Schema
+- Protobuf extensions / group / MessageSet / proto3 语义
+- Security baseline 与 SECURITY.md
+- YAML 自定义 tag
+- OpenAPI 3.0 生成模块
+- Maven Central 发布配置
+- 运行期属性访问器生成：`DocumentAccessorCodegen`
+- 编译期源码生成器：`DocumentCodecSourceGenerator`
+- JQF 9 格式覆盖率引导 fuzz + `fuzzJqf` 任务
+- Jazzer 13 个覆盖率引导目标
+- `fuzzContinuous` 持续随机 fuzz
+- 全格式原生 Token Reader（XML 默认配置，其余配置回退）
+- JSON Double Schubfach 最短格式化
+- Ion 类型保真、CBOR tag 保真
+- `maxStringLength`、YAML alias 限制
+- Properties/TOML/CSV Token 深度校验
+
+### 说明
+
+- 2.0.0 汇总 1.3.0 之后本地 dev 能力
+- 新增 `codegen` 模块；`codegen-test` 不参与发布
+- 运行期/KSP 代码生成能力为本次大版本核心
+
 ## 1.5.0
 
 ### 新增

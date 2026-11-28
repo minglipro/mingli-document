@@ -5,6 +5,8 @@ plugins {
 rootProject.name = "mingli-document"
 
 include(":annotation")
+include(":codegen")
+include(":codegen-test")
 include(":core")
 include(":exception")
 include(":format-json")
@@ -23,4 +25,5 @@ include(":serialization")
 include(":bom")
 include(":fuzz")
 include(":serialization-kotlin")
+include(":openapi")
 include(":benchmarks")

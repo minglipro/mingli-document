@@ -1,5 +1,7 @@
 package com.mingliqiye.document.format.cbor
 
+import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
 import com.mingliqiye.document.serialization.DocumentBaseDeserializer
 import com.mingliqiye.document.serialization.DocumentBaseSerializer
@@ -49,6 +51,7 @@ public open class CborMapper internal constructor(
 ) {
 
     private val preserveTags: Boolean = preserveTagsOf(config)
+    private val maxNodeDepth: Int = config.maxNodeDepth
 
     /**
      * 创建默认 CBOR 映射器。
@@ -86,7 +89,7 @@ public open class CborMapper internal constructor(
      * @param source CBOR 二进制内容
      * @return Token 读取器；保真模式下为 `null`
      */
-    override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTags) null else CborTokenReader(source)
+    override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTags || maxNodeDepth > 0) null else CborTokenReader(source)
 
     /**
      * 将 Java 实体写成 CBOR 字节。
@@ -128,6 +131,82 @@ public open class CborMapper internal constructor(
      * @throws com.mingliqiye.document.format.cbor.exception.CborException 写出失败时抛出
      */
     public fun formatCanonicalBytes(value: Any?): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags).write(toNode(value))
+
+    /**
+     * 解析 CBOR sequence（连续多个自描述数据项），按出现顺序返回全部文档树。
+     *
+     * 空输入返回空列表；只有一个数据项时返回长度为 1 的列表。每个数据项独立
+     * 解析，深度限制取自 Mapper 配置的 `maxNodeDepth`（0 表示不限制）。
+     * [CborConfig.preserveTags] 开启时每个数据项都保留 tag 包装对象。
+     *
+     * @param source CBOR sequence 二进制内容
+     * @param maxItems 最大数据项数量；0 表示不限制
+     * @return 按出现顺序排列的文档树列表；空输入返回空列表
+     * @throws com.mingliqiye.document.format.cbor.exception.CborParseException
+     *   任一数据项格式非法、数据不完整、项数超过 maxItems，或包含 NaN/Infinity
+     *   等无法表示的浮点值时抛出
+     */
+    public fun parseAllToNodes(source: ByteArray, maxItems: Int = 0): List<Node> {
+        checkInputSize(source.size.toLong())
+        return CborSequenceReader(source, maxNodeDepth, maxItems, preserveTags).readAll()
+    }
+
+    /**
+     * 解析 CBOR sequence，按出现顺序把每个数据项反序列化为指定类型。
+     *
+     * 空输入返回空列表；反序列化失败时整体抛出
+     * [com.mingliqiye.document.serialization.exception.DocumentSerializationException]。
+     *
+     * @param source CBOR sequence 二进制内容
+     * @param targetType 每个数据项的目标类型
+     * @param maxItems 最大数据项数量；0 表示不限制
+     * @return 按出现顺序反序列化得到的实体列表
+     */
+    public fun <T> parseAll(
+        source: ByteArray,
+        targetType: Class<T>,
+        maxItems: Int = 0,
+    ): List<T> = parseAllToNodes(source, maxItems).map { fromNode(it, targetType) }
+
+    /**
+     * 解析 CBOR sequence，按出现顺序把每个数据项反序列化为指定泛型类型。
+     *
+     * @param source CBOR sequence 二进制内容
+     * @param targetType 每个数据项的目标泛型类型引用
+     * @param maxItems 最大数据项数量；0 表示不限制
+     * @return 按出现顺序反序列化得到的实体列表
+     */
+    public fun <T> parseAll(
+        source: ByteArray,
+        targetType: DocumentTypeReference<T>,
+        maxItems: Int = 0,
+    ): List<T> = parseAllToNodes(source, maxItems).map { fromNode(it, targetType) }
+
+    /**
+     * 把多个 Java 实体按顺序写成 CBOR sequence 字节。
+     *
+     * 空 [Iterable] 返回空字节数组。默认模式通过 [writeTo] 驱动 [CborTokenWriter]
+     * 直接写 Token 流（不构建 Node 树）；开启 [CborConfig.preserveTags] 时改为
+     * `toNode` + [CborSequenceWriter] 的 Node 写出，以识别并写出 tag 包装对象。
+     *
+     * @param values 要写出的实体、Map、集合或文档树，按迭代顺序输出
+     * @return CBOR sequence 二进制内容；空集合返回空字节数组
+     * @throws com.mingliqiye.document.format.cbor.exception.CborException 写出失败时抛出
+     */
+    public fun formatAll(values: Iterable<Any?>): ByteArray {
+        if (preserveTags) {
+            return CborSequenceWriter(preserveTags = true).writeAll(values.map(::toNode))
+        }
+        val writer = CborTokenWriter()
+        return try {
+            for (value in values) {
+                writeTo(value, writer)
+            }
+            writer.toByteArray()
+        } finally {
+            writer.close()
+        }
+    }
 
     public companion object {
 

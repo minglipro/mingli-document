@@ -9,8 +9,8 @@ import com.mingliqiye.document.schema.SchemaType
  * 无符号 32 位超出 [SchemaType.INT] 的范围，映射为 [SchemaType.LONG]；无符号 64 位超出
  * [SchemaType.LONG] 的范围，映射为可精确表达其全部取值的 [SchemaType.DECIMAL]。
  *
- * [ENUM]、[MESSAGE] 与 [MAP] 是复合类型的占位：该 Schema 适配层不保存自定义 message/enum/map
- * 的完整类型名，只保留其格式无关语义。
+ * [ENUM]、[MESSAGE]、[GROUP] 与 [MAP] 是复合类型的占位：该 Schema 适配层不保存自定义 message/
+ * enum/map 的完整类型名，只保留其格式无关语义。
  *
  * @property typeName `.proto` 中的类型名
  * @property schemaType 对应的格式无关类型
@@ -36,6 +36,14 @@ public enum class ProtobufType(
     BYTES("bytes", SchemaType.BYTES),
     ENUM("enum", SchemaType.STRING),
     MESSAGE("message", SchemaType.OBJECT),
+
+    /**
+     * proto2 group 类型。
+     *
+     * group 在 wire 上使用 start-group/end-group 标签包围嵌套字段，语义与 message 相同；需要
+     * [ProtobufSchemaField.typeReference] 提供 [ProtobufTypeReference.MessageType] 引用。
+     */
+    GROUP("group", SchemaType.OBJECT),
     MAP("map", SchemaType.MAP),
     ;
 

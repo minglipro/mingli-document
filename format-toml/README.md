@@ -5,7 +5,7 @@ TOML 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:toml:1.5.0")
+implementation("com.mingliqiye.document.format:toml:2.0.0")
 ```
 
 ## 主要 API

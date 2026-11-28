@@ -10,13 +10,13 @@ import com.mingliqiye.document.format.protobuf.exception.ProtobufException
  *
  * 转换规则：
  * - 字段类型/编号/repeated/required/presence 与 oneof 归属原样保留
- * - message/enum 字段记录类型引用：根 message 嵌套范围内的类型记为相对名称（如 `Address`、
+ * - message/enum/group 字段记录类型引用：根 message 嵌套范围内的类型记为相对名称（如 `Address`、
  *   `Middle.Inner`），根 message 自身记为 `.` 开头的全限定名，根之外的类型也记为全限定名
+ * - group 字段转换为 [ProtobufType.GROUP]，类型引用指向其 group message
  * - map 字段由 map entry 的 key/value 字段还原为 [ProtobufTypeReference.MapType]；map entry
  *   不作为用户嵌套 message 保留
  * - 嵌套 message 与 enum 递归转换为 [ProtobufMessage]/[ProtobufEnum]
- *
- * group 字段不支持，会抛出 [ProtobufException]。
+ * - `option message_set_wire_format = true` 记录到 [ProtobufSchema.messageSetWireFormat]
  */
 internal object ProtobufSchemaConverter {
 
@@ -41,6 +41,7 @@ internal object ProtobufSchemaConverter {
             packageName,
             content.nestedMessages,
             content.enums,
+            descriptor.options.messageSetWireFormat,
         )
     }
 
@@ -82,7 +83,10 @@ internal object ProtobufSchemaConverter {
         val protobufType = protobufTypeOf(field)
         val typeReference = when (protobufType) {
             ProtobufType.MAP -> convertMapType(field, context)
-            ProtobufType.MESSAGE -> ProtobufTypeReference.MessageType(context.referenceName(field.messageType.fullName))
+            ProtobufType.MESSAGE,
+            ProtobufType.GROUP,
+            -> ProtobufTypeReference.MessageType(context.referenceName(field.messageType.fullName))
+
             ProtobufType.ENUM -> ProtobufTypeReference.EnumType(context.referenceName(field.enumType.fullName))
             else -> null
         }
@@ -122,9 +126,6 @@ internal object ProtobufSchemaConverter {
     private fun protobufTypeOf(field: FieldDescriptor): ProtobufType {
         if (field.isMapField) {
             return ProtobufType.MAP
-        }
-        if (field.type == FieldDescriptor.Type.GROUP) {
-            throw ProtobufException("group 字段暂不支持: ${field.fullName}")
         }
         return ProtobufType.fromTypeName(field.type.name.lowercase())
             ?: throw ProtobufException("不支持的 Protobuf 字段类型: ${field.type}")

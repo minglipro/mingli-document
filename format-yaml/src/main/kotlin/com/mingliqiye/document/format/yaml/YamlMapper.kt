@@ -24,6 +24,11 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
  * 配置了非零 `maxNodeDepth`/`maxNodeCount`/`maxStringLength` 时回退
  * [NodeTokenReader] 路径以保持 Node 树限制语义。[YamlConfig.maxAliases] 同时
  * 作用于两条路径。
+ *
+ * [YamlConfig.allowCustomTags] 同样同时作用于两条路径与多文档 API：默认 `false`
+ * 时未知 tag 抛 [com.mingliqiye.document.format.yaml.exception.YamlParseException]；
+ * 开启后标量 -> StringNode，序列 -> ArrayNode，映射 -> ObjectNode。写出侧不保留
+ * 未知 tag（见 [YamlWriter]）。
  */
 public open class YamlMapper internal constructor(
     serializers: Map<Class<*>, DocumentBaseSerializer<*>>,
@@ -33,7 +38,7 @@ public open class YamlMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "yaml",
-    { source -> YamlReader(source, config.maxNodeDepth, maxAliasesOf(config)).read() },
+    { source -> YamlReader(source, config.maxNodeDepth, maxAliasesOf(config), allowCustomTagsOf(config)).read() },
     { node, pretty -> YamlWriter(pretty).write(node) },
     serializers,
     deserializers,
@@ -46,6 +51,7 @@ public open class YamlMapper internal constructor(
     private val mapperConfig: DocumentMapperConfig = config
     private val maxNodeDepth: Int = config.maxNodeDepth
     private val maxAliases: Int = maxAliasesOf(config)
+    private val allowCustomTags: Boolean = allowCustomTagsOf(config)
 
     /**
      * 创建默认 YAML 映射器。
@@ -75,12 +81,18 @@ public open class YamlMapper internal constructor(
      * 解析多文档 YAML，按文档顺序返回全部文档树。
      *
      * 空白或只含注释的文本返回空列表；显式的空文档返回
-     * [com.mingliqiye.document.core.NullNode]。
+     * [com.mingliqiye.document.core.NullNode]。未知自定义 tag 的处理与 [parse]
+     * 一致（[YamlConfig.allowCustomTags]）。
      *
      * @param source YAML 文本
      * @return 按文档顺序排列的文档树列表
      */
-    public fun parseAllToNodes(source: String): List<Node> = YamlCodec.parseAll(source, mapperConfig.maxNodeDepth, maxAliases)
+    public fun parseAllToNodes(source: String): List<Node> = YamlCodec.parseAll(
+        source,
+        mapperConfig.maxNodeDepth,
+        maxAliases,
+        allowCustomTags,
+    )
 
     /**
      * 解析多文档 YAML，按文档顺序反序列化为指定类型。
@@ -122,18 +134,19 @@ public open class YamlMapper internal constructor(
      *
      * 默认使用原生 [YamlTokenReader]；配置了非零 Node 树限制
      * （`maxNodeDepth`/`maxNodeCount`/`maxStringLength`）时回退
-     * [NodeTokenReader]，以保持 Node 路径的限制与行为。
+     * [NodeTokenReader]，以保持 Node 路径的限制与行为。两条路径都使用
+     * [YamlConfig.allowCustomTags]。
      *
      * @param source YAML 文本
      * @return Token Reader
      */
     override fun createTextTokenReader(source: String): DocumentTokenReader {
         if (mapperConfig.maxNodeDepth > 0 || mapperConfig.maxNodeCount > 0 || mapperConfig.maxStringLength > 0) {
-            val node = YamlReader(source, mapperConfig.maxNodeDepth, maxAliases).read()
+            val node = YamlReader(source, mapperConfig.maxNodeDepth, maxAliases, allowCustomTags).read()
             validateNodeLimits(node)
             return NodeTokenReader(node)
         }
-        return YamlTokenReader(source, maxNodeDepth, maxAliases, mapperConfig.maxStringLength)
+        return YamlTokenReader(source, maxNodeDepth, maxAliases, mapperConfig.maxStringLength, allowCustomTags)
     }
 
     public companion object {
@@ -145,5 +158,7 @@ public open class YamlMapper internal constructor(
         public fun builder(): YamlMapperBuilder = YamlMapperBuilder()
 
         private fun maxAliasesOf(config: DocumentMapperConfig): Int = (config as? YamlConfig)?.maxAliases ?: 0
+
+        private fun allowCustomTagsOf(config: DocumentMapperConfig): Boolean = (config as? YamlConfig)?.allowCustomTags ?: false
     }
 }

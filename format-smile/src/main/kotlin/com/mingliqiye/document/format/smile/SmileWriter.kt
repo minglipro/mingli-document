@@ -37,7 +37,22 @@ public class SmileWriter {
      *
      * @throws SmileException 节点包含无法编码的内容时抛出
      */
-    public fun write(node: Node): ByteArray {
+    public fun write(node: Node): ByteArray = writeAll(listOf(node))
+
+    /**
+     * 按顺序写出多个根值，返回 Smile 多消息流字节。
+     *
+     * 仅供 [SmileSequenceWriter] 使用；空集合返回空字节数组。
+     *
+     * @param nodes 要写出的文档树
+     * @return Smile 二进制内容
+     * @throws SmileException 节点包含无法编码的内容时抛出
+     */
+    internal fun writeAll(nodes: Iterable<Node>): ByteArray {
+        val iterator = nodes.iterator()
+        if (!iterator.hasNext()) {
+            return ByteArray(0)
+        }
         val output = ByteArrayOutputStream()
         val generator = try {
             SMILE_FACTORY.createGenerator(output)
@@ -45,7 +60,9 @@ public class SmileWriter {
             throw SmileException("Cannot create Smile generator", e)
         }
         try {
-            writeValue(generator, node)
+            while (iterator.hasNext()) {
+                writeValue(generator, iterator.next())
+            }
             generator.flush()
         } catch (e: IOException) {
             throw SmileException("Failed to write Smile content: ${e.message}", e)

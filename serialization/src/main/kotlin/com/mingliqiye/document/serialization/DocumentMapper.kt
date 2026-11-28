@@ -74,6 +74,12 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  *   没有无参构造器时，先调用静态工厂方法创建 Builder，按普通 Bean 规则填充 Builder，
  *   再调用 [com.mingliqiye.document.annotation.DocumentBuild] 标注的构建方法
  *   （未标注时回退到无参 `build()`）得到目标对象。
+ * - Java record（运行在 JDK 16+ 时）：组件访问器（`name()` 形式）作为可读属性写出；
+ *   反序列化优先使用 `@DocumentCreator` 构造器，没有标注时按 canonical constructor
+ *   的组件顺序注入，组件名默认作为文档字段名（可用 [DocumentName] 覆盖）。
+ * - 只读属性（没有 setter 且不是可写构造参数）：序列化正常写出；反序列化跳过该字段
+ *   而不是当作未知字段报错；存在 canonical / [DocumentCreator] 构造器时按参数注入。
+ * - 通过 [merge] 把文档树合并到已有对象，保留文档中没有出现的字段。
  * - 通过配置显式注册的多态基类/接口（字段声明为基类时写入/读取子类型信息）
  *
  * 优先使用 [com.mingliqiye.document.annotation.DocumentCreator] 构造器；没有标注的实体
@@ -412,6 +418,196 @@ public abstract class DocumentMapper protected constructor(
      * @return 目标对象
      */
     override fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D = fromNode(toNode(source), destinationType)
+
+    /**
+     * 把文档树合并到已有对象，文档中没有出现的字段保持目标对象的原值。
+     *
+     * 可变 Bean 就地修改并返回同一实例；不可变 Bean（record、
+     * [com.mingliqiye.document.annotation.DocumentCreator] 构造器 Bean、
+     * [com.mingliqiye.document.annotation.DocumentBuilder] Bean）通过
+     * “已有对象序列化结果 + 文档字段覆盖”重建实例后返回，原实例不变。
+     *
+     * @param node 合并来源文档树，必须是对象节点
+     * @param target 已存在的目标对象
+     * @param policy 合并策略，默认 [MergePolicy.REPLACE]
+     * @return 合并后的对象
+     * @throws DocumentSerializationException 节点不是对象、目标为 `null`，
+     *   或目标类型不支持合并时抛出
+     */
+    override fun <T> merge(node: Node, target: T, policy: MergePolicy): T {
+        val instance: Any = target ?: throw DocumentSerializationException("Merge target must not be null")
+        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
+        val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
+        @Suppress("UNCHECKED_CAST")
+        return mergeValue(source, instance, instance.javaClass, DecodePath("$"), policy) as T
+    }
+
+    /**
+     * 合并对象节点到已有实例。
+     *
+     * 可变 Bean 就地写入；不可变 Bean 重建实例。嵌套字段是否递归由
+     * [MergePolicy.deepMerge] 决定。
+     */
+    private fun mergeValue(
+        node: Node,
+        instance: Any,
+        type: Class<*>,
+        path: DecodePath,
+        policy: MergePolicy,
+    ): Any {
+        if (!node.isObject) {
+            throw DocumentSerializationException(
+                "Merge requires an object node at $path but was ${node.type}",
+            )
+        }
+        val objectNode = node.asObject()
+        val creator = beanCreator(type)
+        if (creator != null || beanBuilderFor(type) != null) {
+            return mergeImmutableBean(objectNode, instance, type, creator, path, policy)
+        }
+        if (!isMutableMergeType(type)) {
+            throw DocumentSerializationException(
+                "Type ${type.name} at $path does not support merge; merge target must be a Bean",
+            )
+        }
+        failOnUnknownMergeFields(objectNode, type, creator = null, path = path)
+        val metadata = beanMetadata(type)
+        for ((fieldName, patchNode) in objectNode.asMap()) {
+            val accessor = metadata.property(fieldName) ?: continue
+            if (!accessor.canWrite) {
+                // 只读属性：文档中即使出现也直接跳过，不报错。
+                continue
+            }
+            if (policy.skipNulls && patchNode is NullNode) {
+                continue
+            }
+            val current = if (accessor.canRead) accessor.read(instance) else null
+            val mark = path.mark()
+            path.field(fieldName)
+            val merged = mergePropertyValue(patchNode, current, accessor, policy, path)
+            path.truncate(mark)
+            accessor.write(instance, merged)
+        }
+        return instance
+    }
+
+    /** 合并单个属性值：可深合并的嵌套 Bean 递归合并，其余按完整反序列化覆盖。 */
+    private fun mergePropertyValue(
+        patchNode: Node,
+        current: Any?,
+        accessor: BeanPropertyAccessor,
+        policy: MergePolicy,
+        path: DecodePath,
+    ): Any? {
+        if (!policy.deepMerge || current == null || patchNode !is ObjectNode) {
+            return deserializeForMerge(patchNode, accessor.valueType, accessor.metadata, path)
+        }
+        val declaredType = rawClassOrNull(accessor.valueType)
+            ?: return deserializeForMerge(patchNode, accessor.valueType, accessor.metadata, path)
+        if (config.hasSubtypes && config.subtypeRegistry(declaredType) != null) {
+            // 多态声明字段需要先按类型属性解析子类，直接整体替换。
+            return deserializeForMerge(patchNode, accessor.valueType, accessor.metadata, path)
+        }
+        val actualType = current.javaClass
+        if (!declaredType.isAssignableFrom(actualType) || !isRegularBeanType(declaredType)) {
+            return deserializeForMerge(patchNode, accessor.valueType, accessor.metadata, path)
+        }
+        return mergeValue(patchNode, current, actualType, path, policy)
+    }
+
+    /**
+     * 合并不可变 Bean：把已有对象的序列化结果与文档字段叠加后重新反序列化。
+     *
+     * 构造函数注入类型的字段没有 setter，无法就地写入；通过“已有值 + 覆盖字段”
+     * 重新调用 canonical / `@DocumentCreator` 构造器得到新实例。
+     */
+    private fun mergeImmutableBean(
+        objectNode: ObjectNode,
+        instance: Any,
+        type: Class<*>,
+        creator: BeanCreatorMetadata?,
+        path: DecodePath,
+        policy: MergePolicy,
+    ): Any {
+        failOnUnknownMergeFields(objectNode, type, creator, path)
+        val existing = serializeValue(instance, IdentityHashMap(), 0, null, path.toString())
+        if (existing !is ObjectNode) {
+            throw DocumentSerializationException(
+                "Cannot merge immutable type ${type.name} at $path: serialized value is not an object",
+            )
+        }
+        val mergedFields = LinkedHashMap<String, Node>(existing.asMap())
+        for ((fieldName, patchNode) in objectNode.asMap()) {
+            if (policy.skipNulls && patchNode is NullNode) {
+                continue
+            }
+            val current = mergedFields[fieldName]
+            mergedFields[fieldName] = overlayMergeNode(current, patchNode, policy)
+        }
+        return deserializeValue(ObjectNode.from(mergedFields), type, path.toString())
+            ?: throw DocumentSerializationException("Cannot merge immutable type ${type.name} at $path")
+    }
+
+    /** 叠加单个字段节点；深合并时递归合并对象节点。 */
+    private fun overlayMergeNode(current: Node?, patchNode: Node, policy: MergePolicy): Node = if (policy.deepMerge && current is ObjectNode && patchNode is ObjectNode) {
+        val fields = LinkedHashMap<String, Node>(current.asMap())
+        for ((fieldName, nestedPatch) in patchNode.asMap()) {
+            if (policy.skipNulls && nestedPatch is NullNode) {
+                continue
+            }
+            fields[fieldName] = overlayMergeNode(fields[fieldName], nestedPatch, policy)
+        }
+        ObjectNode.from(fields)
+    } else {
+        patchNode
+    }
+
+    /** 合并路径的未知字段校验：只允许 Bean 已知字段（含只读/忽略属性）与构造参数名。 */
+    private fun failOnUnknownMergeFields(
+        objectNode: ObjectNode,
+        type: Class<*>,
+        creator: BeanCreatorMetadata?,
+        path: DecodePath,
+    ) {
+        if (!config.failOnUnknownFields) {
+            return
+        }
+        val knownFields = beanMetadata(type).knownFields
+        val creatorNames = creator?.documentNames.orEmpty()
+        for (key in objectNode.keys) {
+            if (key !in knownFields && key !in creatorNames) {
+                throw DocumentSerializationException("Unknown field '$key' for ${type.name} at $path")
+            }
+        }
+    }
+
+    /** 目标是否为可就地写入的普通可变 Bean。 */
+    private fun isMutableMergeType(type: Class<*>): Boolean = isRegularBeanType(type) &&
+        !type.isInterface &&
+        !Modifier.isAbstract(type.modifiers) &&
+        beanCreator(type) == null &&
+        beanBuilderFor(type) == null
+
+    /** 排除标量、容器、数组、Node 等不能按 Bean 深合并的类型。 */
+    private fun isRegularBeanType(type: Class<*>): Boolean = when {
+        type.isPrimitive || type.isArray -> false
+        type == String::class.java || type == CharSequence::class.java || type == Char::class.java -> false
+        type == Boolean::class.java || type == java.lang.Boolean::class.java -> false
+        Number::class.java.isAssignableFrom(type) -> false
+        type.isEnum -> false
+        Collection::class.java.isAssignableFrom(type) -> false
+        Map::class.java.isAssignableFrom(type) -> false
+        Node::class.java.isAssignableFrom(type) -> false
+        type == Any::class.java -> false
+        else -> true
+    }
+
+    private fun deserializeForMerge(
+        node: Node,
+        type: Type,
+        property: DocumentProperty?,
+        path: DecodePath,
+    ): Any? = deserializeValue(node, type, path.toString(), property)
 
     private fun serializeWithSerializer(
         serializer: DocumentBaseSerializer<*>,
@@ -1054,7 +1250,7 @@ public abstract class DocumentMapper protected constructor(
                         path.truncate(mark)
                         present[parameter.index] = true
                     } else {
-                        if (config.failOnUnknownFields) {
+                        if (config.failOnUnknownFields && fieldName !in beanMetadata(type).knownFields) {
                             throw DocumentSerializationException(
                                 "Unknown field '$fieldName' for ${type.name} at $path",
                             )
@@ -1401,7 +1597,7 @@ public abstract class DocumentMapper protected constructor(
                 arguments[parameter.index] = readValue(reader, parameter.type, null, "$path.$fieldName")
                 present[parameter.index] = true
             } else {
-                if (config.failOnUnknownFields) {
+                if (config.failOnUnknownFields && fieldName !in beanMetadata(type).knownFields) {
                     throw DocumentSerializationException(
                         "Unknown field '$fieldName' for ${type.name} at $path",
                     )
@@ -1469,6 +1665,9 @@ public abstract class DocumentMapper protected constructor(
      * [MissingFieldPolicy.KEEP_DEFAULT] / [MissingFieldPolicy.SET_NULL] 下传 `null`，
      * 基本类型参数传 Java 默认值；[MissingFieldPolicy.SET_EMPTY] 额外对
      * String/集合/Map/数组传空值；[MissingFieldPolicy.FAIL] 抛异常。
+     *
+     * 被 `@DocumentIgnore` 标记的 record 组件不参与文档匹配，始终传 Java 默认值，
+     * 不受 [MissingFieldPolicy.FAIL] 影响。
      */
     private fun fillMissingCreatorArguments(
         creator: BeanCreatorMetadata,
@@ -1480,8 +1679,18 @@ public abstract class DocumentMapper protected constructor(
             if (present[parameter.index]) {
                 continue
             }
-            arguments[parameter.index] = missingCreatorValue(parameter, path)
+            arguments[parameter.index] = if (parameter.ignored) {
+                ignoredCreatorValue(parameter)
+            } else {
+                missingCreatorValue(parameter, path)
+            }
         }
+    }
+
+    /** 被忽略的构造参数使用 Java 默认值（引用类型 `null`，基本类型 0/false）。 */
+    private fun ignoredCreatorValue(parameter: BeanCreatorParameter): Any? {
+        val rawType = rawClassOrNull(parameter.type)
+        return if (rawType?.isPrimitive == true) primitiveDefault(rawType) else null
     }
 
     private fun missingCreatorValue(parameter: BeanCreatorParameter, path: String): Any? {
@@ -2379,6 +2588,9 @@ public abstract class DocumentMapper protected constructor(
 
     /**
      * 使用 [DocumentCreator] 构造器从对象节点创建实例。
+     *
+     * 只读属性（没有 setter、也不是构造参数）在文档中出现时直接跳过而不是
+     * 按未知字段报错；`@DocumentIgnore` 属性同理。
      */
     private fun deserializeBeanWithCreator(
         objectNode: ObjectNode,
@@ -2387,9 +2599,9 @@ public abstract class DocumentMapper protected constructor(
         path: String,
     ): Any {
         if (config.failOnUnknownFields) {
-            val knownFields = creator.documentNames
+            val readOnlyFields = beanMetadata(type).knownFields
             for (key in objectNode.keys) {
-                if (key !in knownFields) {
+                if (key !in creator.documentNames && key !in readOnlyFields) {
                     throw DocumentSerializationException("Unknown field '$key' for ${type.name} at $path")
                 }
             }
@@ -2559,12 +2771,16 @@ public abstract class DocumentMapper protected constructor(
     )
 
     /**
-     * 获取类型上 [DocumentCreator] 标注的构造器元数据；没有标注时返回 `null`。
+     * 获取类型反序列化时要使用的构造器元数据；没有标注时返回 `null`。
      *
+     * 优先使用 [DocumentCreator] 标注的构造器；没有标注的 Java record 回退到
+     * canonical constructor（运行在 JDK 8 时 record 不存在，不影响普通 Bean）。
      * 结果按类型缓存，同一类型只解析一次反射信息。
      */
     private fun beanCreator(type: Class<*>): BeanCreatorMetadata? {
-        val cached = beanCreatorCache.computeIfAbsent(type) { createBeanCreator(type) ?: noBeanCreator }
+        val cached = beanCreatorCache.computeIfAbsent(type) {
+            createBeanCreator(type) ?: createRecordBeanCreator(type) ?: noBeanCreator
+        }
         return if (cached === noBeanCreator) null else cached as BeanCreatorMetadata
     }
 
@@ -2613,6 +2829,93 @@ public abstract class DocumentMapper protected constructor(
             annotation?.value,
             parameter.parameterizedType,
         )
+    }
+
+    /**
+     * 为 Java record 生成隐式 [DocumentCreator] 元数据：绑定 canonical constructor。
+     *
+     * record 没有无参构造器、组件访问器也不符合 JavaBeans getter 约定，因此没有
+     * 显式 [DocumentCreator] 时按 record 组件顺序绑定 canonical constructor；
+     * 组件名即规范构造参数名，默认作为文档字段名，可用 [DocumentName] 覆盖。
+     * 运行在 JDK 8 时 [JavaRecordSupport] 不可用，本方法返回 `null`。
+     */
+    private fun createRecordBeanCreator(type: Class<*>): BeanCreatorMetadata? {
+        if (!JavaRecordSupport.isRecord(type)) {
+            return null
+        }
+        val components = JavaRecordSupport.components(type)
+        val constructor = findCanonicalRecordConstructor(type, components)
+            ?: throw DocumentSerializationException(
+                "Cannot find canonical constructor of record ${type.name}; " +
+                    "declare an @DocumentCreator constructor instead",
+            )
+        try {
+            constructor.isAccessible = true
+        } catch (e: Exception) {
+            throw DocumentSerializationException(
+                "Cannot access canonical constructor of record ${type.name}",
+                e,
+            )
+        }
+        val parameters = components.mapIndexed { index, component ->
+            createRecordBeanCreatorParameter(type, constructor, index, component)
+        }
+        val duplicates = parameters.filterNot { it.ignored }
+            .groupBy { it.documentName }
+            .filterValues { it.size > 1 }
+            .keys
+        if (duplicates.isNotEmpty()) {
+            throw DocumentSerializationException(
+                "Duplicate record component document names $duplicates on ${type.name}",
+            )
+        }
+        return BeanCreatorMetadata(type, constructor, parameters)
+    }
+
+    private fun createRecordBeanCreatorParameter(
+        type: Class<*>,
+        constructor: Constructor<*>,
+        index: Int,
+        component: JavaRecordComponent,
+    ): BeanCreatorParameter {
+        val elements = listOfNotNull(
+            constructor.parameters.getOrNull(index),
+            component.accessor,
+            findField(type, component.name),
+            component.element,
+        )
+        val property = documentProperty(type, component.name, elements, component.type)
+        return BeanCreatorParameter(
+            index,
+            component.name,
+            property.documentName,
+            property.getAnnotation(DocumentName::class.java)?.value,
+            component.type,
+            property.isIgnored(),
+        )
+    }
+
+    /**
+     * 查找 record 的 canonical constructor。
+     *
+     * 以组件泛型类型的擦除类型按顺序匹配构造参数类型；record 的 canonical
+     * constructor 签名必须与组件列表一致。
+     */
+    private fun findCanonicalRecordConstructor(
+        type: Class<*>,
+        components: List<JavaRecordComponent>,
+    ): Constructor<*>? {
+        val expectedTypes = components.map { component ->
+            try {
+                rawClass(component.type)
+            } catch (_: DocumentSerializationException) {
+                return null
+            }
+        }
+        return type.declaredConstructors.firstOrNull { constructor ->
+            constructor.parameterCount == expectedTypes.size &&
+                constructor.parameterTypes.indices.all { constructor.parameterTypes[it] == expectedTypes[it] }
+        }
     }
 
     /**
@@ -2871,6 +3174,29 @@ public abstract class DocumentMapper protected constructor(
                 ?: field?.genericType
                 ?: property.propertyType
             accessors[property.name] = BeanPropertyAccessor(metadata, getter, setter, valueType)
+        }
+
+        // JavaBeans Introspector 不识别 record 组件：组件访问器是 `name()` 而不是
+        // `getName()`，字段是私有 final。这里按 record 组件补充只读访问器。
+        for (component in JavaRecordSupport.components(type)) {
+            if (component.name in handled) {
+                continue
+            }
+            handled.add(component.name)
+            val field = findField(type, component.name)
+            val metadata = documentProperty(
+                type,
+                component.name,
+                listOfNotNull(component.accessor, field, component.element),
+                component.type,
+            )
+            knownFields.add(metadata.documentName)
+            if (metadata.isIgnored()) {
+                continue
+            }
+            val getter: java.util.function.Function<Any, Any?> = BeanAccessorFactory.getter(component.accessor)
+                ?: java.util.function.Function<Any, Any?> { bean -> invoke(component.accessor, bean) }
+            accessors[component.name] = BeanPropertyAccessor(metadata, getter, null, component.type)
         }
 
         for (field in type.fields) {

@@ -5,7 +5,7 @@ CSV 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:csv:1.5.0")
+implementation("com.mingliqiye.document.format:csv:2.0.0")
 ```
 
 ## 主要 API
@@ -17,6 +17,9 @@ CsvWriter
 CsvConfig
 CsvSchema
 CsvSchemaBuilder
+CsvNestedMode
+CsvSchemaReader
+CsvSchemaWriter
 ```
 
 ## 示例
@@ -52,21 +55,124 @@ val schema = CsvSchema.builder("user")
 val mapper = CsvMapper(schema)
 ```
 
+## 嵌套单元格
+
+默认不支持嵌套（保持旧版本行为）。通过 `CsvConfig.nestedMode` 或 Schema 中的嵌套子
+Schema 按需启用。
+
+### JSON 文本单元格（`CsvNestedMode.JSON`）
+
+`{...}` / `[...]` 单元格解析为嵌套对象/数组，嵌套节点写出为 JSON 文本：
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvConfig
+import com.mingliqiye.document.format.csv.CsvMapper
+import com.mingliqiye.document.format.csv.CsvNestedMode
+
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .nestedMode(CsvNestedMode.JSON)
+        .build(),
+)
+
+val csv = """
+    name,address,tags
+    小于,"{""city"":""杭州""}","[""a"",""b""]"
+""".trimIndent()
+```
+
+只有以 `{` / `[` 开头的单元格会被解析；非法 JSON 抛出
+`CsvParseException`。数组类型字段在 Schema 模式下同样以 JSON 文本单元格读写。
+
+### 点分列名（`CsvNestedMode.COLUMNS`）
+
+表头中的点分列名读写为嵌套对象，写出时把嵌套对象展开为点分列名：
+
+```kotlin
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .nestedMode(CsvNestedMode.COLUMNS)
+        .build(),
+)
+
+// name,address.city,address.geo.lat
+// 小于,杭州,30.1
+```
+
+数组没有列形式，`COLUMNS` 模式下写出嵌套数组会抛出 `CsvException`。
+
+## 多级 Schema
+
+`CsvSchemaBuilder.objectField` 声明带子 Schema 的对象字段，子字段展开为点分列名并支持
+任意层级；`CsvSchemaBuilder.arrayField` 声明带元素 Schema 的数组字段，数组以 JSON 文本
+单元格读写、每个元素按元素 Schema 校验：
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvSchema
+
+val geo = CsvSchema.builder("geo")
+    .double("lat")
+    .double("lon")
+    .build()
+
+val address = CsvSchema.builder("address")
+    .string("city")
+    .int("zip", required = false)
+    .objectField("geo", geo, required = false)
+    .build()
+
+val member = CsvSchema.builder("member")
+    .string("name")
+    .int("age")
+    .build()
+
+val person = CsvSchema.builder("person")
+    .string("name")
+    .objectField("address", address)
+    .arrayField("members", member) // JSON 数组单元格
+    .build()
+
+// person.columnNames ==
+// [name, address.city, address.zip, address.geo.lat, address.geo.lon, members]
+
+val mapper = CsvMapper(person)
+```
+
+写出时按子 Schema 递归展开：
+
+```text
+name,address.city,address.zip,address.geo.lat,address.geo.lon,members
+小于,杭州,310000,30.1,120.2,"[{""name"":""小于"",""age"":18}]"
+```
+
+读取规则：
+
+- 有表头时按列名映射（列顺序任意），无表头时按展开后的列顺序对应；
+- 必填的嵌套叶子列缺失时报错；可选父对象整体缺席时其内部必填列不报错；
+- 嵌套对象的所有单元格都为空时按对象缺席处理，便于可选对象写出后 round-trip；
+- 嵌套对象上的额外字段忽略；`failOnUnknownColumns` 控制顶层未声明列与数组元素 Schema
+  内部的未知字段。
+
 ## 特性
 
 - 平坦表格
 - 表头 / 无表头
 - 类型推断
 - CSV Schema
+- 嵌套对象 / 数组（JSON 文本单元格、点分列名）
+- 多级 Schema（嵌套子 Schema、数组元素 Schema）
 - 文件/流读写
 - Token 直读 Bean
 - 原生 CSV Token Reader
 
 ## 限制
 
-- 只支持平坦对象行
-- 不支持嵌套对象/数组单元格
-- 根节点固定为数组
+- 嵌套 JSON 单元格只支持以 `{` / `[` 开头的对象/数组（不支持裸 JSON 标量）；
+- `COLUMNS` 模式不支持数组（数组请用 `JSON` 模式或元素 Schema）；
+- 多级 Schema 的嵌套对象固定按点分列名展开，子 Schema 的 `header` /
+  `failOnUnknownColumns` 不参与列展开，仅 `failOnUnknownColumns` 参与数组元素 Schema 校验；
+- 子 Schema 内的列名不能与其它展开列冲突（如既有 `address.city` 字段又展开 `address`）；
+- 根节点固定为数组（写出时单对象按单行处理）。
 
 ## 构建
 

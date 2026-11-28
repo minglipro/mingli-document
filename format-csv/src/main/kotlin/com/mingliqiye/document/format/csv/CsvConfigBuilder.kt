@@ -13,6 +13,7 @@ public class CsvConfigBuilder {
     private var delimiter: Char = DEFAULT_CSV_DELIMITER
     private var header: Boolean = DEFAULT_CSV_HEADER
     private var schema: CsvSchema? = null
+    private var nestedMode: CsvNestedMode? = null
 
     /**
      * 为指定字段绑定转换器。
@@ -87,6 +88,21 @@ public class CsvConfigBuilder {
     }
 
     /**
+     * 设置嵌套值读写方式。
+     *
+     * [CsvNestedMode.JSON] 把 `{...}` / `[...]` 单元格解析为嵌套节点、把嵌套节点写出为
+     * JSON 文本；[CsvNestedMode.COLUMNS] 按点分列名读写嵌套对象。传 `null` 关闭嵌套
+     * 支持（默认），保持旧版本行为。
+     *
+     * @param mode 嵌套值读写方式；null 表示不支持嵌套
+     * @return 当前构建器
+     */
+    public fun nestedMode(mode: CsvNestedMode?): CsvConfigBuilder {
+        this.nestedMode = mode
+        return this
+    }
+
+    /**
      * 注册多态子类型。
      *
      * @param baseClass 基类/接口
@@ -150,5 +166,5 @@ public class CsvConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema)
+    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema, nestedMode)
 }

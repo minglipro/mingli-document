@@ -12,6 +12,7 @@ public class YamlConfigBuilder {
     private val base = DocumentMapperConfig.builder()
     private var pretty = false
     private var maxAliases = 0
+    private var allowCustomTags = false
 
     /**
      * 为指定字段绑定转换器。
@@ -73,6 +74,22 @@ public class YamlConfigBuilder {
     public fun maxAliases(maxAliases: Int): YamlConfigBuilder {
         require(maxAliases >= 0) { "maxAliases must be >= 0" }
         this.maxAliases = maxAliases
+        return this
+    }
+
+    /**
+     * 设置是否允许未知自定义 tag（如 `!foo`、`!env`）。
+     *
+     * 默认 `false`，未知 tag 抛出
+     * [com.mingliqiye.document.format.yaml.exception.YamlParseException]；开启后
+     * 标量 -> StringNode，序列 -> ArrayNode，映射 -> ObjectNode。该选项同时作用于
+     * Node 路径（[YamlReader]）与原生 Token 路径（[YamlMapper.parse]）。
+     *
+     * @param allow 是否允许未知自定义 tag
+     * @return 当前构建器
+     */
+    public fun allowCustomTags(allow: Boolean): YamlConfigBuilder {
+        this.allowCustomTags = allow
         return this
     }
 
@@ -140,5 +157,5 @@ public class YamlConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): YamlConfig = YamlConfig(base.build(), pretty, maxAliases)
+    public fun build(): YamlConfig = YamlConfig(base.build(), pretty, maxAliases, allowCustomTags)
 }

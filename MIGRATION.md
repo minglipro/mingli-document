@@ -1,4 +1,19 @@
-# 从 1.0.0 迁移到 1.1.0/1.2.0/1.3.0/1.4.0/1.5.0
+# 从 1.x 迁移到 2.0.0
+
+## 2.0.0
+
+2.0.0 汇总 1.3.0 之后的能力，API 总体兼容：
+
+```text
+新增 codegen 模块（KSP）
+新增 DocumentRuntimeCodecFactory
+新增 DocumentAccessorCodegen
+新增 DocumentCodecSourceGenerator
+新增 JQF / Jazzer / fuzzContinuous
+新增原生 Token Reader 与 Schubfach
+```
+
+需要 Kotlin 编译期代码生成时，额外引入 `codegen` 并应用 KSP 插件。
 
 ## 1.5.0
 
@@ -59,10 +74,10 @@ remoteReferenceResolver
 请统一升级：
 
 ```kotlin
-implementation(platform("com.mingliqiye.document:mingli-document-bom:1.5.0"))
+implementation(platform("com.mingliqiye.document:mingli-document-bom:2.0.0"))
 ```
 
-或者手动把版本从 `1.0.0` 改为 `1.5.0`。
+或者手动把版本从 `1.0.0` 改为 `2.0.0`。
 
 ## 转换器接口改名
 

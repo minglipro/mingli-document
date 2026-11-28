@@ -84,6 +84,7 @@ class ProtobufSchemaTest {
             ProtobufType.BYTES to SchemaType.BYTES,
             ProtobufType.ENUM to SchemaType.STRING,
             ProtobufType.MESSAGE to SchemaType.OBJECT,
+            ProtobufType.GROUP to SchemaType.OBJECT,
             ProtobufType.MAP to SchemaType.MAP,
         )
 
@@ -92,6 +93,7 @@ class ProtobufSchemaTest {
         assertEquals("int32", ProtobufType.INT32.typeName)
         assertEquals("uint64", ProtobufType.UINT64.typeName)
         assertEquals(ProtobufType.INT64, ProtobufType.fromTypeName("int64"))
+        assertEquals(ProtobufType.GROUP, ProtobufType.fromTypeName("group"))
         assertNull(ProtobufType.fromTypeName("uint128"))
         assertEquals(ProtobufType.INT32, ProtobufType.fromSchemaType(SchemaType.INT))
         assertEquals(ProtobufType.STRING, ProtobufType.fromSchemaType(SchemaType.DECIMAL))

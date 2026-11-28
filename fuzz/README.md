@@ -46,6 +46,20 @@ Jazzer 覆盖率引导 fuzz：
 gradle :fuzz:fuzzJazzer -PfuzzSeconds=30 -PjazzerTarget=com.mingliqiye.document.fuzz.JsonJazzerTarget
 ```
 
+JQF 覆盖率引导 fuzz：
+
+```bash
+gradle :fuzz:fuzzJqf -PfuzzSeconds=30
+```
+
+`fuzzJqf` 使用 JQF JUnit 5 适配器与 `jqf-instrument` agent，覆盖：
+
+```text
+json / yaml / xml / properties / toml / csv / ion / cbor / smile
+```
+
+普通 `test` 任务会排除 `*JqfTest*`，不影响常规构建。
+
 可用目标：
 
 ```text
@@ -60,6 +74,8 @@ CborJazzerTarget
 SmileJazzerTarget
 AvroJazzerTarget
 ProtobufJazzerTarget
+CborTagJazzerTarget
+IonFidelityJazzerTarget
 ```
 
 `fuzzContinuous` 按时间持续生成文本/二进制畸形输入，遇到 StackOverflow 或 OOM

@@ -23,10 +23,13 @@ dependencies {
     implementation(project(":format-avro"))
     implementation(project(":format-protobuf"))
     testImplementation(kotlin("test"))
+    testImplementation("edu.berkeley.cs.jqf:jqf-fuzz:3.0")
+    testImplementation("edu.berkeley.cs.jqf:jqf-junit5:3.0")
 }
 
 tasks.test {
     useJUnitPlatform()
+    exclude("**/*JqfTest*.class")
 }
 
 tasks.register<JavaExec>("fuzzContinuous") {
@@ -59,4 +62,34 @@ tasks.register<JavaExec>("fuzzJazzer") {
         "--target_class=$target",
         "-max_total_time=$seconds",
     )
+}
+
+val jqfInstrument by configurations.creating {
+    isTransitive = false
+}
+
+dependencies {
+    jqfInstrument("edu.berkeley.cs.jqf:jqf-instrument:3.0")
+}
+
+tasks.register<Test>("fuzzJqf") {
+    group = "verification"
+    description = "Run JQF coverage-guided fuzz tests for fuzzSeconds (default 10)."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    javaLauncher.set(
+        javaToolchains.launcherFor {
+            languageVersion.set(org.gradle.jvm.toolchain.JavaLanguageVersion.of(17))
+        },
+    )
+    val seconds = providers.gradleProperty("fuzzSeconds").orElse("10").get()
+    maxHeapSize = "1g"
+    jvmArgs("-javaagent:${jqfInstrument.singleFile.absolutePath}")
+    systemProperty("jqf.fuzz", "true")
+    systemProperty("jqf.fuzz.duration", "${seconds}s")
+    systemProperty("jqf.fuzz.out", layout.buildDirectory.dir("jqf-results").get().asFile.absolutePath)
+    filter {
+        includeTestsMatching("*JqfTest*")
+    }
 }

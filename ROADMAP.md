@@ -27,23 +27,26 @@
 - [x] 构造器注入
 - [x] Builder 模式实例化
 - [x] 输入本地 `$ref` 解析\n- [x] 对象身份引用序列化
-- [ ] Java record / Kotlin value class / sealed class
-- [ ] 只读属性
-- [ ] 字段 merge / update
+- [x] Java record（JDK 16+ 运行时）
+- [x] Kotlin value class / sealed class
+- [x] 只读属性
+- [x] 字段 merge / update
 
 ---
 
 ## 阶段 2：格式协议完整性
 
 - [x] Avro：非默认 codec、appendTo\n- [ ] Avro：完整 logical type
-- [ ] Protobuf：extensions、group、MessageSet、proto3 语义
+- [x] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
-- [ ] CBOR sequence\n- [x] CBOR：canonical map key 排序\n- [x] CBOR：可选 tag 保真
+- [x] CBOR sequence
+- [x] CBOR：canonical map key 排序
+- [x] CBOR：可选 tag 保真
 - [x] Ion：timestamp / symbol / clob / blob 类型保真
-- [ ] YAML：自定义 tag、跨文档 anchor
+- [x] YAML：自定义 tag（跨文档 anchor 规范不支持）
 - [ ] TOML：注释保留
-- [ ] CSV：嵌套结构 / 多级 Schema
-- [ ] Smile：多消息流
+- [x] CSV：嵌套结构 / 多级 Schema
+- [x] Smile：多消息流
 
 ---
 
@@ -54,8 +57,10 @@
 - [x] TOML 原生 Token Reader\n- [x] YAML 原生 Token Reader\n- [x] XML 原生 Token Reader（默认配置）
 - [x] JSON 紧凑模式纯字节写出
 - [x] Schubfach Double 最短格式化
-- [ ] 运行期代码生成
-- [ ] 编译期代码生成
+- [x] 运行期属性访问代码生成
+- [x] 编译期枚举转换器源码生成
+- [x] 运行期 Bean 编解码器生成
+- [x] 编译期注解处理器 / KSP
 - [ ] 大文件流式 Bean 映射
 - [ ] 对象池 / 零拷贝
 
@@ -70,8 +75,8 @@
 - [x] 全格式 maxInputSize
 - [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
-- [x] 持续 fuzz harness（fuzzContinuous）\n- [x] Jazzer 覆盖率引导 fuzz\n- [ ] JQF 集成
-- [ ] 安全测试基线
+- [x] 持续 fuzz harness（fuzzContinuous）\n- [x] Jazzer 覆盖率引导 fuzz\n- [x] JQF 集成
+- [x] 安全测试基线
 
 ---
 
@@ -79,7 +84,7 @@
 
 - [x] JSON Schema（常用 draft-07 子集）
 - [ ] Schema Registry 适配
-- [ ] OpenAPI / Swagger 生成
+- [x] OpenAPI 3.0 生成
 - [ ] Bean Validation 集成
 - [ ] 数据库 / ORM 集成
 
@@ -91,8 +96,9 @@
 - [x] 原子文件写入
 - [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）\n- [ ] Gitea CI
-- [ ] Maven Central 发布
-- [x] SHA-256 校验和\n- [x] CycloneDX JSON SBOM
+- [x] Maven Central 发布配置
+- [x] SHA-256 校验和
+- [x] CycloneDX JSON SBOM
 - [ ] JPMS module-info
 - [ ] GraalVM Native Image
 

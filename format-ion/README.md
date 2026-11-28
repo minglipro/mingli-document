@@ -5,7 +5,7 @@ Amazon Ion 格式模块，支持文本 Ion 与二进制 Ion。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:ion:1.5.0")
+implementation("com.mingliqiye.document.format:ion:2.0.0")
 ```
 
 ## 主要 API

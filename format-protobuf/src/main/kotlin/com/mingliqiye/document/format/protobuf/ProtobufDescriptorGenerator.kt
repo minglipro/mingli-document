@@ -20,7 +20,9 @@ import com.mingliqiye.document.format.protobuf.exception.ProtobufException
  * - 根 message 名称中的点号生成隐式外层嵌套 message
  * - 嵌套 message/enum 递归生成
  * - map 字段生成 `map_entry = true` 的嵌套 entry message（key/value 两个字段）
+ * - group 字段生成 `TYPE_GROUP`（类型引用指向嵌套 message）
  * - oneof 按字段声明顺序收集，字段写入 `oneof_index`
+ * - [ProtobufSchema.messageSetWireFormat] 生成 `message_set_wire_format` 选项
  * - message/enum 类型引用优先解析为当前文件内定义的绝对类型名；`.` 开头的全限定名原样交给
  *   protobuf-java，由 [ProtobufSchema.toDescriptor] 的依赖 Descriptor 解析
  */
@@ -51,6 +53,7 @@ internal object ProtobufDescriptorGenerator {
             enums = schema.enums,
             fullName = rootFullName,
             registry = registry,
+            messageSetWireFormat = schema.messageSetWireFormat,
         )
         for (index in messageParts.size - 2 downTo 0) {
             messageProto = DescriptorProto.newBuilder()
@@ -85,8 +88,15 @@ internal object ProtobufDescriptorGenerator {
         enums: List<ProtobufEnum>,
         fullName: String,
         registry: TypeRegistry,
+        messageSetWireFormat: Boolean = false,
     ): DescriptorProto {
+        if (messageSetWireFormat && fields.isNotEmpty()) {
+            throw ProtobufException("MessageSet wire format 的 message 不能声明普通字段: $fullName")
+        }
         val builder = DescriptorProto.newBuilder().setName(name)
+        if (messageSetWireFormat) {
+            builder.setOptions(MessageOptions.newBuilder().setMessageSetWireFormat(true))
+        }
         val oneofIndexes = LinkedHashMap<String, Int>()
         for (field in fields) {
             val oneofName = field.oneofName ?: continue
@@ -154,12 +164,20 @@ internal object ProtobufDescriptorGenerator {
         builder.setLabel(label)
         field.oneofName?.let { builder.setOneofIndex(oneofIndexes.getValue(it)) }
         when (field.protobufType) {
-            ProtobufType.MESSAGE -> {
+            ProtobufType.MESSAGE,
+            ProtobufType.GROUP,
+            -> {
                 val reference = field.typeReference as? ProtobufTypeReference.MessageType
                     ?: throw ProtobufException(
-                        "message 字段 '${field.name}' 缺少 MessageType 类型引用（作用域 $scopeFullName）",
+                        "${field.protobufType.typeName} 字段 '${field.name}' 缺少 MessageType 类型引用（作用域 $scopeFullName）",
                     )
-                builder.setType(FieldDescriptorProto.Type.TYPE_MESSAGE)
+                builder.setType(
+                    if (field.protobufType == ProtobufType.GROUP) {
+                        FieldDescriptorProto.Type.TYPE_GROUP
+                    } else {
+                        FieldDescriptorProto.Type.TYPE_MESSAGE
+                    },
+                )
                 builder.setTypeName(resolveTypeName(reference.typeName, scopeFullName, registry, KIND_MESSAGE, field.name))
             }
 
@@ -263,6 +281,7 @@ internal object ProtobufDescriptorGenerator {
         ProtobufType.BYTES -> FieldDescriptorProto.Type.TYPE_BYTES
         ProtobufType.ENUM,
         ProtobufType.MESSAGE,
+        ProtobufType.GROUP,
         ProtobufType.MAP,
         -> throw ProtobufException("字段 '$fieldName' 的类型 '${protobufType.typeName}' 不是标量类型")
     }
