@@ -6,6 +6,7 @@
 
 - `jpa` 模块：JPA / Hibernate 实体注解映射，实体 ↔ Node
 - 显式 `module-info` + Multi-Release JAR：annotation / exception / core / schema / schema-registry
+- GraalVM Native Image 实测通过（GraalVM JDK21 + Windows SDK）
 
 ### JPMS
 

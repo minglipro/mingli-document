@@ -97,6 +97,26 @@ graalvm\native-smoke\build\native-smoke.exe
 脚本在 JVM 运行成功后也会打印包含完整 classpath 的 `native-image` 命令，可直接复制执行
 （`graalvm/native-smoke/build/` 已被 `.gitignore` 里的 `build` 规则忽略）。
 
+## 实测结果
+
+Windows 环境：
+
+```text
+GraalVM JDK 21.0.12
+Visual Studio 18 BuildTools
+Windows SDK 10.0.26100 / 10.0.28000
+```
+
+构建成功并运行：
+
+```text
+JSON        : {"active":true,"address":{"city":"Hangzhou","zip":310000},"age":30,"user_name":"Li Ming"}
+Record JSON : {"x":3,"y":4}
+SMOKE OK
+```
+
+native 可执行文件约 21 MB；构建耗时约 26 秒。
+
 ## 配置说明
 
 - 示例 Bean（`NativeSmoke$User`、`NativeSmoke$Address`、`NativeSmoke$Point`）按

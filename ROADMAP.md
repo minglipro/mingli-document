@@ -103,7 +103,7 @@
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
 - [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry；其余模块待上游依赖修复模块名，见 docs/guide/jpms.md）
-- [x] GraalVM Native Image 配置与 JVM smoke（native 构建需 GraalVM JDK17+）
+- [x] GraalVM Native Image 实测通过（GraalVM JDK21 + VS BuildTools + Windows SDK）
 
 ---
 

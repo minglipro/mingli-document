@@ -70,11 +70,18 @@ graalvm/native-smoke/run-jvm-smoke.ps1
 
 不安装 GraalVM 也可以运行，用于确认类路径和映射逻辑。
 
+## 实测状态
+
+```text
+JVM smoke：GraalVM JDK 21 / JBR 25 通过
+native ：GraalVM JDK 21 + VS BuildTools + Windows SDK 通过
+输出   ：SMOKE OK
+```
+
 ## 限制
 
 ```text
-本仓库未在 CI 中执行 native-image
-graalvm/ 提供配置模板与 smoke
+CI 中尚未接入 native-image 构建
 Kotlin reflect / validation / Jakarta Provider 需要额外配置
 字符集/Locale/时区默认裁剪
 ```
