@@ -50,10 +50,10 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:1.5.0")
+    implementation("com.mingliqiye.document.format:json:2.0.0")
 
     // 需要 Kotlin data class 时
-    implementation("com.mingliqiye.document:serialization-kotlin:1.5.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:2.0.0")
 }
 ```
 
@@ -79,7 +79,7 @@ protobuf
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:1.5.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.0.0"))
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")
@@ -96,7 +96,7 @@ Maven：
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>1.5.0</version>
+            <version>2.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -435,6 +435,7 @@ gradle :benchmarks:jmh
 | `exception` | 异常基类 |
 | `serialization` | DocumentMapper、Bean 映射、Token |
 | `serialization-kotlin` | Kotlin data class 支持 |
+| `codegen` | KSP 编译期代码生成（不参与常规依赖） |
 | `schema` | 格式无关 Schema |
 | `format-*` | 各格式 Mapper |
 | `bom` | Maven BOM：`mingli-document-bom` |
@@ -449,6 +450,7 @@ gradle :benchmarks:jmh
 [schema](schema/README.md) ·
 [serialization](serialization/README.md) ·
 [serialization-kotlin](serialization-kotlin/README.md) ·
+[codegen](codegen/README.md) ·
 [json](format-json/README.md) ·
 [yaml](format-yaml/README.md) ·
 [xml](format-xml/README.md) ·
@@ -518,7 +520,7 @@ Apache License, Version 2.0。
 ## 变更记录
 
 - [CHANGELOG.md](CHANGELOG.md)
-- [1.0.0 -> 1.5.0 迁移指南](MIGRATION.md)
+- [1.0.0 -> 2.0.0 迁移指南](MIGRATION.md)
 
 ## 贡献
 
