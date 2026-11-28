@@ -5,7 +5,7 @@ description: mingli-document 支持的 11 种格式：能力矩阵、坐标、�
 
 # 格式总览
 
-`mingli-document` 用统一的文档树（[`Node`](/reference/api.html)）作为中间层，把 11 种格式接进同一套 Mapper / Bean 映射体系：
+`mingli-document` 用统一的文档树（[`Node`](../reference/api.md)）作为中间层，把 11 种格式接进同一套 Mapper / Bean 映射体系：
 
 ```text
 文本 / 二进制
@@ -102,7 +102,7 @@ CBOR、Smile、Avro、Protobuf 继承 `BinaryDocumentMapper`：
 - `parse(String)` / `format(...)` / `formatPretty` / `Reader` / `Writer` 会抛
   `DocumentSerializationException`（不支持）。
 
-Ion 是特例：它同时支持文本与二进制，但 Mapper 的字符串/文件/流入口默认按“文本 Ion”工作，二进制读写走 `parse(ByteArray)` / `formatBytes(...)`。详见 [Ion](/formats/ion.html)。
+Ion 是特例：它同时支持文本与二进制，但 Mapper 的字符串/文件/流入口默认按“文本 Ion”工作，二进制读写走 `parse(ByteArray)` / `formatBytes(...)`。详见 [Ion](./ion.md)。
 
 ## 通用读取 API
 
@@ -219,25 +219,25 @@ val yamlText = yaml.format(node)
 
 | 页面 | 内容摘要 |
 |---|---|
-| [JSON](/formats/json.html) | JSONC、严格 UTF-8 字节 API、重复 key 策略、深度限制、JSON Schema 校验 |
-| [YAML](/formats/yaml.html) | 多文档、`!!binary`、自定义 tag、alias 限制、原生 Token 读取 |
-| [XML](/formats/xml.html) | `type`/`nil` 协议、属性映射、PREFIX/CLARK 命名空间、混合内容策略、XXE 防护 |
-| [Properties](/formats/properties.html) | 扁平 key、`.` 路径、`[index]` 数组、百分号转义 |
-| [TOML](/formats/toml.html) | 表/数组、内联表写出、日期时间字符串化、无 null |
-| [CSV](/formats/csv.html) | 表头/无表头、类型推断、CSV Schema、嵌套 JSON 单元格/点分列名 |
-| [Ion](/formats/ion.html) | 文本/二进制 Ion、BLOB/CLOB、类型保真、深度限制 |
-| [CBOR](/formats/cbor.html) | 二进制、canonical 编码、tag 保真、sequence 多值读写 |
-| [Smile](/formats/smile.html) | 二进制、embedded binary、多消息流 |
-| [Avro](/formats/avro.html) | Schema、wire、OCF、codec、schema evolution、append |
-| [Protobuf](/formats/protobuf.html) | Descriptor/DynamicMessage、Schema builder、enum/map/oneof、extension、group、MessageSet、未知字段策略 |
+| [JSON](./json.md) | JSONC、严格 UTF-8 字节 API、重复 key 策略、深度限制、JSON Schema 校验 |
+| [YAML](./yaml.md) | 多文档、`!!binary`、自定义 tag、alias 限制、原生 Token 读取 |
+| [XML](./xml.md) | `type`/`nil` 协议、属性映射、PREFIX/CLARK 命名空间、混合内容策略、XXE 防护 |
+| [Properties](./properties.md) | 扁平 key、`.` 路径、`[index]` 数组、百分号转义 |
+| [TOML](./toml.md) | 表/数组、内联表写出、日期时间字符串化、无 null |
+| [CSV](./csv.md) | 表头/无表头、类型推断、CSV Schema、嵌套 JSON 单元格/点分列名 |
+| [Ion](./ion.md) | 文本/二进制 Ion、BLOB/CLOB、类型保真、深度限制 |
+| [CBOR](./cbor.md) | 二进制、canonical 编码、tag 保真、sequence 多值读写 |
+| [Smile](./smile.md) | 二进制、embedded binary、多消息流 |
+| [Avro](./avro.md) | Schema、wire、OCF、codec、schema evolution、append |
+| [Protobuf](./protobuf.md) | Descriptor/DynamicMessage、Schema builder、enum/map/oneof、extension、group、MessageSet、未知字段策略 |
 
 ## 相关链接
 
-- [快速开始](/guide/getting-started.html)
-- [安装与坐标](/guide/installation.html)
-- [核心概念](/guide/core-concepts.html)
-- [文件与流 IO](/guide/io.html)
-- [配置](/guide/configuration.html)
-- [Token 与流式读写](/guide/token-stream.html)
-- [API 参考](/reference/api.html)
+- [快速开始](../guide/getting-started.md)
+- [安装与坐标](../guide/installation.md)
+- [核心概念](../guide/core-concepts.md)
+- [文件与流 IO](../guide/io.md)
+- [配置](../guide/configuration.md)
+- [Token 与流式读写](../guide/token-stream.md)
+- [API 参考](../reference/api.md)
 - [根 README（GitHub）](https://github.com/minglipro/mingli-document/blob/dev/README.md)

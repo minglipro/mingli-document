@@ -534,10 +534,10 @@ format：date-time / date / time / email / hostname / ipv4 / ipv6 / uri / uuid
 
 ## 相关链接
 
-- [格式总览](/formats/)
-- [核心概念：Node 树](/guide/core-concepts.html)
-- [文件与流 IO](/guide/io.html)
-- [Token 与流式读写](/guide/token-stream.html)
-- [API 参考](/reference/api.html)
-- [异常参考](/reference/exceptions.html)
+- [格式总览](./)
+- [核心概念：Node 树](../guide/core-concepts.md)
+- [文件与流 IO](../guide/io.md)
+- [Token 与流式读写](../guide/token-stream.md)
+- [API 参考](../reference/api.md)
+- [异常参考](../reference/exceptions.md)
 - [format-json 模块 README](https://github.com/minglipro/mingli-document/blob/dev/format-json/README.md)

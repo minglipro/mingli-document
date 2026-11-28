@@ -476,7 +476,7 @@ FIELD_NAME STRING NUMBER BOOLEAN NULL BINARY
 - 文本格式暂时没有原生实现时，用 `NodeTokenReader` 把 Node 树适配成 Token 流；
 - 二进制格式（CBOR/Smile/Ion）的 Token 路径可以跳过完整 Node 树，直接映射 Bean。
 
-详见 [Token 流式 API](/guide/token-stream.html)。
+详见 [Token 流式 API](./token-stream.md)。
 
 ## 异常体系
 
@@ -541,4 +541,4 @@ val yaml = YamlMapper().formatPretty(summary)
 println(yaml)
 ```
 
-下一步：读 [Bean 序列化](/guide/serialization.html) 掌握实体映射的全部规则。
+下一步：读 [Bean 序列化](./serialization.md) 掌握实体映射的全部规则。

@@ -63,17 +63,17 @@ Java Bean / Kotlin data class
 
 | 能力 | 说明 | 详见 |
 |---|---|---|
-| 统一文档树 | `ObjectNode`、`ArrayNode`、`StringNode`、`NumberNode`、`BooleanNode`、`BinaryNode`、`NullNode` | [/modules/core.html](/modules/core.html) |
-| 11 种格式 | JSON/JSONC、YAML、XML、Properties、TOML、CSV、Ion、CBOR、Smile、Avro、Protobuf | [/formats/](/formats/) |
-| Bean 映射 | JavaBean、构造器注入、Builder、record、只读属性、merge | [Bean 序列化](/guide/serialization.html) |
-| Kotlin 支持 | data class、value class、sealed class/interface 多态 | [/modules/serialization-kotlin.html](/modules/serialization-kotlin.html) |
-| 文本 + 二进制 API | `parse(String)`、`format`、`parse(ByteArray)`、`formatBytes` | [文件与流](/guide/io.html) |
-| Token 流 | `DocumentTokenReader` / `DocumentTokenWriter`，二进制格式直读 Bean | [Token 流式 API](/guide/token-stream.html) |
-| 注解 | 字段名、忽略、日期、数字、转换器、多态、XML 根元素 | [/modules/annotation.html](/modules/annotation.html) |
-| 配置体系 | 通用 `DocumentMapperConfig` + 格式专属 Config | [配置](/guide/configuration.html) |
-| 安全边界 | 深度/节点数/字符串长度限制、XXE 防护、YAML SafeConstructor、alias 限制 | [Fuzz 与安全](/guide/fuzz-security.html) |
-| 代码生成 | KSP 编译期枚举转换器、运行期 Bean 编解码器与访问器 | [代码生成](/guide/codegen.html) |
-| 开发者工具 | JMH 基准、Jazzer / JQF / 持续随机 fuzz、OpenAPI 生成 | [/modules/openapi.html](/modules/openapi.html) |
+| 统一文档树 | `ObjectNode`、`ArrayNode`、`StringNode`、`NumberNode`、`BooleanNode`、`BinaryNode`、`NullNode` | [/modules/core.html](../modules/core.md) |
+| 11 种格式 | JSON/JSONC、YAML、XML、Properties、TOML、CSV、Ion、CBOR、Smile、Avro、Protobuf | [/formats/](../formats/) |
+| Bean 映射 | JavaBean、构造器注入、Builder、record、只读属性、merge | [Bean 序列化](./serialization.md) |
+| Kotlin 支持 | data class、value class、sealed class/interface 多态 | [/modules/serialization-kotlin.html](../modules/serialization-kotlin.md) |
+| 文本 + 二进制 API | `parse(String)`、`format`、`parse(ByteArray)`、`formatBytes` | [文件与流](./io.md) |
+| Token 流 | `DocumentTokenReader` / `DocumentTokenWriter`，二进制格式直读 Bean | [Token 流式 API](./token-stream.md) |
+| 注解 | 字段名、忽略、日期、数字、转换器、多态、XML 根元素 | [/modules/annotation.html](../modules/annotation.md) |
+| 配置体系 | 通用 `DocumentMapperConfig` + 格式专属 Config | [配置](./configuration.md) |
+| 安全边界 | 深度/节点数/字符串长度限制、XXE 防护、YAML SafeConstructor、alias 限制 | [Fuzz 与安全](./fuzz-security.md) |
+| 代码生成 | KSP 编译期枚举转换器、运行期 Bean 编解码器与访问器 | [代码生成](./codegen.md) |
+| 开发者工具 | JMH 基准、Jazzer / JQF / 持续随机 fuzz、OpenAPI 生成 | [/modules/openapi.html](../modules/openapi.md) |
 
 格式能力速查（读取 / 写出均为 ✅ 表示双向支持）：
 
@@ -122,7 +122,7 @@ Maven：
 ```
 
 只需要 JSON 时，加一个 `format:json` 就够了：它会传递依赖
-`core`、`exception`、`serialization`。完整坐标见 [安装与依赖](/guide/installation.html)。
+`core`、`exception`、`serialization`。完整坐标见 [安装与依赖](./installation.md)。
 
 ### 2. 写第一个类
 
@@ -344,7 +344,7 @@ com.mingliqiye.document.format:protobuf
 ```
 
 当前版本 `2.0.0`。不想给每个模块写版本时用 BOM，详见
-[安装与依赖](/guide/installation.html)。
+[安装与依赖](./installation.md)。
 
 ## 项目目录结构
 
@@ -385,21 +385,21 @@ com.mingliqiye.document.format.<format>    各格式实现
 com.mingliqiye.document.openapi           OpenAPI 生成
 ```
 
-各模块细节见 [/modules/](/modules/)，各格式细节见 [/formats/](/formats/)。
+各模块细节见 [/modules/](../modules/)，各格式细节见 [/formats/](../formats/)。
 
 ## 学习路径
 
 建议按以下顺序阅读：
 
 1. **本页**：跑通例子，理解「实体 ←→ Node ←→ 文本」。
-2. [安装与依赖](/guide/installation.html)：确认坐标、BOM、JDK/Kotlin 版本与发布仓库。
-3. [核心概念](/guide/core-concepts.html)：Node 类型、Mapper 层次、Node vs Bean。
-4. [Bean 序列化](/guide/serialization.html)：注解、构造器、record、Kotlin、多态、merge。
-5. [文件与流](/guide/io.html)：String / ByteArray / File / Path / 流 的正确用法。
-6. [配置](/guide/configuration.html)：把行为调成你想要的样子。
-7. [Token 流式 API](/guide/token-stream.html)：大对象、二进制格式直读。
-8. [代码生成](/guide/codegen.html) 与 [Fuzz 与安全](/guide/fuzz-security.html)：进阶能力。
-9. 具体格式查 [/formats/](/formats/)，具体模块查 [/modules/](/modules/)。
+2. [安装与依赖](./installation.md)：确认坐标、BOM、JDK/Kotlin 版本与发布仓库。
+3. [核心概念](./core-concepts.md)：Node 类型、Mapper 层次、Node vs Bean。
+4. [Bean 序列化](./serialization.md)：注解、构造器、record、Kotlin、多态、merge。
+5. [文件与流](./io.md)：String / ByteArray / File / Path / 流 的正确用法。
+6. [配置](./configuration.md)：把行为调成你想要的样子。
+7. [Token 流式 API](./token-stream.md)：大对象、二进制格式直读。
+8. [代码生成](./codegen.md) 与 [Fuzz 与安全](./fuzz-security.md)：进阶能力。
+9. 具体格式查 [/formats/](../formats/)，具体模块查 [/modules/](../modules/)。
 
 想要一个真实可运行的完整示例集合，可以看仓库里的测试：`format-json/src/test`、
 `serialization/src/test`、`serialization-kotlin/src/test` 覆盖了每种能力的最小复现。
@@ -408,12 +408,12 @@ com.mingliqiye.document.openapi           OpenAPI 生成
 
 | 我想…… | 去看 |
 |---|---|
-| 用 YAML/XML/CSV 读写 | [/formats/](/formats/) |
-| 让 Kotlin data class 直接反序列化 | [Bean 序列化](/guide/serialization.html) |
-| 处理文件、目录、字符集、原子写 | [文件与流](/guide/io.html) |
-| 限制不可信输入的大小与深度 | [Fuzz 与安全](/guide/fuzz-security.html) |
-| 从 Jackson / 1.x 迁过来 | [迁移指南](/guide/migration.html) |
-| 查常见坑 | [常见问题](/guide/faq.html) |
+| 用 YAML/XML/CSV 读写 | [/formats/](../formats/) |
+| 让 Kotlin data class 直接反序列化 | [Bean 序列化](./serialization.md) |
+| 处理文件、目录、字符集、原子写 | [文件与流](./io.md) |
+| 限制不可信输入的大小与深度 | [Fuzz 与安全](./fuzz-security.md) |
+| 从 Jackson / 1.x 迁过来 | [迁移指南](./migration.md) |
+| 查常见坑 | [常见问题](./faq.md) |
 
 ::: tip 一句话记住
 所有格式都是 `DocumentMapper` 的子类；所有数据都先变成 `Node`；

@@ -366,4 +366,4 @@ gradle :serialization-kotlin:ktlintCheck
 
 - [serialization](./serialization.md)：Mapper、配置、多态注册表
 - [注解模块](./annotation.md)：`@DocumentTypeInfo` / `@DocumentTypeName` / `@DocumentName`
-- [Kotlin 数据类型指南](/guide/serialization.html)（站点指南章节）
+- [Kotlin 数据类型指南](../guide/serialization.md)（站点指南章节）

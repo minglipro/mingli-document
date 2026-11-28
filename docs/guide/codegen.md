@@ -378,4 +378,4 @@ val generateDocumentCodecs by tasks.registering {
 - 生成的 `DocumentModule` 与 `kotlinModule()` 可以同时注册，互不冲突；
 - 生成的源码要纳入版本管理时注意与 `@DocumentEnumCodec` 的注解参数保持一致。
 
-下一步：[Fuzz 与安全](/guide/fuzz-security.html) 或 [常见问题](/guide/faq.html)。
+下一步：[Fuzz 与安全](./fuzz-security.md) 或 [常见问题](./faq.md)。

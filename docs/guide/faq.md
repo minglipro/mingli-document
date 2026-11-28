@@ -26,7 +26,7 @@ title: 常见问题
 
 格式模块坐标是 `com.mingliqiye.document.format:<name>`（如 `format:json`），
 普通模块是 `com.mingliqiye.document:<name>`。完整清单见
-[安装与依赖](/guide/installation.html)。
+[安装与依赖](./installation.md)。
 
 ### Q2：需要什么 JDK / Kotlin 版本？
 
@@ -58,7 +58,7 @@ class DocumentConfig {
 - 多态需要显式注册，不扫描 classpath；
 - 提供 Token 流、统一 IO、跨格式转换、格式专属安全限制。
 
-详细对照见 [迁移指南](/guide/migration.html)。
+详细对照见 [迁移指南](./migration.md)。
 
 ### Q5：Mapper 应该每次 new 吗？
 
@@ -159,7 +159,7 @@ var amount: BigDecimal = BigDecimal.ZERO
 
 普通映射要求文档字符串**完全等于**枚举 `name()`，未知值抛
 `DocumentSerializationException`。如果需要「未知值返回 null」，使用
-`@DocumentEnumCodec` 生成的枚举转换器（见 [代码生成](/guide/codegen.html)）。
+`@DocumentEnumCodec` 生成的枚举转换器（见 [代码生成](./codegen.md)）。
 
 ### Q17：`@DocumentTypeInfo` 加了，多态还是不行？
 
@@ -188,7 +188,7 @@ JSON 的重复 key 策略只处理同名字段。
 - 传 `JsonConfig` -> JSON 专属生效，构建器未暴露的通用选项取默认。
 
 Cbor 例外（`CborConfig.builder().base(config)`）。详见
-[配置](/guide/configuration.html)。
+[配置](./configuration.md)。
 
 ### Q20：`maxInputSize` 单位是字节吗？为什么中文没拦住？
 
@@ -274,7 +274,7 @@ JDK `IOException`（通常是 `NoSuchFileException`）原样抛出，不会被�
 - 直接 Writer：YAML、XML；
 - 其余（Properties、TOML、CSV）当前回退为完整字符串。
 
-以源码行为为准，详见 [文件与流](/guide/io.html#流式写出覆盖范围)。
+以源码行为为准，详见 [文件与流](./io.md#流式写出覆盖范围)。
 
 ## Kotlin 与代码生成
 
@@ -451,7 +451,7 @@ gradle :benchmarks:jmh
 - JSON 用 `JsonConfig.maxDepth`，考虑 `DuplicateKeyPolicy.FAIL`；
 - YAML 设置 `maxAliases`，保持 `allowCustomTags(false)`；
 - 不要给不可信输入配置远程 `$ref` 解析器；
-- 跑 `gradle :fuzz:test`。详见 [Fuzz 与安全](/guide/fuzz-security.html)。
+- 跑 `gradle :fuzz:test`。详见 [Fuzz 与安全](./fuzz-security.md)。
 
 ### Q54：`NaN` / `Infinity` 为什么被拒绝？
 
@@ -478,5 +478,5 @@ schema.validateOrThrow(node)
 支持 draft-07 常用子集（type/enum/properties/items/组合/format/本地 `$ref`），
 不支持远程 `$ref`、`dependentSchemas` 等高级关键字。
 
-如果你的问题不在列表中，先看对应格式页 [/formats/](/formats/) 与模块页
-[/modules/](/modules/)，再用仓库测试用例定位最小复现。
+如果你的问题不在列表中，先看对应格式页 [/formats/](../formats/) 与模块页
+[/modules/](../modules/)，再用仓库测试用例定位最小复现。

@@ -599,10 +599,10 @@ println(node.asObject()["@xmlns"]?.asString())   // urn:default
 
 ## 相关链接
 
-- [格式总览](/formats/)
-- [核心概念：Node 树](/guide/core-concepts.html)
-- [文件与流 IO](/guide/io.html)
-- [配置](/guide/configuration.html)
-- [API 参考](/reference/api.html)
-- [异常参考](/reference/exceptions.html)
+- [格式总览](./)
+- [核心概念：Node 树](../guide/core-concepts.md)
+- [文件与流 IO](../guide/io.md)
+- [配置](../guide/configuration.md)
+- [API 参考](../reference/api.md)
+- [异常参考](../reference/exceptions.md)
 - [format-xml 模块 README](https://github.com/minglipro/mingli-document/blob/dev/format-xml/README.md)

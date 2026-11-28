@@ -323,7 +323,7 @@ dependencies {
 }
 ```
 
-详细用法见 [代码生成](/guide/codegen.html)。
+详细用法见 [代码生成](./codegen.md)。
 
 ## 发布流程
 
@@ -374,4 +374,4 @@ fun main() {
 }
 ```
 
-下一步：读 [核心概念](/guide/core-concepts.html) 理解 Node 树与 Mapper 的关系。
+下一步：读 [核心概念](./core-concepts.md) 理解 Node 树与 Mapper 的关系。

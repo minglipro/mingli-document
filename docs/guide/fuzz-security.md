@@ -98,7 +98,7 @@ CBOR 深度限制。
 - 或者先 `parse(text, Node::class.java)` 再 `fromNode(...)`，让 Node 路径校验；
 - 或者选择在配置限制时会自动回退 Node 的格式（YAML/XML/TOML/CBOR）。
 
-详见 [Token 流式 API 的限制](/guide/token-stream.html#token-路径的限制)。
+详见 [Token 流式 API 的限制](./token-stream.md#token-路径的限制)。
 :::
 
 ## 不可信输入推荐配置
@@ -380,4 +380,4 @@ fuzz/src/test/resources/corpus/<format>/
 
 也就是说：本库负责「解析器不被打穿」，业务语义安全与基础设施防护仍需你自己兜底。
 
-下一步：[迁移指南](/guide/migration.html) 或 [常见问题](/guide/faq.html)。
+下一步：[迁移指南](./migration.md) 或 [常见问题](./faq.md)。

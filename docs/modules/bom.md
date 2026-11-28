@@ -269,5 +269,5 @@ gradle :bom:ktlintCheck   # bom 无 Kotlin 源码，通常为空任务
 相关文档：
 
 - [模块总览](./index.md)：模块坐标与依赖关系
-- [安装指南](/guide/installation.html)：站点安装章节
-- [迁移指南](/guide/migration.html)：1.0.0 → 2.0.0 坐标升级
+- [安装指南](../guide/installation.md)：站点安装章节
+- [迁移指南](../guide/migration.md)：1.0.0 → 2.0.0 坐标升级

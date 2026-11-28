@@ -605,10 +605,10 @@ check(trailingError is AvroParseException)
 
 ## 相关链接
 
-- [格式总览](/formats/)
-- [Schema 模块](/modules/schema.html)
-- [核心概念：Node 树](/guide/core-concepts.html)
-- [文件与流 IO](/guide/io.html)
-- [API 参考](/reference/api.html)
-- [异常参考](/reference/exceptions.html)
+- [格式总览](./)
+- [Schema 模块](../modules/schema.md)
+- [核心概念：Node 树](../guide/core-concepts.md)
+- [文件与流 IO](../guide/io.md)
+- [API 参考](../reference/api.md)
+- [异常参考](../reference/exceptions.md)
 - [format-avro 模块 README](https://github.com/minglipro/mingli-document/blob/dev/format-avro/README.md)

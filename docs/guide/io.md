@@ -238,7 +238,7 @@ File/Path   -> Files.readAllBytes() -> parse(...)
 - 用 `maxInputSize` 控制上限；
 - 在业务层按记录拆分文件（例如 JSON Lines 逐行自己解析，或用格式提供的多值 API，
   如 CBOR sequence / Smile 多消息流）；
-- 或者使用 Token API 自行控制来源（见 [Token 流式 API](/guide/token-stream.html)）。
+- 或者使用 Token API 自行控制来源（见 [Token 流式 API](./token-stream.md)）。
 
 ## 字符流 Reader 与 Writer
 
@@ -411,5 +411,5 @@ val restored = cbor.parse(output.toByteArray(), AppConfig::class.java)
    （除非你明确知道格式尾部语义）。
 6. **字符集显式化**：跨平台写文件建议显式 `fileCharset`，不要依赖平台默认。
 
-下一步：[配置](/guide/configuration.html) 了解所有读写开关；
-[Token 流式 API](/guide/token-stream.html) 了解更低层的读写方式。
+下一步：[配置](./configuration.md) 了解所有读写开关；
+[Token 流式 API](./token-stream.md) 了解更低层的读写方式。

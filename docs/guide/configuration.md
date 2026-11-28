@@ -273,7 +273,7 @@ val mapper = CsvMapper(
 | `schema` | `null` | `CsvSchema`；非空时按 Schema 列顺序与类型读写 |
 | `nestedMode` | `null` | `JSON` / `COLUMNS` / `null`（不支持嵌套） |
 
-细节见 [CSV 格式](/formats/csv.html) 与 [modules/schema](/modules/schema.html)。
+细节见 [CSV 格式](../formats/csv.md) 与 [modules/schema](../modules/schema.md)。
 
 ### IonConfig
 
@@ -550,7 +550,7 @@ val config = DocumentMapperConfig.builder()
 - 基类上的 `@DocumentTypeInfo.property` 不能为空白。
 
 Kotlin sealed 层级可用 `kotlinSealedSubtypes(...)` 批量注册，见
-[Bean 序列化](/guide/serialization.html)。
+[Bean 序列化](./serialization.md)。
 
 ## 字段级转换器
 
@@ -617,5 +617,5 @@ val mapper = JsonMapper.builder()
 println(mapper.formatPretty(mapOf("ok" to true)))
 ```
 
-下一步：[Token 流式 API](/guide/token-stream.html) 与
-[Fuzz 与安全](/guide/fuzz-security.html)。
+下一步：[Token 流式 API](./token-stream.md) 与
+[Fuzz 与安全](./fuzz-security.md)。

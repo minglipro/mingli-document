@@ -442,4 +442,4 @@ val b = node.asObject()["a"]!!.asObject()["b"]!!.asNumber().toInt()
 - [ ] 流式场景改成 `format(value, outputStream)` / Token API；
 - [ ] 双跑一段时间，对比两边输出（尤其是数字、日期、null、枚举）。
 
-下一步：[常见问题](/guide/faq.html) 汇总了使用中最容易踩的坑。
+下一步：[常见问题](./faq.md) 汇总了使用中最容易踩的坑。

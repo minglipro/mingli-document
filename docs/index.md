@@ -59,12 +59,12 @@ val bean = yaml.parse(yamlText, User::class.java)
 
 ## 从哪里开始
 
-1. [安装与坐标](/guide/installation.html)
-2. [核心概念](/guide/core-concepts.html)
-3. [Bean 序列化](/guide/serialization.html)
-4. [文件与流 IO](/guide/io.html)
-5. [选择格式](/formats/)
+1. [安装与坐标](./guide/installation.md)
+2. [核心概念](./guide/core-concepts.md)
+3. [Bean 序列化](./guide/serialization.md)
+4. [文件与流 IO](./guide/io.md)
+5. [选择格式](./formats/)
 
 ## 版本
 
-当前文档对应 `2.0.0`。历史变更见 [CHANGELOG](/reference/changelog.html)。
+当前文档对应 `2.0.0`。历史变更见 [CHANGELOG](./reference/changelog.md)。

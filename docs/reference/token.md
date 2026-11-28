@@ -394,4 +394,4 @@ val restored = mapper.parse(bytes, User::class.java)  // 内部走 Token 读取
 
 - [api 参考](./api.md)：Token API 签名索引
 - [serialization 模块](../modules/serialization.md)：Mapper 钩子与流式写出
-- [格式章节](/formats/)：各格式的 Token 支持细节
+- [格式章节](../formats/)：各格式的 Token 支持细节

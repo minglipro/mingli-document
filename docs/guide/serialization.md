@@ -846,5 +846,5 @@ println(response.data.address?.city) // 杭州
 println(mapper.formatPretty(response))
 ```
 
-下一步：读 [文件与流](/guide/io.html) 掌握真正的读写方式，以及
-[配置](/guide/configuration.html) 了解每个开关的默认值。
+下一步：读 [文件与流](./io.md) 掌握真正的读写方式，以及
+[配置](./configuration.md) 了解每个开关的默认值。

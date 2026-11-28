@@ -480,5 +480,5 @@ while (token != null) {
    覆盖；如果自己持有缓冲，记得在 `writeTo` 后 `flush()`。
 5. **流式写出与 `writeReferences` 互斥**：需要对象身份引用时请走 `format`（Node 路径）。
 
-下一步：[代码生成](/guide/codegen.html) 学习如何把枚举与 Bean 映射进一步下沉到
+下一步：[代码生成](./codegen.md) 学习如何把枚举与 Bean 映射进一步下沉到
 编译期/运行期生成代码。

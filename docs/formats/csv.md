@@ -644,9 +644,9 @@ check(restored[0].name == "小于")
 
 ## 相关链接
 
-- [格式总览](/formats/)
-- [Schema 模块](/modules/schema.html)
-- [核心概念：Node 树](/guide/core-concepts.html)
-- [文件与流 IO](/guide/io.html)
-- [API 参考](/reference/api.html)
+- [格式总览](./)
+- [Schema 模块](../modules/schema.md)
+- [核心概念：Node 树](../guide/core-concepts.md)
+- [文件与流 IO](../guide/io.md)
+- [API 参考](../reference/api.md)
 - [format-csv 模块 README](https://github.com/minglipro/mingli-document/blob/dev/format-csv/README.md)
