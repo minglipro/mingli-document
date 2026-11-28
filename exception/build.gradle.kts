@@ -9,7 +9,7 @@ kotlin {
 }
 
 dependencies {
-    api("com.mingliqiye.exception:mingli-exception:1.1.1-Final")
+    api("com.mingliqiye.exception:mingli-exception:1.1.2-Final")
     testImplementation(kotlin("test"))
 }
 

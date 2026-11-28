@@ -54,7 +54,7 @@ java.lang.Throwable
 
 说明：
 
-- `MingLiBaseException` 来自外部依赖 `com.mingliqiye.exception:mingli-exception:1.1.1-Final`；
+- `MingLiBaseException` 来自外部依赖 `com.mingliqiye.exception:mingli-exception:1.1.2-Final`；
 - 内置格式统一采用「`XxxException`（open，模块基类）+ `XxxParseException`（final，解析失败）」
   的两层结构；
 - `JsonSchemaException` / `JsonSchemaValidationException` 直接继承 `DocumentException`，

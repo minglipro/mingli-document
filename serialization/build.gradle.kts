@@ -11,7 +11,7 @@ kotlin {
 dependencies {
     api(project(":core"))
     api(project(":exception"))
-    api("com.mingliqiye.utils.aliasfor:alias-for:1.0.4")
+    api("com.mingliqiye.utils.aliasfor:alias-for:1.0.5")
     api(project(":annotation"))
     testImplementation(project(":format-json"))
     testImplementation(kotlin("test"))

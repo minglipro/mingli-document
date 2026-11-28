@@ -26,6 +26,7 @@
 - 26 个显式 MR-JAR module-info：补齐 `serialization-kotlin` / `record-support` / `codegen` /
   `codegen-test` / `openapi`；`record-support` 提供 `provides JavaRecordSupport`，
   `codegen` 提供 KSP `provides SymbolProcessorProvider`
+- `format-json` jlink 镜像（`:format-json:jlinkImage`），alias-for 1.0.5 / mingli-exception 1.1.2-Final 显式模块
 - JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
   `@MapKeyJoinColumn` 实体 Map 键（含复合主键标识符文本）、jpa-hibernate
   `fromNode` 关联引用解析支持 `@EmbeddedId`/`@IdClass` 复合主键
@@ -39,5 +40,4 @@
 
 ## 保留待办
 
-- [ ] `jlink` 支持
 - [ ] native-image 构建接入 CI

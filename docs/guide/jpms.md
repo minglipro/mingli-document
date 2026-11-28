@@ -92,8 +92,9 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 
 全部可发布模块都已提供 `src/main/java9/module-info.java`，**没有剩余的「可发布自动模块」**：
 `benchmarks` / `fuzz` 不是可发布模块，`bom` 是 `java-platform`（没有 jar），根项目只做聚合，
-它们都不需要模块描述。第三方依赖中仍有自动模块（`mingli.exception`、`alias-for`、
-Avro / Ion / TOML / commons-csv / protobuf-java、`hibernate-core` 等），见[限制](#限制)。
+它们都不需要模块描述。第三方依赖中 `mingli.exception` / `alias-for` 已显式；
+仍有自动模块（Avro / Ion / TOML / commons-csv / protobuf-java、`hibernate-core` 等），
+见[限制](#限制)。
 
 ::: tip 模块名是发布契约
 自动模块名和 `module-info` 里的模块名一样，是使用方的编译期/运行期契约。本库按
@@ -135,7 +136,7 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
      依赖使用普通 jar：`kotlin.stdlib`、`jakarta.validation`、`jakarta.persistence`、
      `jackson-core` / `jackson-databind` / `jackson-dataformat-cbor` /
      `jackson-dataformat-smile`、`snakeyaml`、`jakarta.xml.bind` 等是显式模块；
-     `mingli.exception`、`alias-for`、`org.apache.avro`、`com.amazon.ion`、`tomlj`、
+     `org.apache.avro`、`com.amazon.ion`、`tomlj`、
      `org.apache.commons.csv`、`com.google.protobuf`、`org.hibernate.orm.core` 等是自动模块；
    - `-encoding UTF-8`、`-proc:none`。
 3. 模块的 `jar` 任务把编译结果放进 `META-INF/versions/9/module-info.class`，并在清单写入
@@ -185,11 +186,11 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
   `module-info.class`）。Kotlin 公共 API 的类型来自它，所以用 `requires transitive`，
   消费方 `requires` 本库模块即可获得 stdlib 可读性。
 - `mingli.exception` 没有显式 `module-info`，模块名由文件名推导
-  （`mingli-exception-1.1.1-Final.jar` → `mingli.exception`）。`exception` 模块只做普通
+  （`mingli-exception-1.1.2-Final.jar` → `mingli.exception`）。`exception` 模块只做普通
   `requires`；如果消费方直接使用 `MingLiBaseException` 的 API，需要自行
   `requires mingli.exception`。`serialization` 也保留一条普通 `requires mingli.exception`
   （与 `exception` 模块保持一致；普通 `requires` 只影响本模块可读性，消费方仍需自行声明）。
-- `alias-for` 1.0.4 起带 `Automatic-Module-Name: com.mingliqiye.utils.aliasfor`，因此可被
+- `alias-for` 1.0.5 起提供显式 `module-info`（模块名 `com.mingliqiye.utils.aliasfor`），可被
   `requires`（仍是自动模块）。`serialization` 只在模块内部用 `AnnotationGetter` 读取注解，
   消费方一般不需要直接读取它，所以用普通 `requires`。
 - `core` 的公开 API 会抛出 `DocumentTypeException`，`schema-registry` 的公开 API 会抛出
@@ -316,7 +317,7 @@ public final class Main {
 ```
 
 `lib/` 至少需要：`exception-2.4.0.jar`、`core-2.4.0.jar`、`schema-2.4.0.jar`，以及依赖
-`kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`（只有直接使用注解时才需要
+`kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.2-Final.jar`（只有直接使用注解时才需要
 `annotation-2.4.0.jar`）。
 
 ```bash
@@ -338,7 +339,7 @@ com.mingliqiye.document.schema requires com.mingliqiye.document.core file:///...
 com.mingliqiye.document.core requires com.mingliqiye.document.exception file:///.../lib/exception-2.4.0.jar
 com.mingliqiye.document.core requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
 com.mingliqiye.document.exception requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
-com.mingliqiye.document.exception requires mingli.exception file:///.../lib/mingli-exception-1.1.1-Final.jar automatic
+com.mingliqiye.document.exception requires mingli.exception file:///.../lib/mingli-exception-1.1.2-Final.jar
 ```
 
 ### serialization / jdbc / validation / jpa smoke（实测）
@@ -426,7 +427,7 @@ public final class Main {
 
 `lib/` 需要本库的 `annotation` / `exception` / `core` / `serialization` / `jdbc` /
 `validation` / `jpa` jar，以及 `kotlin-stdlib-2.0.0.jar`、
-`mingli-exception-1.1.1-Final.jar`、`alias-for-1.0.4.jar`、
+`mingli-exception-1.1.2-Final.jar`、`alias-for-1.0.5.jar`、
 `jakarta.validation-api-3.0.2.jar`、`jakarta.persistence-api-3.1.0.jar`。
 
 ```bash
@@ -449,8 +450,8 @@ smoke.app requires com.mingliqiye.document.validation file:///.../lib/validation
 com.mingliqiye.document.jpa requires jakarta.persistence file:///.../lib/jakarta.persistence-api-3.1.0.jar
 com.mingliqiye.document.jpa requires java.desktop jrt:/java.desktop
 com.mingliqiye.document.jpa requires java.sql jrt:/java.sql
-com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.4.jar automatic
-com.mingliqiye.document.serialization requires mingli.exception file:///.../lib/mingli-exception-1.1.1-Final.jar automatic
+com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.5.jar
+com.mingliqiye.document.serialization requires mingli.exception file:///.../lib/mingli-exception-1.1.2-Final.jar
 com.mingliqiye.document.validation requires jakarta.validation file:///.../lib/jakarta.validation-api-3.0.2.jar
 com.mingliqiye.document.jdbc requires java.sql jrt:/java.sql
 ```
@@ -499,8 +500,8 @@ JPMS yaml smoke OK
 ```
 
 `lib/` 需要：对应格式模块 jar + `core` / `exception` / `serialization` / `annotation`
-jar + `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`、
-`alias-for-1.0.4.jar`，以及该格式的第三方依赖（JSON 是
+jar + `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.2-Final.jar`、
+`alias-for-1.0.5.jar`，以及该格式的第三方依赖（JSON 是
 `jackson-core-2.15.3.jar`；YAML 是 `snakeyaml-2.6.jar`）。
 `--show-module-resolution` 中可以看到格式模块的 `requires` 逐条解析（节选）：
 
@@ -508,7 +509,7 @@ jar + `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`、
 root smoke.json file:///.../out/
 smoke.json requires com.mingliqiye.document.format.json file:///.../lib/format-json-2.4.0.jar
 com.mingliqiye.document.format.json requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.4.0.jar
-com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.4.jar automatic
+com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.5.jar
 ```
 
 ::: tip format-json Double
@@ -637,8 +638,8 @@ smoke.codegen binds com.mingliqiye.document.codegen file:///.../lib/codegen-2.4.
 
 `lib/` 需要本批 5 个模块 jar + `annotation` / `exception` / `core` / `schema` /
 `serialization` / `format-json` jar，以及 `kotlin-stdlib-2.0.0.jar`、
-`kotlin-reflect-2.0.0.jar`（`serialization-kotlin`）、`alias-for-1.0.4.jar`、
-`mingli-exception-1.1.1-Final.jar`、`jackson-core-2.15.3.jar`（record smoke 的 `JsonMapper`）、
+`kotlin-reflect-2.0.0.jar`（`serialization-kotlin`）、`alias-for-1.0.5.jar`、
+`mingli-exception-1.1.2-Final.jar`、`jackson-core-2.15.3.jar`（record smoke 的 `JsonMapper`）、
 `symbol-processing-api-2.0.0-1.0.21.jar`（`codegen` 的 KSP 依赖）。
 
 ### 显式模块与自动模块的解析差异
@@ -1035,7 +1036,7 @@ jdeps --multi-release 9 --module-path lib --check com.mingliqiye.document.jpa
 `requires`，本库选择与 Gradle `api(...)` 一致的 `requires transitive`，属于有意的差异。
 
 本批新增模块中，`format-json` / `format-yaml` 等格式模块的 `jdeps --check` 实测退出码 0
-（它们的依赖链里只有 `mingli.exception` / `alias-for` 等自动模块，可正常解析）。
+（依赖链里的显式模块可正常解析）。
 
 本批 5 个模块的 `jdeps --check` 也全部退出码 0：`serialization-kotlin`（含
 `kotlin.reflect`、`java.desktop`）、`record-support`（含 `provides`）、`codegen`（含自动模块
@@ -1052,22 +1053,67 @@ jar 才能完成检查；`java --module-path ... -m` 的运行时解析不受影
 默认不进入本模块的模块图，jpa-hibernate smoke 已实测通过）。
 :::
 
-### 8. jlink（仅对没有自动模块依赖的模块可用）
+### 8. jlink（format-json 链已实测）
 
-```bash
-jlink --module-path lib --add-modules com.mingliqiye.document.annotation --output image
-# 成功：annotation 只依赖 kotlin.stdlib（显式模块），可以进入自定义运行时镜像
+`format-json` 的依赖链已全部是显式模块：
+
+```text
+com.mingliqiye.document.format.json
+  -> serialization / core / exception / annotation
+  -> kotlin.stdlib / kotlin.reflect
+  -> alias-for 1.0.5 / mingli-exception 1.1.2-Final
 ```
 
-`core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa`
-的依赖链里都有自动模块（`mingli.exception`，`serialization` 还有 `aliasfor`），`jlink` 只接受
-显式模块，因此仍不能为这些模块生成自定义运行时镜像（见[限制](#限制)）。`format-*` 也
-不可用：它们的依赖链里既有 `mingli.exception` / `alias-for`，也有 Avro / Ion / TOML /
-Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `hibernate-core`。
-本批的 `serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi`
-同样不可 `jlink`：它们分别依赖 `alias-for` / `mingli.exception` / 自动模块
-`symbol.processing.api` 等第三方自动模块。因此 `jlink` 仍然只对 `annotation` 这类
-「依赖链里只有显式模块」的模块可用。
+`alias-for` 1.0.5 与 `mingli-exception` 1.1.2-Final 已提供显式 Multi-Release
+`module-info`，因此可以直接生成自定义运行时镜像：
+
+```bash
+jlink \
+  --module-path lib \
+  --add-modules com.mingliqiye.document.format.json \
+  --output image \
+  --strip-debug --no-header-files --no-man-pages
+```
+
+Gradle 任务：
+
+```bash
+gradle :format-json:jlinkImage
+```
+
+产物：
+
+```text
+format-json/build/jlink/format-json/
+```
+
+镜像中可以看到：
+
+```text
+com.mingliqiye.document.annotation
+com.mingliqiye.document.core
+com.mingliqiye.document.exception
+com.mingliqiye.document.format.json
+com.mingliqiye.document.serialization
+com.mingliqiye.utils.aliasfor
+kotlin.reflect
+kotlin.stdlib
+mingli.exception
+```
+
+仍不能直接 `jlink` 的模块：
+
+```text
+format-avro / format-ion / format-toml / format-protobuf / format-csv
+  第三方自动模块：Avro / Ion / tomlj / protobuf / commons-csv
+jpa / jpa-hibernate
+  hibernate-core 及其运行期依赖为自动模块
+codegen
+  symbol.processing.api 自动模块
+```
+
+`annotation` 与 `core` / `exception` / `schema` / `serialization` 等只依赖
+`kotlin.stdlib`、`alias-for`、`mingli-exception` 的链也已具备 jlink 条件。
 
 ## 限制
 
@@ -1098,18 +1144,13 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
    提供这些 jar（`jakarta.transaction-api:2.0.1` 的 `module-info` 还要求
    `jakarta.cdi` / `jakarta.interceptor`）。因此 `jpa-hibernate` 的 module path smoke 覆盖
    不传 `EntityManager` 的 detach 映射路径；完整 ORM 运行期仍建议 classpath。
-5. **`mingli.exception` 是自动模块**：模块名由文件名推导，不受本库控制；`exception` 与
-   `serialization` 模块对它只做普通 `requires`，消费方直接使用 `MingLiBaseException` 时需
-   自行 `requires mingli.exception`。
-6. **`alias-for` 仍是自动模块**：1.0.4 起带合法 `Automatic-Module-Name`，可正常参与模块解析，
-   但自动模块导出全部包、也没有显式 `requires`，后续可推动上游提供显式 `module-info`。
-7. **`jlink` 仅 `annotation` 可用**：`core` / `schema` / `schema-registry` / `serialization` /
-   `jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate` 的依赖链里都有自动模块
-   （`mingli.exception`、`alias-for`，格式模块还有 Avro / Ion / TOML / Protobuf / commons-csv，
-   `jpa-hibernate` 有 `hibernate-core`），本批的 `serialization-kotlin` / `record-support` /
-   `codegen` / `codegen-test` / `openapi` 也分别依赖 `alias-for` / `mingli.exception` /
-   `symbol.processing.api` 等自动模块。`jlink` 只接受显式模块，因此仍不能生成自定义运行时
-   镜像。
+5. **`mingli.exception` 已显式化**：`mingli-exception` 1.1.2-Final 提供显式
+   `module mingli.exception`，`exception` / `serialization` 仍按普通 `requires` 使用。
+6. **`alias-for` 已显式化**：`alias-for` 1.0.5 提供显式
+   `module com.mingliqiye.utils.aliasfor`，`serialization` 按普通 `requires` 使用。
+7. **`jlink` 支持范围**：`format-json` 链已验证可 `jlink`；其余格式模块与
+   `jpa` / `jpa-hibernate` / `codegen` 仍受第三方自动模块阻塞（Avro / Ion / tomlj /
+   protobuf-java / commons-csv / hibernate-core / symbol.processing.api）。
 8. **`jpa` / `jpa-hibernate` 的 module path 运行期要求 JDK 11+**：
    `jakarta.persistence-api:3.1.0` 主 classes 是 class file 55，Hibernate 6.5 的 class 文件
    也是 55；JDK 9/10 无法加载这些类。`serialization` / `jdbc` / `validation` / 格式模块及其它
@@ -1144,8 +1185,8 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
 
 ## 后续计划
 
-1. **第三方依赖显式模块化**：推动 `mingli-exception`、`alias-for`、`symbol-processing-api`
-   以及 Avro / Ion / TOML / commons-csv / protobuf-java、`hibernate-core` 上游提供（或升级到
+1. **第三方依赖显式模块化**：推动 `symbol-processing-api` 以及 Avro / Ion / TOML / commons-csv / protobuf-java、
+    `hibernate-core` 上游提供（或升级到
    带显式 `module-info` 的）版本，解除 `jlink` 与「自动模块抱团」限制。本库 26 个可发布模块
    已全部显式化；仍阻塞 `jlink` 的只剩这些第三方自动模块。
 3. **第三方依赖显式模块化**：推动 `mingli-exception`、`alias-for`、Avro / Ion / TOML /

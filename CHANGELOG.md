@@ -12,6 +12,8 @@
   `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级（捕获
   `ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`
+- `alias-for` 1.0.5 / `mingli-exception` 1.1.2-Final 提供显式 Module-Info
+- 新增 `:format-json:jlinkImage`，`format-json` 依赖链可生成 JDK 17 jlink 镜像
 - `format-json` 不再依赖 jackson-core 内部包：`Double` 写出改用 JDK
   `Double.toString`，module path 上不再需要 `--add-exports`
 - JPMS：26 个可发布模块全部为显式 MR-JAR module-info（补齐

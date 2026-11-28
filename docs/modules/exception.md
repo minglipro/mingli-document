@@ -7,7 +7,7 @@
 - 当前版本：`2.4.0`
 - 包名：`com.mingliqiye.document.exception`
 - 目标字节码：JDK 8
-- 公开依赖：`com.mingliqiye.exception:mingli-exception:1.1.1-Final`（`api`）
+- 公开依赖：`com.mingliqiye.exception:mingli-exception:1.1.2-Final`（`api`）
 
 ## 职责
 
@@ -30,7 +30,7 @@ try {
 ## 依赖关系
 
 ```text
-com.mingliqiye.exception:mingli-exception:1.1.1-Final
+com.mingliqiye.exception:mingli-exception:1.1.2-Final
                  ▲ api
                  │
         DocumentException（本模块）

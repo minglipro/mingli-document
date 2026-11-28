@@ -33,7 +33,7 @@
    |---|---|
    | `KOTLIN_STDLIB_JAR` | `kotlin-stdlib-2.x.jar` |
    | `ALIAS_FOR_JAR` | `alias-for-1.0.3.jar` |
-   | `MINGLI_EXCEPTION_JAR` | `mingli-exception-1.1.1-Final.jar` |
+   | `MINGLI_EXCEPTION_JAR` | `mingli-exception-1.1.2-Final.jar` |
 
 ## 在 JVM 上运行（无需 GraalVM）
 

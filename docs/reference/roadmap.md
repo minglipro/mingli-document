@@ -126,7 +126,8 @@
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
 > 已放弃：Gitea CI、Maven Central 发布。
-> 未完成项：第三方自动模块的显式模块化（`jlink` 仍受限）。
+> 未完成项：第三方自动模块的显式模块化（Avro / Ion / TOML / Protobuf / commons-csv /
+> hibernate-core / KSP API 等仍限制 jlink 范围）。
 
 ## 批次计划
 
@@ -273,7 +274,7 @@
 
 | 序号 | 待办 | 阶段 |
 |---|---|---|
-| 2 | `jlink` 支持（当前仅 `annotation` 可 jlink，受第三方自动模块限制） | 阶段 6 |
+| 2 | `jlink` 支持：`format-json` 链已实测，其余受第三方自动模块限制 | 阶段 6 |
 
 > 2.4.0 已发布；`2.5.0` 开发中。
 

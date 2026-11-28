@@ -126,7 +126,7 @@ exception
 关键点：
 
 - `annotation` 不依赖任何模块，只有注解与标记接口；`serialization` 通过 `api` 暴露它。
-- `exception` 依赖外部的 `com.mingliqiye.exception:mingli-exception:1.1.1-Final`，
+- `exception` 依赖外部的 `com.mingliqiye.exception:mingli-exception:1.1.2-Final`，
   所有库内异常最终都继承该体系。
 - `serialization` 是唯一包含「实体映射」逻辑的模块，`format-*` 只做格式编解码。
 - `schema` 只依赖 `core`，`openapi` 依赖 `schema` + `core` + `exception`。

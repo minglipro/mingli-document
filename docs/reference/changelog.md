@@ -37,6 +37,8 @@
   （`ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`
 - `format-json` 的 `Double` 写出改用 JDK `Double.toString`，移除 jackson-core 内部包依赖
+- `alias-for` 1.0.5 / `mingli-exception` 1.1.2-Final 提供显式 module-info
+- 新增 `:format-json:jlinkImage`，`format-json` 依赖链可生成 JDK 17 jlink 镜像
 - `jpa`：`@Convert(attributeName = "...")` 支持 `@Embedded`/`@EmbeddedId` 内部基本
   属性的点分路径覆盖（类级/属性级、`disableConversion`、外层路径优先于嵌入类自身
   转换器与 autoApply；失效路径/类型不匹配抛 `JpaConfigException`）

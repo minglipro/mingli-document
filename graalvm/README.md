@@ -149,7 +149,7 @@ graalvm/native-smoke/build/classes
 + annotation、exception、core、serialization、format-json 的 jar
 + kotlin-stdlib-2.x.jar
 + alias-for-1.0.3.jar
-+ mingli-exception-1.1.1-Final.jar
++ mingli-exception-1.1.2-Final.jar
 ```
 
 如果配置不在 classpath 上，也可以用外部配置目录（目录中放 `reflect-config.json` 等文件）：
