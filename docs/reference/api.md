@@ -139,6 +139,33 @@ public interface DocumentMapperApi {
 | `writeValueAsBytes(value: Any?): ByteArray` | 紧凑/格式化字节 |
 | `writeValue(value: Any?, file: File / path: Path / output: OutputStream / writer: Writer)` | 写入目标；流由调用方关闭 |
 
+## JavaRecordSupport（SPI）
+
+`serialization` 定义的 Java record 反射访问扩展点；实现由可选模块 `record-support`
+（JDK 17+）提供，经 `META-INF/services` + `ServiceLoader` 加载：
+
+```kotlin
+public interface JavaRecordSupport {
+    fun isRecord(type: Class<*>): Boolean
+    fun components(type: Class<*>): List<JavaRecordComponentInfo>
+}
+
+public class JavaRecordComponentInfo(
+    val name: String,      // 组件名 = 访问器方法名 = canonical constructor 参数名
+    val type: Type,        // 组件泛型类型
+    val accessor: Method,  // 访问器，例如 name()
+    val element: AnnotatedElement, // RecordComponent 本身，可读组件注解
+)
+```
+
+| 项 | 说明 |
+|---|---|
+| 实现 | `record-support` 模块的 `Jdk17RecordSupport`（JDK 17 字节码） |
+| 注册 | `META-INF/services/com.mingliqiye.document.serialization.JavaRecordSupport` |
+| 加载 | 内部 `JavaRecordSupportLoader`：JDK 16+ 用 `ServiceLoader` 查找；JDK 8-15、找不到实现、`ServiceConfigurationError` / `LinkageError` 时安全降级（`isRecord=false`、`components=[]`） |
+| 映射语义 | 全部由 `serialization` 实现（见 [serialization 模块](../modules/serialization.md#java-record)）；本 SPI 只提供 record 识别与组件元数据 |
+| 前置条件 | JDK 17+ 运行时 + classpath / module path 上有 `record-support` |
+
 ## DocumentMapper
 
 `format-*` Mapper 的公共父类（抽象类），构造器为 `protected`，由格式模块调用。

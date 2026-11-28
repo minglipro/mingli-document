@@ -13,7 +13,9 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 - 根对象 Bean 校验扩展点 `DocumentBeanValidator`（配合 `validation` 模块）
 - 多态类型注册与类型属性
 - Bean 元数据缓存与访问器
-- Java record、只读属性与构造器注入
+- 只读属性与构造器注入
+- Java record：通过可选 `record-support` 模块（JDK 17+，`JavaRecordSupport` SPI）支持，
+  未引入时安全降级为普通 Bean
 - `merge` 合并到已有对象（`MergePolicy`）
 - 对象映射便捷 API：`readTree` / `readValue` / `writeValueAs*` / `updateValue` /
   `convertValue` / `readerFor` / `writer`（format-agnostic，`DocumentObjectReader` /
@@ -572,7 +574,8 @@ class User {
 
 ## Java record
 
-record 组件访问器是 `name()` 而不是 `getName()`，Mapper 会自动识别 record 组件：
+record 组件访问器是 `name()` 而不是 `getName()`。引入可选的 `record-support` 模块后，
+Mapper 会自动识别 record 组件：
 
 ```java
 public record Address(String city, int zipCode) {}
@@ -584,6 +587,9 @@ public record User(
 ```
 
 ```kotlin
+// 依赖：serialization（或任一格式模块）+ record-support，运行在 JDK 17+
+implementation("com.mingliqiye.document:record-support:2.5.0") // 2.5.0 未发布
+
 val node = mapper.toNode(User("小于", 18, Address("杭州", 310000)))
 // {"display_name":"小于","age":18,"address":{"city":"杭州","zipCode":310000}}
 
@@ -598,9 +604,15 @@ val user = mapper.fromNode(node, User::class.java)
 - `@DocumentIgnore` 标记的组件既不写出，也不从文档读取
 - 只读属性见下一节
 
-record 反射 API（`Class.isRecord()` / `RecordComponent`）从 JDK 16 开始提供。
-Mapper 通过反射按名称探测，**主代码仍按 JDK 8 目标编译**：运行在 JDK 8 时该分支
-不会执行，普通 Bean 行为不变；运行在 JDK 16+ 时自动启用 record 支持。
+record 反射访问独立在 `record-support` 模块（JDK 17 字节码）：它直接使用
+`Class.isRecord()` / `Class.getRecordComponents()` / `RecordComponent`，并通过
+`META-INF/services` 注册 `JavaRecordSupport` SPI 实现；`serialization` 以 JDK 8 目标编译，
+运行期用 `ServiceLoader` 加载。
+
+JDK 17+ 且 classpath / module path 上有 `record-support` 时自动启用 record 支持；
+未引入该模块、或运行在 JDK 8-15 时加载器安全降级（`isRecord` 恒为 `false`、
+`components` 恒为空），record 类型按普通 Bean 处理，不会抛异常。详见
+[record-support](../record-support/README.md)。
 
 ## 只读属性
 
@@ -765,11 +777,14 @@ val module = DocumentCodecSourceGenerator().module(
 ## 构建
 
 ```bash
-# 默认测试（JDK 8 工具链，Java record 测试自动跳过）
+# serialization 默认测试（JDK 8 工具链）
 gradle :serialization:test
 
-# Java record 映射测试：需要 JDK 16+ 运行时，测试用 Java 17 工具链执行
-gradle :serialization:recordTest
+# Java record 映射测试：独立 JDK 17 模块 record-support
+gradle :record-support:test
+
+# 代码格式
+gradle :serialization:ktlintFormat
 ```
 
 文档：[根 README](../README.md) · [贡献指南](../CONTRIBUTING.md)

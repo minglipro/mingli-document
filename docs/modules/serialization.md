@@ -5,10 +5,10 @@
 多态、构造器/Builder 实例化、合并、`$ref`、Token 与流式读写、安全限制等能力。
 
 - 坐标：`com.mingliqiye.document:serialization`
-- 当前版本：`2.4.0`
+- 当前版本：`2.4.0`（`2.5.0` 开发中）
 - 包名：`com.mingliqiye.document.serialization`
 - 目标字节码：JDK 8
-- 公开依赖：`core`、`exception`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3`
+- 公开依赖：`core`、`exception`、`annotation`、`com.mingliqiye.utils.aliasfor:alias-for:1.0.3`；Java record 额外依赖可选模块 `record-support`（JDK 17+，2.5.0 起）
 - 测试依赖：`format-json`（仅测试用）
 
 ## 职责
@@ -22,20 +22,23 @@
 | 反序列化特性 | `DeserializationFeature`（`FAIL_ON_NULL_FOR_PRIMITIVES`） |
 | Token / 流式 | `DocumentTokenType`、`DocumentToken`、`DocumentTokenReader/Writer`、`DocumentValueReader/Writer`、`NodeTokenReader` |
 | 代码生成（运行期/源码） | `DocumentAccessorCodegen`、`DocumentRuntimeCodecFactory`、`DocumentCodecSourceGenerator` |
+| Java record 扩展点（SPI） | `JavaRecordSupport`、`JavaRecordComponentInfo`（实现由 `record-support` 模块提供） |
 | 异常 | `DocumentSerializationException` |
 
 ## 依赖关系
 
 ```text
 annotation ──api──┐
-exception ──api───┼── api ── serialization ── api ── serialization-kotlin
-core ───────api───┘                 ▲
+exception ──api───┼── api ── serialization ── api ── record-support（JDK 17，提供 SPI 实现）
+core ───────api───┘                 │
 alias-for ──api─────────────────────┘
+                                    └── api ── serialization-kotlin
 ```
 
 - `format-*` 继承 `DocumentMapper` / `BinaryDocumentMapper`，通过构造器注入
   `parseText`/`writeText`（或 `parseBytes`/`writeBytes`），不接触映射逻辑；
 - `serialization-kotlin` 通过 `DocumentModule` 注入实例化策略与属性元数据解析器；
+  `record-support`（JDK 17+）实现 `JavaRecordSupport` SPI 并由 `ServiceLoader` 加载；
   `serialization` 不依赖具体格式（唯一格式依赖在测试范围）。
 
 ## 三条数据路径
@@ -229,7 +232,7 @@ strict.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES) // true
 
 基本类型及包装类型、`String`、枚举、`BigDecimal`/`BigInteger`、数组、`Collection`、
 `Map`；标准 Java Bean（getter/setter 或 public 字段 + 无参构造）；`@DocumentCreator`
-构造器注入；`@DocumentBuilder`/`@DocumentBuild`；Java record（JDK 16+ 运行时）；只读属性；
+构造器注入；`@DocumentBuilder`/`@DocumentBuild`；Java record（JDK 17+ 运行时、需 `record-support`）；只读属性；
 显式注册的多态类型；Kotlin data class / value class / sealed（需 `serialization-kotlin`）。
 
 ## 功能详解
@@ -276,7 +279,35 @@ mapper.parse("""{"kind":"cat"}""", Animal::class.java)
 
 - 序列化：record 组件访问器作为可读属性写出；
 - 反序列化：优先 `@DocumentCreator`，否则绑定 canonical constructor，按组件名取值；
-- 运行在 JDK 8 时该分支不执行，普通 Bean 行为不变；测试由 `recordTest` 在 JDK 17 执行。
+- record 反射访问独立在 `record-support`（JDK 17 字节码）中，通过 `JavaRecordSupport` SPI
+  + `ServiceLoader` 接入，见 [record-support](./record-support.md)；
+- 未引入 `record-support` 或运行在 JDK 8-15 时安全降级为普通 Bean 行为，测试在
+  `:record-support:test`（JDK 17 工具链）执行。
+
+#### JavaRecordSupport SPI
+
+`serialization` 以 JDK 8 为字节码目标，不能直接引用 record 反射 API，因此把 record 探测
+抽象为公共 SPI：
+
+```kotlin
+public interface JavaRecordSupport {
+    fun isRecord(type: Class<*>): Boolean
+    fun components(type: Class<*>): List<JavaRecordComponentInfo>
+}
+
+public class JavaRecordComponentInfo(
+    val name: String,
+    val type: Type,
+    val accessor: Method,
+    val element: AnnotatedElement,
+)
+```
+
+- 实现：`record-support` 模块的 `Jdk17RecordSupport`（JDK 17 字节码）；
+- 注册：`META-INF/services/com.mingliqiye.document.serialization.JavaRecordSupport`；
+- 加载：内部 `JavaRecordSupportLoader` 在 JDK 16+ 用 `ServiceLoader` 查找；JDK 8-15、
+  找不到实现、或 provider 加载失败（`ServiceConfigurationError` / `LinkageError`）时
+  安全返回 `false` / 空列表，普通 Bean 行为不变。
 
 ### 只读属性
 
@@ -424,7 +455,7 @@ println(mapper.fromNode(node, User::class.java).userName) // 小于
 - 自定义转换器在 Mapper 内缓存实例，必须无状态；
 - `namingStrategy` 不作用于 Kotlin data class 构造参数（见
   [serialization-kotlin](./serialization-kotlin.md)）；
-- Java record 支持依赖 JDK 16+ 运行时反射 API，主代码仍按 JDK 8 编译；二进制 Mapper
+- Java record 支持依赖 JDK 17+ 运行时与 `record-support` 模块；主代码仍按 JDK 8 编译；二进制 Mapper
   不支持 `Reader`/`Writer` 重载；内置序列化深度上限 128；
 - `DocumentMapperApi` 默认的 `parse(ByteArray)` / `formatBytes` 抛
   `DocumentSerializationException`；配置期错误抛 `IllegalArgumentException`。
@@ -434,11 +465,14 @@ println(mapper.fromNode(node, User::class.java).userName) // 小于
 ```kotlin
 implementation("com.mingliqiye.document:serialization:2.4.0")
 implementation(platform("com.mingliqiye.document:mingli-document-bom:2.4.0")) // 或使用 BOM
+
+// Java record 映射额外依赖（JDK 17+，2.5.0 起）
+implementation("com.mingliqiye.document:record-support:2.5.0")
 ```
 
 ```bash
 gradle :serialization:test
-gradle :serialization:recordTest     # Java 17 运行时
+gradle :record-support:test        # Java record 映射测试（JDK 17 工具链）
 gradle :serialization:ktlintCheck
 ```
 

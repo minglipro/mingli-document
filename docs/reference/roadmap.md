@@ -14,7 +14,7 @@
 
 版本发布时统一从根 `gradle.properties` 的 `projectVersion` 取版本号，发布模块包括
 `annotation` / `exception` / `core` / `schema` / `serialization` /
-`serialization-kotlin` / `codegen` / `openapi` / `format-*` / `bom`；
+`serialization-kotlin` / `record-support` / `codegen` / `openapi` / `format-*` / `bom`；
 `benchmarks`、`fuzz`、`codegen-test` 不发布。
 
 ## 阶段 0：发布基线
@@ -33,7 +33,7 @@
 - [x] Builder 模式实例化（`@DocumentBuilder` / `@DocumentBuild`）
 - [x] 输入本地 `$ref` 解析
 - [x] 对象身份引用序列化（`writeReferences`）
-- [x] Java record（JDK 16+ 运行时）
+- [x] Java record（2.0.0 内嵌；2.5.0 起独立为 `record-support` 模块，JDK 17+）
 - [x] Kotlin value class / sealed class
 - [x] 只读属性
 - [x] 字段 merge / update（`MergePolicy`）
@@ -123,7 +123,7 @@
 - [x] JPMS `module-info`（Multi-Release jar：`annotation` / `exception` / `core` /
   `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` /
   11 个 `format-*` / `jpa-hibernate` 共 21 个模块；其余 `serialization-kotlin` / `codegen` /
-  `codegen-test` / `openapi` 仍为自动模块，见 [JPMS 指南](../guide/jpms.md)）
+  `record-support` / `codegen-test` / `openapi` 仍为自动模块，见 [JPMS 指南](../guide/jpms.md)）
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
 > 已放弃：Gitea CI、Maven Central 发布。
@@ -280,10 +280,24 @@
 | 2 | `format-json` 去除 Jackson 内部包依赖（module path 写 Double 需 `--add-exports`） | 阶段 6 |
 | 3 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
 | 4 | `jlink` 支持（当前仅 `annotation` 可 jlink） | 阶段 6 |
+| 5 | `record-support` 的显式 `module-info`（当前为自动模块） | 阶段 6 |
 
-> 2.4.0 已发布。
+> 2.4.0 已发布；`2.5.0` 开发中。
 
 > 仓库根的 `TODO.md` 记录了更细粒度的待办项，本表只列路线图级目标。
+
+
+## 当前状态（2.5.0 开发中）
+
+- **Java record 支持独立为 `record-support` 模块**（JDK 17+ 字节码）：`serialization`
+  不再内嵌 record 反射探测，改为公共 `JavaRecordSupport` SPI + `ServiceLoader`；
+  JDK 17+ 应用需额外引入 `com.mingliqiye.document:record-support`，未引入或运行在
+  JDK 8-15 时安全降级为普通 Bean 行为
+- 删除 `:serialization:recordTest`；record 映射测试迁移到 `:record-support:test`
+  （JDK 17 工具链）
+- BOM 纳入 `record-support`；GraalVM 运行期初始化参数改指 `JavaRecordSupportLoader`
+- 已验证：`:serialization:ktlintFormat :serialization:test :record-support:ktlintFormat
+  :record-support:test` 通过
 
 ## 状态说明
 

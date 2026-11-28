@@ -1,22 +1,5 @@
 [
   {
-    "name": "java.lang.Class",
-    "methods": [
-      {
-        "name": "isRecord",
-        "parameterTypes": []
-      },
-      {
-        "name": "getRecordComponents",
-        "parameterTypes": []
-      }
-    ]
-  },
-  {
-    "name": "java.lang.reflect.RecordComponent",
-    "allPublicMethods": true
-  },
-  {
     "name": "com.mingliqiye.document.annotation.DocumentBuild",
     "allDeclaredMethods": true
   },

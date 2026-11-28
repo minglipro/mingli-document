@@ -21,6 +21,7 @@ dependencies {
         api(project(":jpa"))
         api(project(":jpa-hibernate"))
         api(project(":serialization"))
+        api(project(":record-support"))
         api(project(":serialization-kotlin"))
         api(project(":codegen"))
         api(project(":openapi"))

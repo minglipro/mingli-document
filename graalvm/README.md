@@ -50,7 +50,7 @@
 | Bean/构造函数/Builder 发现 | `Class.getDeclaredFields/Methods/Constructors`、`getDeclaredField/Method/Constructor` | 同上 |
 | 注解解析 | `alias-for` 的 `AnnotationGetter`：`annotationType.getDeclaredMethods()` + `Method.invoke(annotation)` | 元素上出现的**每个运行时注解类型**都要注册 |
 | `@AliasFor` 自定义注解 | `java.lang.reflect.Proxy.newProxyInstance` | 需要 proxy 配置（见 4.3） |
-| Java record | `Class.isRecord()` / `getRecordComponents()` / `RecordComponent#getAccessor` | 库 jar 内嵌 JDK 条目；record 类需要 `allRecordComponents` |
+| Java record | `Class.isRecord()` / `getRecordComponents()` / `RecordComponent#getAccessor`（由可选 `record-support` 模块直接调用） | record 类需要 `allRecordComponents`；JDK 17+ 且引入 `record-support` 时生效 |
 | `@DocumentConverter` 等注解声明的 converter | `getDeclaredField("INSTANCE")` / `getDeclaredConstructor()` | converter 类需要注册 |
 | 属性访问加速 | `MethodHandles.lookup().unreflect` + `LambdaMetafactory` | 不可用时库自动回退到 `Method.invoke`，不注册也不会崩，但回退路径同样需要方法可反射 |
 | Java 序列化 | 无 | 库不使用 `ObjectOutputStream` |
@@ -67,8 +67,8 @@
 | `graalvm/proxy-config.json` | 动态代理模板（仅 `@AliasFor` 自定义注解需要） | ❌ 模板 |
 | `graalvm/native-smoke/` | 可运行的 smoke 示例（JVM 可直接跑，不要求 GraalVM） | ❌ 示例 |
 | `core/src/main/resources/META-INF/native-image/com.mingliqiye.document/core/native-image.properties` | core 模块构建参数（构建期初始化） | ✅ 随 `core` jar |
-| `serialization/src/main/resources/META-INF/native-image/com.mingliqiye.document/serialization/native-image.properties` | serialization 模块构建参数（`JavaRecordSupport` 运行期初始化） | ✅ 随 `serialization` jar |
-| `serialization/src/main/resources/META-INF/native-image/com.mingliqiye.document/serialization/reflect-config.json` | JDK record API + 库全部注解类型的反射注册 | ✅ 随 `serialization` jar |
+| `serialization/src/main/resources/META-INF/native-image/com.mingliqiye.document/serialization/native-image.properties` | serialization 模块构建参数（`JavaRecordSupportLoader` 运行期初始化） | ✅ 随 `serialization` jar |
+| `serialization/src/main/resources/META-INF/native-image/com.mingliqiye.document/serialization/reflect-config.json` | 库全部注解类型的反射注册（record 反射已迁移到 `record-support`） | ✅ 随 `serialization` jar |
 
 库内嵌配置会被 `native-image` **自动读取**：`native-image` 扫描 classpath 上所有
 `META-INF/native-image/<groupId>/<artifactId>/` 目录（`native-image.properties`、`reflect-config.json`
@@ -135,7 +135,7 @@ xcopy /E /I /Y graalvm\native-smoke\META-INF graalvm\native-smoke\build\classes\
 :: 3) 构建 native 镜像（Windows 用 ; 分隔 classpath，Linux/macOS 用 :)
 native-image -cp "<classpath>" -H:Name=graalvm\native-smoke\build\native-smoke ^
   --initialize-at-run-time=java.beans.Introspector ^
-  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport ^
+  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader ^
   com.mingliqiye.document.graalvm.smoke.NativeSmoke
 
 :: 4) 运行
@@ -184,7 +184,7 @@ graalvmNative {
         named("main") {
             imageName.set("my-app")
             buildArgs.add("--initialize-at-run-time=java.beans.Introspector")
-            buildArgs.add("--initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport")
+            buildArgs.add("--initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader")
             // 需要非 UTF-8 字符集 / 多 Locale / 全时区时按需启用：
             // buildArgs.add("-H:+AddAllCharsets")
             // buildArgs.add("-H:+IncludeAllLocales")
@@ -210,7 +210,7 @@ graalvmNative {
     <configuration>
         <buildArgs>
             <buildArg>--initialize-at-run-time=java.beans.Introspector</buildArg>
-            <buildArg>--initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport</buildArg>
+            <buildArg>--initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader</buildArg>
         </buildArgs>
     </configuration>
 </plugin>
@@ -401,7 +401,7 @@ schema 为准；也可直接用 tracing agent 生成对应条目。）
 
 | 参数 | 作用 | 建议 |
 |---|---|---|
-| `--initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport` | 该对象在 `<clinit>` 里用 `Class.forName`/`getMethod` 探测 JDK record API，探测结果不能固化进镜像 | 库 jar 已内嵌，**不要移除** |
+| `--initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader` | 该对象在运行期用 `ServiceLoader` 查找 `record-support` 提供的 `JavaRecordSupport` 实现，加载结果不能固化进镜像 | 库 jar 已内嵌，**不要移除** |
 | `--initialize-at-build-time=com.mingliqiye.document.core` | core 是无状态纯数据类，构建期初始化可减少运行期开销 | 库 jar 已内嵌，可按需覆盖 |
 | `--initialize-at-run-time=java.beans.Introspector` | 避免 `java.beans.Introspector was unintentionally initialized at build time` 构建错误 | 建议加到应用侧（模板已含） |
 | `-H:+ReportExceptionStackTraces` | 构建期异常输出完整堆栈 | 建议排查阶段开启 |
@@ -424,7 +424,7 @@ schema 为准；也可直接用 tracing agent 生成对应条目。）
 2. **随应用 classpath 自动加载**：可以复制到应用
    `src/main/resources/META-INF/native-image/<groupId>/<artifactId>/native-image.properties`，
    但请先在目标 GraalVM 版本上用 `native-image --verbose` 验证作用域与最终生效参数；
-3. 库自身需要的初始化参数（`JavaRecordSupport` 运行期初始化、core 构建期初始化）已经内嵌在
+3. 库自身需要的初始化参数（`JavaRecordSupportLoader` 运行期初始化、core 构建期初始化）已经内嵌在
    `core` / `serialization` jar 中，随 jar 自动生效，应用无需重复；
 4. 注意 `native-image.properties` 只有在 `META-INF/native-image` 目录下才会被自动读取，
    普通目录（例如直接把 `graalvm/` 作为配置 JSON 目录）不会加载它，需要手工传参。
@@ -457,7 +457,8 @@ schema 为准；也可直接用 tracing agent 生成对应条目。）
    自身的 reachability metadata（建议 agent 采集），本仓库未提供。
 9. **运行期代码生成器**（`DocumentAccessorCodegen`、`DocumentRuntimeCodecFactory`）仍走反射注册，
    不是「生成字节码」；KSP/注解处理器属于编译期，不进入镜像。
-10. 本目录是仓库内的开发文档，与 `docs/` 下的 VuePress 文档站相互独立（文档站由文档任务维护）。
+10. **Java record 支持是可选的 JDK 17+ 模块**：需要 classpath / module path 上有 `record-support`，native 构建同样如此；provider 由 Native Image 的 ServiceLoader 支持注册，record 类仍需 `allRecordComponents`。未引入该模块时 record 按普通 Bean 处理。
+11. 本目录是仓库内的开发文档，与 `docs/` 下的 VuePress 文档站相互独立（文档站由文档任务维护）。
 
 ## 9. 验证与限制
 
@@ -481,7 +482,7 @@ schema 为准；也可直接用 tracing agent 生成对应条目。）
 # 2) nativeTest 或直接构建后运行示例
 native-image -cp "<classpath>" -H:Name=native-smoke \
   --initialize-at-run-time=java.beans.Introspector \
-  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport \
+  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader \
   com.mingliqiye.document.graalvm.smoke.NativeSmoke
 ./native-smoke   # 预期输出 SMOKE OK
 ```

@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.5.0（未发布）
+
+### 新增
+
+- `record-support` 模块（JDK 17+）：Java record 反射访问独立成模块，提供
+  `JavaRecordSupport` SPI 实现 `Jdk17RecordSupport`（直接使用 `Class.isRecord()` /
+  `Class.getRecordComponents()` / `RecordComponent`），经 `META-INF/services` +
+  `ServiceLoader` 接入
+- `serialization` 新增公共 SPI：`JavaRecordSupport` / `JavaRecordComponentInfo`；内部
+  `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级（捕获
+  `ServiceConfigurationError` / `LinkageError`）
+- BOM 纳入 `record-support`
+
+### 变更
+
+- **Java record 支持改为可选模块**：`serialization` 不再内嵌 record 反射探测；JDK 17+
+  应用需额外引入 `com.mingliqiye.document:record-support` 才能映射 record。未引入该模块
+  或运行在 JDK 8-15 时按普通 Bean 处理（不再自动识别 record，行为与 2.0.0 之前一致）
+- `serialization` 的 `module-info` 增加
+  `uses com.mingliqiye.document.serialization.JavaRecordSupport`
+- `serialization` 的 GraalVM 运行期初始化参数改为
+  `JavaRecordSupportLoader`，并移除不再需要的 JDK record 反射条目
+
+### 移除
+
+- 删除 `:serialization:recordTest` 任务；record 映射测试迁移到 `:record-support:test`
+  （JDK 17 工具链）
+- 删除 `serialization` 内嵌的 record 反射实现（`JavaRecordSupport` 改为公共 SPI）
 ## 2.4.0
 
 ### 新增

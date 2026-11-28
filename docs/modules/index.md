@@ -25,8 +25,8 @@
 
 | 项目 | 值 |
 |---|---|
-| 当前版本 | `2.4.0`（根 `gradle.properties` 的 `projectVersion`） |
-| 目标字节码 | JDK 8（`jvmVersion=8`） |
+| 当前版本 | `2.4.0`（根 `gradle.properties` 的 `projectVersion`）；`record-support` 为 `2.5.0` 新增（未发布） |
+| 目标字节码 | JDK 8（`jvmVersion=8`）；`record-support` 为 JDK 17 |
 | 构建 Kotlin | 2.4.0（根 `build.gradle.kts`） |
 | KSP | `2.0.0-1.0.21`（仅 `codegen` 与使用方需要） |
 | 构建工具 | Gradle 8.x（仓库自带 wrapper） |
@@ -52,6 +52,7 @@
 |---|---|---|---|
 | [`serialization`](./serialization.md) | `com.mingliqiye.document:serialization` | `DocumentMapper`、Bean 映射、Token、配置、合并、`$ref` | `core`、`exception`、`annotation`、`alias-for` |
 | [`serialization-kotlin`](./serialization-kotlin.md) | `com.mingliqiye.document:serialization-kotlin` | Kotlin data class / value class / sealed class 支持 | `serialization`（`kotlin-reflect` 为实现依赖） |
+| [`record-support`](./record-support.md) | `com.mingliqiye.document:record-support` | Java record 反射支持（JDK 17+，`JavaRecordSupport` SPI） | `serialization` |
 
 ### 工具模块
 

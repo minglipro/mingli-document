@@ -3181,13 +3181,13 @@ public abstract class DocumentMapper protected constructor(
      * record 没有无参构造器、组件访问器也不符合 JavaBeans getter 约定，因此没有
      * 显式 [DocumentCreator] 时按 record 组件顺序绑定 canonical constructor；
      * 组件名即规范构造参数名，默认作为文档字段名，可用 [DocumentName] 覆盖。
-     * 运行在 JDK 8 时 [JavaRecordSupport] 不可用，本方法返回 `null`。
+     * 运行环境没有 `record-support` 实现时 [JavaRecordSupportLoader] 不可用，本方法返回 `null`。
      */
     private fun createRecordBeanCreator(type: Class<*>): BeanCreatorMetadata? {
-        if (!JavaRecordSupport.isRecord(type)) {
+        if (!JavaRecordSupportLoader.isRecord(type)) {
             return null
         }
-        val components = JavaRecordSupport.components(type)
+        val components = JavaRecordSupportLoader.components(type)
         val constructor = findCanonicalRecordConstructor(type, components)
             ?: throw DocumentSerializationException(
                 "Cannot find canonical constructor of record ${type.name}; " +
@@ -3220,7 +3220,7 @@ public abstract class DocumentMapper protected constructor(
         type: Class<*>,
         constructor: Constructor<*>,
         index: Int,
-        component: JavaRecordComponent,
+        component: JavaRecordComponentInfo,
     ): BeanCreatorParameter {
         val elements = listOfNotNull(
             constructor.parameters.getOrNull(index),
@@ -3247,7 +3247,7 @@ public abstract class DocumentMapper protected constructor(
      */
     private fun findCanonicalRecordConstructor(
         type: Class<*>,
-        components: List<JavaRecordComponent>,
+        components: List<JavaRecordComponentInfo>,
     ): Constructor<*>? {
         val expectedTypes = components.map { component ->
             try {
@@ -3522,7 +3522,7 @@ public abstract class DocumentMapper protected constructor(
 
         // JavaBeans Introspector 不识别 record 组件：组件访问器是 `name()` 而不是
         // `getName()`，字段是私有 final。这里按 record 组件补充只读访问器。
-        for (component in JavaRecordSupport.components(type)) {
+        for (component in JavaRecordSupportLoader.components(type)) {
             if (component.name in handled) {
                 continue
             }

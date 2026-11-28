@@ -110,6 +110,7 @@ export default defineUserConfig({
           children: [
             '/modules/serialization.md',
             '/modules/serialization-kotlin.md',
+            '/modules/record-support.md',
           ],
         },
         {

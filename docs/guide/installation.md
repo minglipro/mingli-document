@@ -26,7 +26,7 @@ title: 安装与依赖
 | 项目 | 要求 | 说明 |
 |---|---|---|
 | JDK 运行 | **JDK 8+** | 所有模块字节码目标为 JDK 8（`gradle.properties` 的 `jvmVersion=8`） |
-| Java record 映射 | **JDK 16+ 运行时** | 反射 `Class.isRecord()` / `RecordComponent` 从 JDK 16 开始提供；运行在 JDK 8 时自动跳过该分支 |
+| Java record 映射 | **JDK 17+ 运行时 + `record-support` 模块** | record 反射访问独立在 `record-support`（JDK 17 字节码）；未引入模块或运行在 JDK 8-15 时安全降级 |
 | Kotlin | `serialization-kotlin` 需要 **Kotlin 2.0**（本库用 Kotlin 2.0.0 编译） | 只用 Java 模块时 Kotlin 版本无关 |
 | Gradle | **Gradle 8.x** | 仅构建源码时需要；项目使用 `foojay-resolver-convention` 解析 JDK 工具链 |
 | KSP | `2.0.0-1.0.21` | 仅使用 `codegen`（`@DocumentEnumCodec`）时需要，版本必须与 Kotlin 2.0.0 匹配 |
@@ -108,6 +108,9 @@ dependencies {
 
     // Kotlin data class 支持
     implementation("com.mingliqiye.document:serialization-kotlin:2.4.0")
+
+    // Java record 支持（JDK 17+，2.5.0 起）
+    implementation("com.mingliqiye.document:record-support:2.5.0")
 }
 ```
 
@@ -199,6 +202,7 @@ com.mingliqiye.document:exception
 com.mingliqiye.document:core
 com.mingliqiye.document:schema
 com.mingliqiye.document:serialization
+com.mingliqiye.document:record-support
 com.mingliqiye.document:serialization-kotlin
 com.mingliqiye.document:codegen
 com.mingliqiye.document:openapi
@@ -218,6 +222,7 @@ com.mingliqiye.document.format:{json,yaml,xml,properties,toml,csv,ion,cbor,smile
 | core | `com.mingliqiye.document` | `core` | Node 树、`DocumentTypeReference` |
 | schema | `com.mingliqiye.document` | `schema` | `DocumentSchema` / `SchemaField` / `SchemaType` |
 | serialization | `com.mingliqiye.document` | `serialization` | `DocumentMapper`、配置、Token、Bean 映射 |
+| record-support | `com.mingliqiye.document` | `record-support` | Java record 反射支持（JDK 17+，2.5.0 起） |
 | serialization-kotlin | `com.mingliqiye.document` | `serialization-kotlin` | Kotlin data class / value class / sealed |
 | codegen | `com.mingliqiye.document` | `codegen` | KSP 处理器（`ksp` 配置引用） |
 | openapi | `com.mingliqiye.document` | `openapi` | OpenAPI 3.0 生成 |
@@ -284,8 +289,8 @@ gradle ktlintFormat
 - 根 `build.gradle.kts` 统一应用 `java`、`kotlin("jvm")`、`maven-publish`、`signing`、
   `dokka`、`dokka-javadoc`、`ktlint`；各模块只声明自己的依赖。
 - `jvmToolchain(8)`：主代码按 JDK 8 目标编译。
-- Java record 映射测试需要 JDK 16+ 运行时，单独用 Java 17 工具链执行：
-  `gradle :serialization:recordTest`。
+- Java record 映射测试在独立 JDK 17 模块 `record-support` 中执行：
+  `gradle :record-support:test`。
 - `fuzz:test` 会排除 `*JqfTest*`；Jazzer/JQF 是独立任务。
 
 本地安装到 `~/.m2`：
@@ -350,7 +355,7 @@ gradle publish
 | `Failed to resolve: ...2.4.0` 但本地明明有 | 业务项目用了 `mavenLocal()` 但仓库顺序/缓存问题 | `gradle --refresh-dependencies` |
 | Kotlin 编译报元数据版本不兼容 | 业务 Kotlin < 2.0，同时依赖了 `serialization-kotlin` | 升级 Kotlin 到 2.0，或仅依赖 Java 模块 |
 | KSP 报 “ksp version mismatch” | KSP 版本与 Kotlin 版本不匹配 | 使用 `2.0.0-1.0.21` |
-| record 反序列化失败 / 走了无参构造 | 运行在 JDK 8~15 | 需要 JDK 16+ 运行时 |
+| record 反序列化失败 / 走了无参构造 | 未引入 `record-support`，或运行在 JDK 8~16 | 引入 `com.mingliqiye.document:record-support` 并使用 JDK 17+ 运行时 |
 | 构建源码时 `signing` 失败 | 本地没有 GPG | 用 `publishToMavenLocal`，或配置 GPG（发布才需要） |
 
 ## 验证安装

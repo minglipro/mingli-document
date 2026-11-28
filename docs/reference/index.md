@@ -4,10 +4,10 @@
 变更与路线图。与「模块」章节的区别是：模块章节按模块讲职责与用法，参考章节按**主题**
 做全库索引，方便查签名、查行为、查异常。
 
-- 文档对应版本：`2.4.0`
+- 文档对应版本：`2.4.0`（`2.5.0` 开发中，新增 `record-support`）
 - 源码基线：`dev` 分支（文档编写时的仓库状态；`gradle.properties` 中
   `projectVersion=2.4.0`）
-- 目标平台：JDK 8+（Java record 支持需要 JDK 16+ 运行时）
+- 目标平台：JDK 8+（Java record 支持需要 JDK 17+ 运行时 + `record-support` 模块）
 - 语言：Kotlin 2.0.0、Java 8+
 
 ## 页面索引
@@ -67,6 +67,7 @@ mapper.format(users, java.io.File("users.json"))
 | 改字段名 / 忽略字段 / 自定义转换器 | [注解参考](./annotations.md) |
 | 把 Java Bean 与 JSON 互转 | [api.md · DocumentMapperApi](./api.md#documentmapperapi) |
 | 用 `readTree` / `readValue` / `readerFor` / `writer` 等对象映射风格 API | [io.md · 对象映射 API](../guide/io.md#对象映射-api) + [api.md](./api.md#documentmapperapi) |
+| 映射 Java record（JDK 17+） | [record-support 模块](../modules/record-support.md) |
 | 处理多态类型 | [注解参考](./annotations.md) + [serialization 模块](../modules/serialization.md) |
 | 处理 Kotlin data class | [serialization-kotlin](../modules/serialization-kotlin.md) |
 | 配置缺失字段 / 未知字段 / null 写出 / 命名策略 | [api.md · 配置](./api.md#documentmapperconfig) |

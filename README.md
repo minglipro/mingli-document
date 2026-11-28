@@ -64,6 +64,9 @@ dependencies {
 
     // 需要 Kotlin data class 时
     implementation("com.mingliqiye.document:serialization-kotlin:2.4.0")
+
+    // 需要 Java record 支持时（JDK 17+，2.5.0 起）
+    implementation("com.mingliqiye.document:record-support:2.5.0")
 }
 ```
 
@@ -93,6 +96,7 @@ dependencies {
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")
+    implementation("com.mingliqiye.document:record-support")
     implementation("com.mingliqiye.document.format:json")
     implementation("com.mingliqiye.document.format:yaml")
 }
@@ -128,6 +132,7 @@ JDK 8 字节码，行为不变：
 | `format-avro` / `format-cbor` / `format-csv` / `format-ion` / `format-json` / `format-properties` / `format-protobuf` / `format-smile` / `format-toml` / `format-xml` / `format-yaml` | `com.mingliqiye.document.format.<格式名>` | ✅ 显式 `module-info`（Multi-Release） |
 | `jpa-hibernate` | `com.mingliqiye.document.jpa.hibernate` | ✅ 显式 `module-info`（Multi-Release） |
 | `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` | `com.mingliqiye.document.serialization.kotlin` / `.codegen` / `.codegen.test` / `.openapi` | ⚠️ 自动模块（`Automatic-Module-Name`） |
+| `record-support` | `com.mingliqiye.document.record.support` | ⚠️ 自动模块（`Automatic-Module-Name`；JDK 17 字节码，通过 `META-INF/services` 提供 `JavaRecordSupport`） |
 
 `serialization` 依赖的 `alias-for` 自 1.0.4 起提供合法模块名
 （`Automatic-Module-Name: com.mingliqiye.utils.aliasfor`），不再是显式 `module-info` 的阻塞项。
@@ -524,6 +529,7 @@ gradle :benchmarks:jmh
 | `exception` | 异常基类 |
 | `serialization` | DocumentMapper、Bean 映射、Token |
 | `serialization-kotlin` | Kotlin data class 支持 |
+| `record-support` | Java record 支持（JDK 17+，`JavaRecordSupport` SPI 实现） |
 | `codegen` | KSP 编译期代码生成（不参与常规依赖） |
 | `openapi` | OpenAPI 3.0 文档生成 |
 | `schema` | 格式无关 Schema |
@@ -550,6 +556,7 @@ gradle :benchmarks:jmh
 [jpa-hibernate](jpa-hibernate/README.md) ·
 [serialization](serialization/README.md) ·
 [serialization-kotlin](serialization-kotlin/README.md) ·
+[record-support](record-support/README.md) ·
 [codegen](codegen/README.md) ·
 [openapi](openapi/README.md) ·
 [json](format-json/README.md) ·
@@ -576,6 +583,7 @@ gradle clean ktlintCheck build
 # 单模块测试
 gradle :format-json:test
 gradle :serialization:test
+gradle :record-support:test
 gradle :fuzz:test
 
 # 代码格式
@@ -603,10 +611,11 @@ gradle publish
 
 ## 兼容性说明
 
-- 目标字节码：JDK 8
+- 目标字节码：JDK 8（`record-support` 为 JDK 17）
+- Java record：需要 JDK 17+ 运行时 + `record-support` 模块；未引入时按普通 Bean 处理
 - JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
   `jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate` 共 21 个模块提供
-  Multi-Release 显式 `module-info`（JDK 9+），其余模块（`serialization-kotlin`、`codegen`、
+  Multi-Release 显式 `module-info`（JDK 9+），其余模块（`serialization-kotlin`、`record-support`、`codegen`、
   `codegen-test`、`openapi`）仍为自动模块；主 classes 仍是 JDK 8 字节码，JDK 8 按 classpath
   使用；`jlink` 目前仅 `annotation` 可用（依赖链含自动模块 `mingli.exception`）；`jpa` /
   `jpa-hibernate` 走 module path 需要 JDK 11+（`jakarta.persistence-api:3.1.0` 与 Hibernate

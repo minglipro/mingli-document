@@ -397,7 +397,7 @@ val b = node.asObject()["a"]!!.asObject()["b"]!!.asNumber().toInt()
    请补 getter/setter、改成 public 字段，或使用 `@DocumentCreator` / record。
 3. **Kotlin data class 需要模块**：对应 Jackson 的 `jackson-module-kotlin`，
    本库需要 `addModule(kotlinModule())`。
-4. **Java record 需要 JDK 16+ 运行时**：编译目标仍可保持 JDK 8。
+4. **Java record 需要 JDK 17+ 运行时并引入 `record-support` 模块**：库的其它模块编译目标仍为 JDK 8。
 5. **多态必须显式注册**：Jackson 的 `@JsonSubTypes` 自动注册；本库需要
    `config.subtype(...)` 或 Kotlin `kotlinSealedSubtypes(...)`，不扫描 classpath。
 6. **日期需要注解**：Jackson 有内置日期序列化器；本库需要

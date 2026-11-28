@@ -367,7 +367,7 @@ val reader = mapper.readerFor<User>()
 - `kotlin-reflect` 是 `implementation` 依赖，不会暴露到使用方的编译类路径，但运行时需要
   （由 Gradle 的 runtime classpath 传递）；
 - 模块不提供 Kotlin 协程、`@JvmRecord`、自定义 `@JvmInline` 之外的内联类等能力；
-- 与 Java record 支持互不影响：Java record 由 `serialization` 模块自身处理。
+- 与 Java record 支持互不影响：Java record 由可选 `record-support` 模块（JDK 17+）处理后交给 `serialization` 映射。
 
 ## 坐标与构建
 

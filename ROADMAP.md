@@ -28,7 +28,7 @@
 - [x] Builder 模式实例化
 - [x] 输入本地 `$ref` 解析
 - [x] 对象身份引用序列化
-- [x] Java record（JDK 16+ 运行时）
+- [x] Java record（2.0.0 内嵌支持；2.5.0 起独立为 `record-support` 模块，JDK 17+）
 - [x] Kotlin value class / sealed class
 - [x] 只读属性
 - [x] 字段 merge / update
@@ -111,7 +111,7 @@
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
-- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa / 11 个 format-* / jpa-hibernate 共 21 个模块；其余 serialization-kotlin / codegen / codegen-test / openapi 仍为自动模块，见 docs/guide/jpms.md）
+- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa / 11 个 format-* / jpa-hibernate 共 21 个模块；其余 serialization-kotlin / record-support / codegen / codegen-test / openapi 仍为自动模块，见 docs/guide/jpms.md）
 - [x] GraalVM Native Image 实测通过（GraalVM JDK21 + VS BuildTools + Windows SDK）
 
 > 已放弃：Gitea CI、Maven Central。
@@ -303,3 +303,14 @@
 - 全量构建 1566 tests 通过
 - Gitea CI / Maven Central：已放弃
 - 私服 / GitHub Release 已发布
+
+## 2.5.0 交付状态（开发中）
+
+- Java record 支持独立为 `record-support` 模块（JDK 17+ 字节码）：`serialization` 改为
+  公共 `JavaRecordSupport` SPI + `ServiceLoader` 加载，JDK 8-15 或无 provider 时安全降级；
+  `module-info` 增加 `uses`
+- 删除 `:serialization:recordTest`；record 映射测试迁移到 `:record-support:test`
+  （JDK 17 工具链），serialization 测试保持 JDK 8 工具链
+- BOM 纳入 `record-support`；GraalVM 运行期初始化参数改指 `JavaRecordSupportLoader`
+- 已验证：`:serialization:ktlintFormat :serialization:test :record-support:ktlintFormat
+  :record-support:test` 通过；全量构建 1588 tests 通过

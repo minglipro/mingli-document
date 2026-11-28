@@ -1,13 +1,14 @@
 # 变更记录
 
 本页是 `CHANGELOG.md` 的站点版，记录 `mingli-document` 各版本的公开能力变化。
-当前文档对应 `2.4.0`；最新条目之后的 `dev` 分支提交见文末
+当前文档对应 `2.4.0`（`2.5.0` 开发中）；最新条目之后的 `dev` 分支提交见文末
 [未发布的 dev 变更](#未发布的-dev-变更)。
 
 ## 版本速览
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
+| `2.5.0`（未发布） | record 支持独立模块 | `record-support` 模块、`JavaRecordSupport` SPI / `JavaRecordComponentInfo`、record 测试迁移到 JDK 17 |
 | `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info、对象映射便捷 API |
 | `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
 | `2.2.0` | 数据库与扩展 | `jdbc`、`schema-registry`、`validation`、TOML 注释保留、JPMS 自动模块名 |
@@ -22,6 +23,32 @@
 
 发布标签：`1.0.0`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v2.0.0`、`v2.1.0`、`v2.2.0`、`v2.3.0`、`v2.4.0`。
 
+## 2.5.0（未发布）
+
+### 新增
+
+- `record-support` 模块（JDK 17+）：Java record 反射访问独立成模块，提供
+  `JavaRecordSupport` SPI 实现 `Jdk17RecordSupport`，经 `META-INF/services` +
+  `ServiceLoader` 接入
+- `serialization` 新增公共 SPI：`JavaRecordSupport` / `JavaRecordComponentInfo`；
+  内部 `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级
+  （`ServiceConfigurationError` / `LinkageError`）
+- BOM 纳入 `record-support`
+
+### 变更
+
+- **Java record 支持改为可选模块**：`serialization` 不再内嵌 record 反射探测；JDK 17+
+  应用需额外引入 `com.mingliqiye.document:record-support` 才能映射 record；
+  未引入或运行在 JDK 8-15 时按普通 Bean 处理
+- `serialization` 的 `module-info` 增加
+  `uses com.mingliqiye.document.serialization.JavaRecordSupport`
+- GraalVM 运行期初始化参数改为 `JavaRecordSupportLoader`
+
+### 移除
+
+- 删除 `:serialization:recordTest` 任务；record 映射测试迁移到 `:record-support:test`
+  （JDK 17 工具链）
+- 删除 `serialization` 内嵌的 record 反射实现
 ## 2.4.0
 
 ### 新增
@@ -243,22 +270,11 @@
 
 ## 未发布的 dev 变更
 
-以下提交位于 `dev` 分支、尚未形成新的版本条目（文档编写时 `dev` HEAD 为 `9af250e`）。
-按照仓库约定，它们可能随下一个版本发布。
+`2.4.0` 发布之后 `dev` 分支的未发布变更统一记入上方的「2.5.0（未发布）」小节
+（核心是 `record-support` 模块与 `JavaRecordSupport` SPI）。
 
-| 提交 | 内容 |
-|---|---|
-| `9af250e` | `format-protobuf`：支持 `parse`/`format` 显式传 `Descriptor` |
-| `35b7b48` | `format-protobuf`：增加共享 Mapper 工厂 |
-| `de2d071` | CSV/Properties/TOML 流式写出（writer 支持 `Appendable`，补充 OutputStream 测试） |
-| `56b4b6b` | XML/YAML 流式写出（`format(value, OutputStream)` 直写） |
-| `2fdec7f` | Ion 文本与 JSON pretty 流式写出 |
-| `e7f335e` | 增加 JSON/CBOR/Smile 流式写出 |
-| `35ae1b4` | 完善 File/Path/ByteArray/Stream 写出 |
-| `a1888d6` | CI：修复 KSP 插件解析与 CI JDK 版本 |
-
-> 这些提交均可从 `git log` 与源码（`DocumentMapper.createStreamingTokenWriter`、
-> 各格式 Mapper 的覆写）中核对；它们不代表新的公开 API 承诺，以最终发布说明为准。
+`2.4.0` 之前 dev 分支的流式写出、Protobuf Descriptor 等提交已随 2.4.0 发布归档，
+不再单列；历史细节可从 `git log` 核对。
 
 ## 升级指引
 
@@ -302,7 +318,7 @@
 | 项目 | 承诺 |
 |---|---|
 | 版本号 | 语义化版本；2.x 内保持向后兼容 |
-| 字节码 | JDK 8 目标；Java record 支持需要 JDK 16+ 运行时 |
+| 字节码 | JDK 8 目标（`record-support` 为 JDK 17）；Java record 支持需要 JDK 17+ 运行时 + `record-support` 模块 |
 | 破坏性变更 | 仅在大版本（如 1.x → 2.0.0）出现，并配套迁移说明 |
 | 新增配置 | 默认值保持旧行为（关闭/不限制） |
 | 异常 message | 不作为稳定契约 |
@@ -311,7 +327,7 @@
 ## 文档来源
 
 - 本页内容整理自仓库根目录 `CHANGELOG.md`；
-- `dev` 未发布变更整理自 `git log`（HEAD `9af250e`）；
+- `dev` 未发布变更整理自 `git log`（2.4.0 发布后进入 2.5.0 开发）；
 - 迁移细节整理自根目录 `MIGRATION.md`；
 - 版本号以根 `gradle.properties` 的 `projectVersion` 为准。
 

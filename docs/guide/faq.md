@@ -31,7 +31,7 @@ title: 常见问题
 ### Q2：需要什么 JDK / Kotlin 版本？
 
 - 运行：JDK 8+；
-- Java record 映射：JDK 16+ 运行时；
+- Java record 映射：JDK 17+ 运行时，并引入 `record-support` 模块；
 - Kotlin data class：Kotlin 2.0（`serialization-kotlin` 用 Kotlin 2.0.0 编译）；
 - 构建源码：Gradle 8.x；
 - KSP：`2.0.0-1.0.21`。
@@ -88,8 +88,9 @@ val mapper = JsonMapper.builder()
 
 ### Q8：Java record 为什么没生效？
 
-record 反射 API 需要 **JDK 16+ 运行时**。主代码仍按 JDK 8 编译没问题，但运行环境
-低于 16 时会走普通 Bean 逻辑。
+record 支持已拆分为独立模块 `record-support`：需要 **JDK 17+ 运行时**，并确认依赖里有
+`com.mingliqiye.document:record-support`。未引入该模块（或运行在 JDK 8-16）时
+`serialization` 会安全降级为普通 Bean 逻辑。
 
 ### Q9：如何忽略某个字段？
 

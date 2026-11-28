@@ -30,6 +30,10 @@ module com.mingliqiye.document.serialization {
     // 日期时间转换器支持 java.sql.Date / java.sql.Timestamp（java.sql 模块）。
     requires java.sql;
 
+    // record-support（JDK 17 模块）通过 META-INF/services 提供 record 反射实现；
+    // 未引入该模块时运行期找不到 provider，Mapper 安全降级为普通 Bean 行为。
+    uses com.mingliqiye.document.serialization.JavaRecordSupport;
+
     exports com.mingliqiye.document.serialization;
     exports com.mingliqiye.document.serialization.codegen;
     exports com.mingliqiye.document.serialization.exception;

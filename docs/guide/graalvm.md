@@ -42,7 +42,7 @@ native-image \
   -cp "build/libs/*:..." \
   -H:Name=native-smoke \
   --initialize-at-run-time=java.beans.Introspector \
-  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport \
+  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader \
   com.mingliqiye.document.graalvm.smoke.NativeSmoke
 ```
 
@@ -50,6 +50,16 @@ native-image \
 
 ```text
 fatal error C1083: stdio.h: No such file or directory
+```
+
+## Java record 支持
+
+- record 映射需要 JDK 17+ 运行时并引入 `record-support` 模块（见 [record-support](../modules/record-support.md)）；
+- provider 由 Native Image 的 ServiceLoader 支持自动注册；
+- record 类本身需要注册组件元数据，例如：
+
+```json
+{ "name": "com.example.User", "allRecordComponents": true }
 ```
 
 ## 用户需要补充的反射配置

@@ -59,7 +59,7 @@ Mapper 为每个类型构建一次 `BeanMetadata`，属性来源按以下顺序�
 第一次出现的定义）：
 
 1. **JavaBeans Introspector**：`getXxx()` / `isXxx()` + `setXxx(...)`；
-2. **record 组件**（JDK 16+ 运行时）：`name()` 访问器；
+2. **record 组件**（JDK 17+ 运行时 + `record-support` 模块）：`name()` 访问器；
 3. **public 字段**：`public String name;` 这种直接可读写的字段（`final` public 字段只读）；
 4. **流式 setter**：`setXxx(...)` 返回非 `void`（如返回 `this` 的 Builder），
    JavaBeans Introspector 不识别这种情况，Mapper 会补充写访问器。
@@ -342,7 +342,13 @@ Builder 存在 @DocumentBuild 方法，或回退到无参 build()
 
 ## Java record
 
-record 组件访问器是 `name()` 而不是 `getName()`，Mapper 会自动识别 record 组件：
+record 组件访问器是 `name()` 而不是 `getName()`。引入可选的 `record-support` 模块后，
+Mapper 会自动识别 record 组件：
+
+```kotlin
+// 依赖（2.5.0 未发布）：serialization（或任一格式模块）+ record-support
+implementation("com.mingliqiye.document:record-support:2.5.0")
+```
 
 ```java
 public record Address(String city, int zipCode) {}
@@ -360,13 +366,19 @@ val user = mapper.fromNode(node, User::class.java)
 
 要点：
 
-- **需要 JDK 16+ 运行时**：`Class.isRecord()` / `RecordComponent` 从 JDK 16 开始提供；
-  主代码仍按 JDK 8 目标编译，运行在 JDK 8 时该分支不执行，普通 Bean 行为不变。
+- **需要 JDK 17+ 运行时 + `record-support` 模块**：record 反射访问独立在
+  `record-support`（JDK 17 字节码），它实现 `JavaRecordSupport` SPI 并通过
+  `META-INF/services` 注册，`serialization` 运行期用 `ServiceLoader` 加载；
+  未引入该模块（或运行在 JDK 8-15）时安全降级为普通 Bean 行为，不抛异常。
+- 不需要任何注册代码：JDK 17+ 且 classpath / module path 上有 `record-support` 即自动生效。
 - 序列化：组件按可读属性写出，支持 `@DocumentName`、`@DocumentIgnore` 与命名策略。
 - 反序列化：优先 `@DocumentCreator` 构造器；没有时自动绑定 canonical constructor，
   按组件名取值（可用 `@DocumentName` 覆盖）。
 - record 组件都是只读的，按构造参数注入；缺字段按 `MissingFieldPolicy` 处理。
 - `@DocumentIgnore` 的组件既不写出，也不从文档读取。
+
+详见 [record-support 模块](../modules/record-support.md) 与
+[record-support README](../../record-support/README.md)。
 
 ## 只读属性
 
@@ -884,7 +896,7 @@ val index = mapper.parse(
 - **多态不自动扫描**：必须显式注册，Kotlin sealed 用 `kotlinSealedSubtypes`。
 - **Map key** 序列化用 `toString()`，反序列化按声明 key 类型解析；复杂对象 key 不支持。
 - **未知字段** 默认忽略，需要严格校验时开启 `failOnUnknownFields`。
-- **Java record** 仅在 JDK 16+ 运行时有特殊支持。
+- **Java record** 需要 JDK 17+ 运行时并引入 `record-support` 模块；未引入时按普通 Bean 处理。
 - **Kotlin data class** 必须注册 `kotlinModule()`，否则没有无参构造器会实例化失败。
 
 ## 综合示例

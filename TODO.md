@@ -1,6 +1,6 @@
 # TODO
 
-当前分支：`dev`，版本 `2.4.0`。
+当前分支：`dev`，版本 `2.4.0`（`2.5.0` 开发中）。
 
 ## 已完成（2.4.0）
 
@@ -16,6 +16,14 @@
 - 对象映射便捷 API
 - reified 扩展迁移到 serialization-kotlin
 
+## 已完成（2.5.0 未发布）
+
+- Java record 支持独立为 `record-support` 模块（JDK 17+）：`JavaRecordSupport` SPI +
+  `ServiceLoader`，JDK 8-15 / 无 provider 时安全降级
+- record 映射测试迁移：删除 `:serialization:recordTest`，改在 `:record-support:test`
+  （JDK 17 工具链）执行
+- BOM 纳入 `record-support`；GraalVM 初始化参数改指 `JavaRecordSupportLoader`
+
 ## 已放弃
 
 - Gitea CI
@@ -23,7 +31,7 @@
 
 ## 保留待办
 
-- [ ] serialization-kotlin / codegen / codegen-test / openapi 的显式 module-info
+- [ ] serialization-kotlin / record-support / codegen / codegen-test / openapi 的显式 module-info
 - [ ] format-json 去掉 jackson 内部包 `DoubleToDecimal` 依赖
 - [ ] Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn`
 - [ ] `jlink` 支持

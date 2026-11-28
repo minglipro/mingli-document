@@ -87,7 +87,7 @@ xcopy /E /I /Y graalvm\native-smoke\META-INF graalvm\native-smoke\build\classes\
 :: 2) 构建 native 镜像
 native-image -cp "<classpath>" -H:Name=graalvm\native-smoke\build\native-smoke ^
   --initialize-at-run-time=java.beans.Introspector ^
-  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupport ^
+  --initialize-at-run-time=com.mingliqiye.document.serialization.JavaRecordSupportLoader ^
   com.mingliqiye.document.graalvm.smoke.NativeSmoke
 
 :: 3) 运行
