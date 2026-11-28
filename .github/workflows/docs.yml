@@ -24,6 +24,9 @@ jobs:
     defaults:
       run:
         working-directory: docs
+    env:
+      npm_config_minimum_release_age: '0'
+      NPM_CONFIG_MINIMUM_RELEASE_AGE: '0'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,6 +40,9 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 11
+
+      - name: Configure pnpm
+        run: pnpm config set minimumReleaseAge 0 --location=project
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
