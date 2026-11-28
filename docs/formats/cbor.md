@@ -12,14 +12,14 @@ CBOR 是纯二进制格式，Mapper 只实现字节 API：`parse(String)` / `for
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:cbor:2.0.0")
+implementation("com.mingliqiye.document.format:cbor:2.1.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `cbor` |
-| 版本 | `2.0.0` |
+| 版本 | `2.1.0` |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | `com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.15.3` |
 | 字节码 | JDK 8 |

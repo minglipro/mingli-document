@@ -12,10 +12,10 @@
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:schema-registry:2.0.0")
+implementation("com.mingliqiye.document:schema-registry:2.1.0")
 ```
 
-模块已包含在 BOM `com.mingliqiye.document:mingli-document-bom:2.0.0` 中。
+模块已包含在 BOM `com.mingliqiye.document:mingli-document-bom:2.1.0` 中。
 
 ## 主要 API
 

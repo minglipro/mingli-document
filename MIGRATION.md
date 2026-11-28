@@ -1,4 +1,18 @@
-# 从 1.x 迁移到 2.0.0
+# 从 1.x 迁移到 2.1.0
+
+## 2.1.0
+
+2.1.0 在 2.0.0 基础上新增：
+
+```text
+JSON Lines / JSON 数组 / CSV 逐行流式 Bean 映射
+ByteArrayPool 缓冲池与 BinaryNode.ofShared 零拷贝
+schema-registry 模块
+validation 模块
+DocumentBeanValidator 扩展点
+```
+
+API 向后兼容；新增模块需要显式引入。
 
 ## 2.0.0
 

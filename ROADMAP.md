@@ -226,3 +226,13 @@
 - JPMS module-info
 - GraalVM Native Image
 - Maven Central 实际发布（配置已就绪，需凭据/GPG）
+---
+
+## 2.1.0 交付状态
+
+- master / v2.1.0 发布
+- 私服 2.1.0 全模块发布成功
+- 全量构建通过，1191 tests
+- 新增 schema-registry / validation 模块
+- P1 全部完成：流式 Bean、缓冲池/零拷贝、Schema Registry、Bean Validation
+- 文档站同步新增页面

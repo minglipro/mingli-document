@@ -22,7 +22,7 @@ ByteArrayPool
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:core:2.0.0")
+implementation("com.mingliqiye.document:core:2.1.0")
 ```
 
 ## 示例

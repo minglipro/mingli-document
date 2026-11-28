@@ -48,8 +48,8 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.0.0")
-    implementation("com.mingliqiye.document.format:yaml:2.0.0")
+    implementation("com.mingliqiye.document.format:json:2.1.0")
+    implementation("com.mingliqiye.document.format:yaml:2.1.0")
 }
 ```
 
@@ -59,7 +59,7 @@ Maven：
 <dependency>
     <groupId>com.mingliqiye.document.format</groupId>
     <artifactId>json</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0</version>
 </dependency>
 ```
 
@@ -69,7 +69,7 @@ Maven：
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.0.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
     implementation("com.mingliqiye.document.format:json")
     implementation("com.mingliqiye.document.format:cbor")
 }

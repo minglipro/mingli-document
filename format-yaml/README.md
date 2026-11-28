@@ -5,7 +5,7 @@ YAML 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:yaml:2.0.0")
+implementation("com.mingliqiye.document.format:yaml:2.1.0")
 ```
 
 ## 主要 API

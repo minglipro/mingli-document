@@ -9,7 +9,7 @@ Kotlin 类型支持模块：
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization-kotlin:2.0.0")
+implementation("com.mingliqiye.document:serialization-kotlin:2.1.0")
 ```
 
 ## 快速开始

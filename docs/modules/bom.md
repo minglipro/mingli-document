@@ -4,7 +4,7 @@
 依赖版本。它是一个 `java-platform` 项目，只声明版本约束，不引入任何依赖。
 
 - 坐标：`com.mingliqiye.document:mingli-document-bom`
-- 当前版本：`2.0.0`（来自根 `gradle.properties` 的 `projectVersion`）
+- 当前版本：`2.1.0`（来自根 `gradle.properties` 的 `projectVersion`）
 - 类型：`pom`（Gradle `java-platform`）
 - 目标字节码：不适用（无代码）
 - 源码：`bom/build.gradle.kts`
@@ -25,7 +25,7 @@ BOM **不引入依赖**：导入它不会把任何 jar 加到你的 classpath，
 
 ```text
 根 gradle.properties
-   projectVersion = 2.0.0
+   projectVersion = 2.1.0
         │
         ▼
    bom（java-platform）
@@ -91,7 +91,7 @@ protobuf
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.0.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")
@@ -110,7 +110,7 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation platform("com.mingliqiye.document:mingli-document-bom:2.0.0")
+    implementation platform("com.mingliqiye.document:mingli-document-bom:2.1.0")
     implementation "com.mingliqiye.document:serialization"
     implementation "com.mingliqiye.document.format:json"
 }
@@ -124,7 +124,7 @@ dependencies {
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>2.0.0</version>
+            <version>2.1.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -163,7 +163,7 @@ repositories {
 - 版本唯一来源：根 `gradle.properties`
 
 ```properties
-projectVersion=2.0.0
+projectVersion=2.1.0
 ```
 
 - 所有发布模块的 `version` 都在根 `build.gradle.kts` 的 `allprojects` 中统一赋值；
@@ -229,7 +229,7 @@ subprojects {
 
 // app 模块
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.0.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.1.0"))
 
     implementation("com.mingliqiye.document.format:json")
     implementation("com.mingliqiye.document.format:yaml")
@@ -254,7 +254,7 @@ BOM 是纯版本约束，没有 SPI。需要扩展时：
 - 不管理第三方依赖（如 Jackson、SnakeYAML、ion-java、protobuf-java 等），需要时请自行
   统一版本或用 `gradle/libs.versions.toml`；
 - 不管理 `benchmarks` / `fuzz` / `codegen-test`；
-- 使用 `platform(...)` 时 BOM 自身版本仍需显式指定（`2.0.0`）；
+- 使用 `platform(...)` 时 BOM 自身版本仍需显式指定（`2.1.0`）；
 - 如果某模块在 BOM 中不存在（例如未来新增但未及时加入），不会报错，只会缺少约束；
 - BOM 不解决版本冲突：冲突仍由 Gradle/Maven 的解析规则处理。
 
@@ -270,4 +270,4 @@ gradle :bom:ktlintCheck   # bom 无 Kotlin 源码，通常为空任务
 
 - [模块总览](./index.md)：模块坐标与依赖关系
 - [安装指南](../guide/installation.md)：站点安装章节
-- [迁移指南](../guide/migration.md)：1.0.0 → 2.0.0 坐标升级
+- [迁移指南](../guide/migration.md)：1.0.0 → 2.1.0 坐标升级

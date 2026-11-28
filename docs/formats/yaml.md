@@ -10,14 +10,14 @@ description: format-yaml 模块：YamlMapper、YamlConfig、多文档、!!binary
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:yaml:2.0.0")
+implementation("com.mingliqiye.document.format:yaml:2.1.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `yaml` |
-| 版本 | `2.0.0` |
+| 版本 | `2.1.0` |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | `org.yaml:snakeyaml:2.6` |
 | 字节码 | JDK 8 |

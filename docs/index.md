@@ -67,4 +67,4 @@ val bean = yaml.parse(yamlText, User::class.java)
 
 ## 版本
 
-当前文档对应 `2.0.0`。历史变更见 [CHANGELOG](./reference/changelog.md)。
+当前文档对应 `2.1.0`。历史变更见 [CHANGELOG](./reference/changelog.md)。

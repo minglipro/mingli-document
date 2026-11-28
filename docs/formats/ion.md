@@ -12,14 +12,14 @@ Ion 是自描述格式，既有 `blob` / `clob` / `timestamp` / `symbol` 等 Nod
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:ion:2.0.0")
+implementation("com.mingliqiye.document.format:ion:2.1.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `ion` |
-| 版本 | `2.0.0` |
+| 版本 | `2.1.0` |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | `com.amazon.ion:ion-java:1.11.9` |
 | 字节码 | JDK 8 |

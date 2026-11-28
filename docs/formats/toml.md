@@ -12,14 +12,14 @@ TOML 文档根必须是表（table），因此 TOML 的根节点固定为 `Objec
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:toml:2.0.0")
+implementation("com.mingliqiye.document.format:toml:2.1.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `toml` |
-| 版本 | `2.0.0` |
+| 版本 | `2.1.0` |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | `org.tomlj:tomlj:1.0.0` |
 | 字节码 | JDK 8 |
