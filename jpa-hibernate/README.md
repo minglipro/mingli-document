@@ -4,9 +4,10 @@ Hibernate `Session` / `EntityManager` 运行期集成模块：在 `jpa` 模块�
 处理 Hibernate 代理、懒加载集合/属性、关联深度、循环引用与按标识符加载。
 
 模块复用 `jpa` 模块的全部注解元数据（列名、枚举、日期、`@Embedded`、
-`@ElementCollection`、命名策略、null 策略、访问策略），**不重复实现元数据**；
-Hibernate 运行期只使用 JPA 元模型（`jakarta.persistence.metamodel`）区分关联属性，
-不再扫描注解。不负责持久化/事务：`Session`/`EntityManager` 的打开、关闭、事务边界
+`@ElementCollection`、`@Convert`/autoApply 转换器、Map 关联、`@Inheritance` 多态、
+命名策略、null 策略、访问策略），**不重复实现元数据**；Hibernate 运行期只使用
+JPA 元模型（`jakarta.persistence.metamodel`）区分关联属性，不再扫描注解。
+不负责持久化/事务：`Session`/`EntityManager` 的打开、关闭、事务边界
 全部由调用方管理。
 
 ## Maven
@@ -141,6 +142,44 @@ val restored = mapper.fromNode(detachedNode, Employee::class.java)
 引用解析只支持**单个基本类型标识符**（`@Id` 基本类型）；复合主键、`@EmbeddedId`
 或标识符字段名不是节点键别名时按普通 detach 递归处理。
 
+## 高级映射：@Convert / Map 关联 / 多态
+
+本模块不重复实现这些 JPA 语义，而是在 Hibernate 运行期映射中复用 jpa 模块的规则：
+
+- **`@Convert` / autoApply `AttributeConverter`**：非关联属性由 jpa 模块按元数据
+  写出/读入，因此文档中表示数据库列值；autoApply 转换器通过
+  `JpaConfig.builder().autoApplyConverter(...)` 注册后同样生效（`HibernateDocumentMapper`
+  会把 `JpaConfig` 原样透传给内部 jpa 映射器）。注意：**持久化到数据库**时，
+  Hibernate `SessionFactory` 也需要认识该转换器（例如
+  `MetadataBuilder.applyAttributeConverter(...)`），这是 JPA 提供者的要求。
+- **Map 关联（`Map<K, V>`）与 Map `@ElementCollection`**：Hibernate 元模型中的
+  `MapAttribute` 会按 jpa 模块相同规则展开为对象节点（键为字符串化 Map 键），
+  lazy `PersistentMap` 按懒加载策略初始化；键格式由 jpa 模块公开的 `JpaMapKeys`
+  统一，`@MapKey`/`@MapKeyColumn`/`@MapKeyEnumerated`/`@MapKeyTemporal` 语义一致。
+  键文本冲突/无法解析同样抛异常。
+- **多态（`@Inheritance`/`@DiscriminatorColumn`/`@DiscriminatorValue`）**：
+  写出方向按实际实体类型（Hibernate 代理会先还原）写出 discriminator 与子类字段；
+  读入方向由 `JpaConfig.entityTypes` 注册的子类决定实例化类型，未知 discriminator
+  抛 `JpaMappingException`；关联值的声明类型是父类时同样按 discriminator 选择子类。
+  Hibernate 感知映射的关联遍历会使用实例的**实际实体类型**，因此子类新增的关联也
+  会被读取。
+
+```kotlin
+val mapper = HibernateDocumentMapper(
+    jpaConfig = JpaConfig.builder()
+        .autoApplyConverter(EmailConverter::class.java)   // autoApply 转换器
+        .entityType(Cat::class.java)                      // 多态读入候选子类
+        .entityType(Dog::class.java)
+        .build(),
+)
+
+entityManager.use { em ->
+    val zoo = em.find(Zoo::class.java, 1L)
+    val node = mapper.toNode(zoo, em)                     // 子类字段 + discriminator + Map 关联
+    val copy = mapper.fromNode(node, Zoo::class.java, em) // 关联解析 + 多态实例化
+}
+```
+
 ## 配置
 
 ```kotlin
@@ -162,7 +201,8 @@ val mapper = HibernateDocumentMapper(config = config)
 | `cyclePolicy` | `FAIL` | `FAIL`：抛 `HibernateJpaMappingException`（消息含首次出现路径）；`OMIT`：单值关联字段省略、集合中的循环元素跳过 |
 
 `JpaConfig` 的 `associationDepth`、`namingStrategy`、`nullPolicy`、
-`unknownPropertyPolicy`、`accessType`、`includeTransient` 在 Hibernate 感知映射中同样生效。
+`unknownPropertyPolicy`、`accessType`、`includeTransient`、`autoApplyConverters`、
+`entityTypes` 在 Hibernate 感知映射中同样生效（基础映射器原样透传 jpa 配置）。
 `INITIALIZE` 需要传入与实体关联的、打开的 `Session`/`EntityManager`；否则抛
 `HibernateJpaLazyLoadException`。
 
@@ -207,8 +247,13 @@ try {
   与 Hibernate Session 实现；其它 JPA 提供者的代理不会被识别（会被当作普通实体字段映射）；
 - **不加载关联内部的关联**：`@Embeddable` 内部的关系映射由 jpa 模块按深度规则处理，
   本模块的代理/懒加载遍历只覆盖实体自身的关联属性；
-- 不处理 `@Inheritance` 多态写入的鉴别器语义、`@Convert`/`AttributeConverter`
-  （节点表示 Java 属性值）、`@MapKey`/Map 关联（jpa 模块直接拒绝）；
+- 高级语义（`@Convert`/autoApply、Map 关联、多态 discriminator）由 jpa 模块实现，
+  本模块只负责 Hibernate 运行期遍历；因此：
+  - autoApply 转换器与多态子类需要通过 `JpaConfig` 注册；
+  - Map 键格式完全沿用 jpa 模块（`JpaMapKeys`），Hibernate 侧不额外解释 `@MapKeyColumn` 列名；
+  - 多态读入时若没有注册任何子类，未知 discriminator 会抛 jpa 模块的 `JpaMappingException`；
+- 转换为数据库列值的 `@Convert` 若需要在数据库读写，Hibernate `SessionFactory` 也必须
+  注册同一转换器（JPA 提供者要求），否则实体引导/持久化会失败；
 - 字节码增强的懒加载属性依赖 `Hibernate.initialize` 能整体初始化实体；单属性增强代理
   无法初始化时会抛 `HibernateJpaLazyLoadException`（请在映射前通过 getter 初始化）；
 - 关联深度为 0 时不读取关联字段，因此不会触发任何关联懒加载查询；
@@ -226,6 +271,8 @@ gradle :jpa-hibernate:ktlintFormat :jpa-hibernate:test
 测试使用 H2 内存数据库 + 以编程方式 bootstrap 的 Hibernate `SessionFactory`，
 覆盖：懒加载 `@OneToMany`/`@ManyToOne`、Hibernate 代理（含 `getReference` 根代理）、
 `@Embedded`、枚举、懒加载 `@ElementCollection`、关联深度、双向/自引用循环、
-`EntityManager` 与 `Session` 两种入口、`fromNode` 引用解析与 `findAsNode`/`getAsNode`。
+`EntityManager` 与 `Session` 两种入口、`fromNode` 引用解析与 `findAsNode`/`getAsNode`，
+以及 `@Convert`/autoApply 转换器、Map 关联（`@MapKey`/`@MapKeyColumn`，与纯 jpa
+映射的键格式一致性）、`@Inheritance` 多态的写出与按 discriminator 读入。
 
 文档：[根 README](../README.md) · [jpa](../jpa/README.md) · [core](../core/README.md) · [贡献指南](../CONTRIBUTING.md)

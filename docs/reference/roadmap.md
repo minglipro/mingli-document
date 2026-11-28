@@ -122,12 +122,13 @@
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`）
 - [x] JPMS `module-info`（Multi-Release jar：`annotation` / `exception` / `core` /
-  `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` 九个模块；
-  其余 `format-*` / `serialization-kotlin` / `codegen` / `openapi` / `jpa-hibernate` 仍为
-  自动模块，见 [JPMS 指南](../guide/jpms.md)）
+  `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` /
+  11 个 `format-*` / `jpa-hibernate` 共 21 个模块；其余 `serialization-kotlin` / `codegen` /
+  `codegen-test` / `openapi` 仍为自动模块，见 [JPMS 指南](../guide/jpms.md)）
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
-> 未完成项：Gitea CI、`format-*` 等剩余模块的 JPMS `module-info`、Maven Central 实际发布。
+> 未完成项：Gitea CI、`serialization-kotlin` / `codegen` / `openapi` 等剩余模块的 JPMS
+> `module-info`、Maven Central 实际发布。
 
 ## 批次计划
 
@@ -274,7 +275,7 @@
 | 序号 | 待办 | 阶段 |
 |---|---|---|
 | 1 | Hibernate Session / EntityManager 运行期集成 | 阶段 5 |
-| 2 | `format-*` / `serialization-kotlin` / `codegen` / `openapi` / `jpa-hibernate` 的显式 module-info（`serialization` / `jdbc` / `validation` / `jpa` 已完成；`alias-for` 1.0.4 已解除阻塞） | 阶段 6 |
+| 2 | `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` 的显式 module-info（`format-*` / `jpa-hibernate` 已在 dev 补齐；`alias-for` 1.0.4 已解除阻塞） | 阶段 6 |
 | 3 | Maven Central 实际发布（需额度/凭据） | 阶段 6 |
 | 4 | Avro 完整 logical type | 阶段 2 |
 | 5 | XML / Properties / TOML / CSV `maxDepth` | 阶段 4 |

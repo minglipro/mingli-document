@@ -11,13 +11,17 @@ import com.mingliqiye.document.jpa.hibernate.exception.HibernateJpaMappingExcept
 import com.mingliqiye.document.jpa.hibernate.internal.HibernateRuntime
 import com.mingliqiye.document.jpa.hibernate.internal.associationTargetClass
 import com.mingliqiye.document.jpa.hibernate.internal.columnNameOf
+import com.mingliqiye.document.jpa.hibernate.internal.mapKeyFieldName
+import com.mingliqiye.document.jpa.hibernate.internal.mapKeyValue
 import com.mingliqiye.document.jpa.hibernate.internal.newCollectionInstance
+import com.mingliqiye.document.jpa.hibernate.internal.newMapInstance
 import com.mingliqiye.document.jpa.hibernate.internal.readAttributeValue
 import com.mingliqiye.document.jpa.hibernate.internal.writeAttributeValue
 import jakarta.persistence.EntityManager
 import jakarta.persistence.PersistenceException
 import jakarta.persistence.metamodel.Attribute
 import jakarta.persistence.metamodel.EntityType
+import jakarta.persistence.metamodel.MapAttribute
 import jakarta.persistence.metamodel.PluralAttribute
 import jakarta.persistence.metamodel.SingularAttribute
 import org.hibernate.Hibernate
@@ -289,6 +293,9 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
         if (!Hibernate.isInitialized(value)) {
             runtime.initializeLazy(value, "Association collection '${attribute.name}'", path)
         }
+        if (attribute is MapAttribute<*, *, *> && value is Map<*, *>) {
+            return writeAssociationMap(value, attribute, runtime, childDepth, path, stack)
+        }
         val elements = value as? Collection<*>
             ?: throw HibernateJpaMappingException(
                 "Association '${attribute.name}' expects a Collection at $path but was ${value.javaClass.name}",
@@ -305,6 +312,41 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
             index++
         }
         return ArrayNode.from(nodes)
+    }
+
+    /**
+     * 写出 Map 关联：对象节点，字段名为字符串化的 Map 键，值按关联实体递归写出。
+     *
+     * 键格式与 jpa 模块一致（`@MapKey`/`@MapKeyColumn` 只影响 JPA 持久化、
+     * 不改变文档键；`@MapKeyEnumerated`/`@MapKeyTemporal` 决定枚举/日期键文本）。
+     * 同一文档字段名重复（键字符串冲突）时抛异常。
+     */
+    private fun writeAssociationMap(
+        value: Map<*, *>,
+        attribute: MapAttribute<*, *, *>,
+        runtime: HibernateRuntime,
+        childDepth: Int,
+        path: String,
+        stack: IdentityHashMap<Any, String>,
+    ): ObjectNode {
+        val fields = LinkedHashMap<String, Node>(value.size)
+        for ((key, element) in value) {
+            val keyText = mapKeyFieldName(attribute, key, path)
+            if (fields.containsKey(keyText)) {
+                throw HibernateJpaMappingException(
+                    "Map key collision at $path: multiple keys of '${attribute.name}' " +
+                        "are serialized as '$keyText'",
+                )
+            }
+            if (element == null) {
+                fields[keyText] = NullNode.INSTANCE
+            } else {
+                writeAssociationEntity(element, runtime, childDepth, "$path[$keyText]", stack)?.let {
+                    fields[keyText] = it
+                }
+            }
+        }
+        return ObjectNode.from(fields)
     }
 
     private fun writeAssociationEntity(
@@ -351,10 +393,13 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
             ?: throw HibernateJpaMappingException(
                 "Expected object node for entity ${entityType.name} at $path but was ${node.type}",
             )
-        val entityMetadata = runtime.entityTypeOf(entityType)
+        runtime.entityTypeOf(entityType)
+        // baseMapper 按 jpa 元数据构建非关联字段；继承层次中会按 discriminator 选择子类，
+        // 因此关联遍历使用实例的实际实体类型（子类可能声明额外关联）。
         val instance = baseMapper.fromNode(objectNode, entityType)
+        val actualEntityType = runtime.entityTypeOf(instance.javaClass)
         if (depth < jpaConfig.associationDepth) {
-            for (attribute in entityMetadata.attributes) {
+            for (attribute in actualEntityType.attributes) {
                 if (!attribute.isAssociation) {
                     continue
                 }
@@ -393,6 +438,9 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
             return null
         }
         val targetType = associationTargetClass(attribute, path)
+        if (attribute is MapAttribute<*, *, *>) {
+            return readAssociationMap(node, attribute, targetType, runtime, childDepth, path)
+        }
         if (attribute is PluralAttribute<*, *, *>) {
             val arrayNode = node.asArrayOrNull()
                 ?: throw HibernateJpaMappingException(
@@ -411,6 +459,40 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
             return collection
         }
         return readAssociationTarget(node, targetType, runtime, childDepth, path)
+    }
+
+    /**
+     * 读入 Map 关联：对象节点字段名为字符串化的 Map 键，按 jpa 模块相同的键规则
+     * 反向转换为 Map 键；同一键文本解析出重复键时抛异常。
+     */
+    private fun readAssociationMap(
+        node: Node,
+        attribute: MapAttribute<*, *, *>,
+        targetType: Class<*>,
+        runtime: HibernateRuntime,
+        depth: Int,
+        path: String,
+    ): Any {
+        val objectNode = node.asObjectOrNull()
+            ?: throw HibernateJpaMappingException(
+                "Expected object node for Map association '${attribute.name}' at $path but was ${node.type}",
+            )
+        val map = newMapInstance(attribute.javaType, path)
+        for ((keyText, child) in objectNode.asMap()) {
+            val key = mapKeyValue(attribute, keyText, "$path.$keyText")
+            if (map.containsKey(key)) {
+                throw HibernateJpaMappingException(
+                    "Map key collision at $path: multiple document keys of '${attribute.name}' " +
+                        "resolve to the same key",
+                )
+            }
+            map[key] = if (child.isNull) {
+                null
+            } else {
+                readAssociationTarget(child, targetType, runtime, depth, "$path[$keyText]")
+            }
+        }
+        return map
     }
 
     private fun readAssociationTarget(
@@ -498,12 +580,19 @@ public class HibernateDocumentMapper @JvmOverloads constructor(
  *
  * 关联属性由本模块基于 Hibernate 运行期元数据遍历，因此基础映射器把关联深度设为 0，
  * 避免 jpa 模块按字段反射访问 Hibernate 代理/懒加载集合。
+ *
+ * 其余配置（包括 autoApply 转换器与用于多态读入的实体注册）原样透传，保证
+ * Hibernate 感知路径与纯 jpa 路径的标量/转换器/多态语义一致。
  */
-private fun baseConfig(config: JpaConfig): JpaConfig = JpaConfig.builder()
-    .namingStrategy(config.namingStrategy)
-    .includeTransient(config.includeTransient)
-    .associationDepth(0)
-    .nullPolicy(config.nullPolicy)
-    .unknownPropertyPolicy(config.unknownPropertyPolicy)
-    .accessType(config.accessType)
-    .build()
+private fun baseConfig(config: JpaConfig): JpaConfig {
+    val builder = JpaConfig.builder()
+        .namingStrategy(config.namingStrategy)
+        .includeTransient(config.includeTransient)
+        .associationDepth(0)
+        .nullPolicy(config.nullPolicy)
+        .unknownPropertyPolicy(config.unknownPropertyPolicy)
+        .accessType(config.accessType)
+    config.autoApplyConverters.forEach { builder.autoApplyConverter(it) }
+    config.entityTypes.forEach { builder.entityType(it) }
+    return builder.build()
+}

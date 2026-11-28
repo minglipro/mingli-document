@@ -110,24 +110,36 @@ Maven：
 ### JPMS 模块与 module-info
 
 `annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
-`jdbc` / `validation` / `jpa` 九个模块的主 jar 是 **Multi-Release JAR**：JDK 9+ 使用 jar 内
-显式的 `META-INF/versions/9/module-info.class`（`jar --describe-module --release 9` 不再显示
-`automatic`），JDK 8 仍按 classpath 使用原有 JDK 8 字节码，行为不变：
+`jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate` 共 21 个模块的主 jar 是
+**Multi-Release JAR**：JDK 9+ 使用 jar 内显式的 `META-INF/versions/9/module-info.class`
+（`jar --describe-module --release 9` 不再显示 `automatic`），JDK 8 仍按 classpath 使用原有
+JDK 8 字节码，行为不变：
 
 | 模块（主 jar） | 模块名 | JPMS 形态 |
 |---|---|---|
 | `annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` | `com.mingliqiye.document.<模块名>` | ✅ 显式 `module-info`（Multi-Release） |
-| `serialization-kotlin` / `format-*` / `codegen` / `openapi` / `jpa-hibernate` 等 | `com.mingliqiye.document[.format].<模块名>` | ⚠️ 自动模块（`Automatic-Module-Name`，后续补 `module-info`） |
+| `format-avro` / `format-cbor` / `format-csv` / `format-ion` / `format-json` / `format-properties` / `format-protobuf` / `format-smile` / `format-toml` / `format-xml` / `format-yaml` | `com.mingliqiye.document.format.<格式名>` | ✅ 显式 `module-info`（Multi-Release） |
+| `jpa-hibernate` | `com.mingliqiye.document.jpa.hibernate` | ✅ 显式 `module-info`（Multi-Release） |
+| `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` | `com.mingliqiye.document.serialization.kotlin` / `.codegen` / `.codegen.test` / `.openapi` | ⚠️ 自动模块（`Automatic-Module-Name`） |
 
 `serialization` 依赖的 `alias-for` 自 1.0.4 起提供合法模块名
 （`Automatic-Module-Name: com.mingliqiye.utils.aliasfor`），不再是显式 `module-info` 的阻塞项。
-注意 `jpa` 的 module path 运行期要求 JDK 11+（依赖的 `jakarta.persistence-api:3.1.0` 是
-class file 55）；`serialization` / `jdbc` / `validation` 没有这个限制。
+格式模块的第三方依赖中，Jackson 2.15.3 与 SnakeYAML 2.6 自带显式 `module-info`；
+Avro / Ion / TOML / commons-csv / protobuf-java 仍是自动模块；`hibernate-core` 的自动模块名是
+`org.hibernate.orm.core`，也是自动模块。
+注意 `jpa` / `jpa-hibernate` 的 module path 运行期要求 JDK 11+（依赖的
+`jakarta.persistence-api:3.1.0` 与 Hibernate 6.5 是 class file 55）；`serialization` / `jdbc` /
+`validation` / 格式模块没有这个限制。
+另外 `format-json` 在 module path 上写 `Double` 时引用了 jackson-core 未导出的内部包，
+需要消费方追加 `--add-exports com.fasterxml.jackson.core/com.fasterxml.jackson.core.io.schubfach=com.mingliqiye.document.format.json`；
+classpath 使用不受影响（详见 JPMS 指南的限制章节）。
 
 ```java
 module my.app {
     requires com.mingliqiye.document.core;
     requires com.mingliqiye.document.schema;
+    // 格式模块的 core / exception / serialization 依赖已通过 requires transitive 传递可读：
+    requires com.mingliqiye.document.format.json;
 }
 ```
 
@@ -552,12 +564,13 @@ gradle publish
 
 - 目标字节码：JDK 8
 - JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
-  `jdbc` / `validation` / `jpa` 提供 Multi-Release 显式 `module-info`（JDK 9+），其余模块
-  （`format-*`、`serialization-kotlin`、`codegen`、`openapi`、`jpa-hibernate`）仍为自动模块；
-  主 classes 仍是 JDK 8 字节码，JDK 8 按 classpath 使用；`jlink` 目前仅 `annotation` 可用
-  （依赖链含自动模块 `mingli.exception`）；`jpa` 走 module path 需要 JDK 11+（依赖
-  `jakarta.persistence-api:3.1.0` 的 class file 55）。详见
-  [docs/guide/jpms.md](docs/guide/jpms.md)
+  `jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate` 共 21 个模块提供
+  Multi-Release 显式 `module-info`（JDK 9+），其余模块（`serialization-kotlin`、`codegen`、
+  `codegen-test`、`openapi`）仍为自动模块；主 classes 仍是 JDK 8 字节码，JDK 8 按 classpath
+  使用；`jlink` 目前仅 `annotation` 可用（依赖链含自动模块 `mingli.exception`）；`jpa` /
+  `jpa-hibernate` 走 module path 需要 JDK 11+（`jakarta.persistence-api:3.1.0` 与 Hibernate
+  6.5 的 class file 55）；`format-json` 在 module path 上写 `Double` 需要 `--add-exports`。
+  详见 [docs/guide/jpms.md](docs/guide/jpms.md)
 - 文本 Token Reader：YAML/XML/Properties/TOML/CSV 通过 `NodeTokenReader` 适配
 - CSV 只支持平坦表格
 - TOML 日期时间映射为字符串

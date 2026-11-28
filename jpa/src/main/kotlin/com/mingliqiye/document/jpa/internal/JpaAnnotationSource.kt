@@ -16,6 +16,20 @@ internal class JpaAnnotationSource(
     /** 读取注解，主成员优先。 */
     fun <A : Annotation> annotation(type: Class<A>): A? = primary?.getAnnotation(type) ?: secondary?.getAnnotation(type)
 
+    /**
+     * 读取可重复注解的全部实例（如 `@Convert`/`@Converts`），主成员优先。
+     *
+     * 主成员上存在该注解（或容器注解）时只返回主成员的结果，不再合并次成员，
+     * 避免同一属性在字段与 getter 同时标注时重复应用。
+     */
+    fun <A : Annotation> annotations(type: Class<A>): List<A> {
+        val primaryAnnotations = primary?.getAnnotationsByType(type)?.toList().orEmpty()
+        if (primaryAnnotations.isNotEmpty()) {
+            return primaryAnnotations
+        }
+        return secondary?.getAnnotationsByType(type)?.toList().orEmpty()
+    }
+
     /** 是否存在指定注解。 */
     fun isPresent(type: Class<out Annotation>): Boolean = annotation(type) != null
 }

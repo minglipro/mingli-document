@@ -89,7 +89,7 @@ class JpaPropertyAccessTest {
     }
 
     @Test
-    fun rejectsUnsupportedMapAssociationMetadata() {
+    fun rejectsSingleValuedMapAssociationMetadata() {
         assertFailsWith<JpaConfigException> {
             mapper.toNode(BrokenMapAssociationEntity())
         }

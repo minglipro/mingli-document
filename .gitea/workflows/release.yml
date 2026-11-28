@@ -1,0 +1,50 @@
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build
+        required: true
+        default: 2.4.0
+
+concurrency:
+  group: gitea-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: bash ./gradlew clean build -PprojectVersion=${{ inputs.version }} --no-daemon
+
+      - name: Generate checksums
+        run: bash ./gradlew generateChecksums -PprojectVersion=${{ inputs.version }} --no-daemon
+
+      - name: Generate SBOM
+        run: bash ./gradlew generateSbom -PprojectVersion=${{ inputs.version }} --no-daemon
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: sha256sums-${{ inputs.version }}
+          path: build/checksums/SHA256SUMS.txt
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyclonedx-${{ inputs.version }}
+          path: build/sbom/cyclonedx.json

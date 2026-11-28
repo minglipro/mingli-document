@@ -70,10 +70,22 @@ internal class JpaProperty(
     val temporalType: TemporalType?,
     /** 关联类型；非关联属性为 `null`。 */
     val associationKind: JpaAssociationKind?,
-    /** 集合元素类型：关联目标类型或 `@ElementCollection` 元素类型。 */
+    /** 集合元素类型：关联目标类型、`@ElementCollection` 元素类型或 Map 值类型。 */
     val elementType: Class<*>?,
     /** 是否 transient 属性（仅在 `includeTransient` 开启时出现）。 */
     val transientProperty: Boolean,
+    /** 显式/自动应用的属性转换器（`@Convert` / autoApply）；非转换属性为 `null`。 */
+    val converter: JpaAttributeConverter? = null,
+    /** 是否为 Map 关联 / Map `@ElementCollection`。 */
+    val map: Boolean = false,
+    /** Map 键类型；无法从泛型确定且使用 `@MapKey` 时为 `null`（映射时按目标实体的 `@Id` 解析）。 */
+    val mapKeyType: Class<*>? = null,
+    /** Map 键枚举策略（`@MapKeyEnumerated`）；未标注时为 `null`（按 JPA 默认 ORDINAL）。 */
+    val mapKeyEnumerated: EnumType? = null,
+    /** Map 键日期策略（`@MapKeyTemporal`）；未标注时为 `null`。 */
+    val mapKeyTemporal: TemporalType? = null,
+    /** `@MapKey` 指定的目标实体属性名；空字符串表示使用目标实体的主键。 */
+    val mapKeyPropertyName: String? = null,
 ) {
 
     /** 声明类型是否为基本类型。 */

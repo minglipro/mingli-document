@@ -23,11 +23,15 @@ implementation("com.mingliqiye.document:jpa:2.3.0")
 
 ```text
 JpaDocumentMapper       实体 ⇄ ObjectNode（toNode / fromNode / toNodes / fromNodes）
-JpaConfig               命名策略、transient、关联深度、null 策略、未知属性策略、访问策略
+                        额外查询 API：isEntity / entityName / tableName /
+                        discriminatorValue / discriminatorFieldName
+JpaConfig               命名策略、transient、关联深度、null 策略、未知属性策略、访问策略、
+                        autoApply 转换器注册、多态子类注册
 JpaConfigBuilder        配置构建器
 JpaNullPolicy           INCLUDE / OMIT
 JpaUnknownPropertyPolicy FAIL / IGNORE
 JpaAccessType           AUTO / FIELD / PROPERTY
+JpaMapKeys              Map 键 ⇄ 文档字段名的转换规则（与 Mapper 内部一致，供扩展模块复用）
 ```
 
 异常位于 `com.mingliqiye.document.jpa.exception`：
@@ -111,6 +115,9 @@ val config = JpaConfig.builder()
     .nullPolicy(JpaNullPolicy.INCLUDE)                          // 写出 null / 读取 NullNode
     .unknownPropertyPolicy(JpaUnknownPropertyPolicy.FAIL)       // 未知属性：报错 / 忽略
     .accessType(JpaAccessType.AUTO)                             // AUTO / FIELD / PROPERTY
+    .autoApplyConverter(MoneyConverter::class.java)             // 注册 autoApply 转换器（不扫描 classpath）
+    .entityType(CatEntity::class.java)                          // 注册多态子类（按 discriminator 读入）
+    .entityType(DogEntity::class.java)
     .build()
 
 val mapper = JpaDocumentMapper(config)
@@ -124,6 +131,8 @@ val mapper = JpaDocumentMapper(config)
 | `nullPolicy` | `INCLUDE` | `INCLUDE` 写出 `NullNode`；`OMIT` 跳过 null 属性 |
 | `unknownPropertyPolicy` | `FAIL` | `FAIL` 抛 `JpaMappingException`；`IGNORE` 忽略未知键 |
 | `accessType` | `AUTO` | 决定读取字段还是 getter 上的注解 |
+| `autoApplyConverters` | 空 | 注册为 autoApply 的 `AttributeConverter` 类；按属性 Java 类型匹配 |
+| `entityTypes` | 空 | 多态读入时的候选子类；写出方向不需要注册 |
 
 ### 节点字段命名规则
 
@@ -156,15 +165,19 @@ val mapper = JpaDocumentMapper(config)
 | `@Transient` | 默认忽略；`includeTransient(true)` 时按普通值读写 |
 | `@Enumerated` | `STRING` 写名称、`ORDINAL` 写序号；JPA 默认 `ORDINAL` |
 | `@Temporal` | `DATE` / `TIME` / `TIMESTAMP`，详见下方类型映射 |
+| `@Convert` / `@Converts` | 属性级 `AttributeConverter`，文档中为**数据库列值**；null 也会传入转换器（见下文） |
+| autoApply `AttributeConverter` | 通过 `JpaConfig.builder().autoApplyConverter(...)` 注册后按属性类型匹配 |
 | `@OneToOne` / `@ManyToOne` | 单值关联，生成嵌套对象；读取 `optional` 决定 null 校验 |
-| `@OneToMany` / `@ManyToMany` | 集合关联，生成数组；元素类型取泛型参数或 `targetEntity` |
-| `@ElementCollection` | 标量或嵌入对象的元素集合，生成数组 |
+| `@OneToMany` / `@ManyToMany` | 集合关联生成数组；`Map<K, V>` 关联生成对象（见“Map 关联”） |
+| `@ElementCollection` | 标量/嵌入对象/Map 元素集合，生成数组或对象 |
+| `@MapKey` / `@MapKeyClass` / `@MapKeyColumn` | Map 关联的键语义/键类型；`@MapKeyEnumerated`、`@MapKeyTemporal` 控制键文本 |
+| `@Inheritance` / `@DiscriminatorColumn` / `@DiscriminatorValue` | discriminator 字段写出与多态读入（见“继承与多态”） |
 | `@Access` | 类级访问策略 |
 
 不支持（会被忽略或按普通值处理）：`@JoinColumn` 的列名语义（关联节点使用属性名）、
-`@AttributeOverride`、`@MapKey`（Map 关联直接抛 `JpaConfigException`）、
-`@Convert`/`AttributeConverter`（节点表示 Java 属性值，本就与数据库转换无关）、
-`@Inheritance`/`@DiscriminatorColumn` 多态写入、`@Version` 的乐观锁语义、`@Formula` 等。
+`@AttributeOverride`、`@Convert(attributeName = ...)`（嵌入对象内部的属性覆盖写法；
+请直接标注在嵌入类的基本属性上）、`@MapKeyJoinColumn`（实体作为 Map 键）、
+`@OrderBy`、`@Version` 的乐观锁语义、`@Formula` 等。
 
 ## 类型映射
 
@@ -187,6 +200,9 @@ val mapper = JpaDocumentMapper(config)
 
 `java.sql.Date`/`java.sql.Time`/`java.sql.Timestamp` 未标注 `@Temporal` 时按自身类型
 （DATE/TIME/TIMESTAMP）处理。
+
+`@Convert`/autoApply 转换器不存在时属性值按上表映射；存在转换器时表中描述的是
+**数据库列类型 Y**，`X` 与 `Y` 的转换由转换器负责（见“属性转换器”）。
 
 ## 关联、深度与循环
 
@@ -218,6 +234,202 @@ class Employee {
   消息包含首次出现路径；`associationDepth` 足够大时才会真正递归到环。
 - 集合关联必须能从泛型参数或 `targetEntity` 解析元素类型，否则抛 `JpaConfigException`。
 
+## Map 关联与 Map 元素集合
+
+`@OneToMany` / `@ManyToMany` 的 `Map<K, V>`，以及 `Map` 形式的 `@ElementCollection`，
+在文档中表示为对象节点：**字段名是字符串化的 Map 键，值是关联/元素值**。
+
+```kotlin
+@Entity
+class Team {
+    @Id
+    var id: Long? = null
+
+    var name: String? = null
+
+    // @MapKey(name)：键取自目标实体的持久属性
+    @OneToMany(mappedBy = "team")
+    @MapKey(name = "name")
+    var membersByName: MutableMap<String, Employee> = mutableMapOf()
+
+    // 基本类型键：@MapKeyColumn 只影响 JPA 列名，不改变文档键格式
+    @ManyToMany
+    @MapKeyColumn(name = "member_id")
+    var membersById: MutableMap<Long, Employee> = mutableMapOf()
+
+    // Map 形式的 @ElementCollection：标量/嵌入对象值
+    @ElementCollection
+    @MapKeyColumn(name = "attr_key")
+    var attributes: MutableMap<String, String> = mutableMapOf()
+
+    @ElementCollection
+    @MapKeyEnumerated(EnumType.STRING)
+    var statusNotes: MutableMap<Status, String> = mutableMapOf()
+}
+```
+
+```jsonc
+{
+  "membersByName": {
+    "alice": { "id": 1, "name": "alice" },
+    "bob": { "id": 2, "name": "bob" }
+  },
+  "membersById": {
+    "10": { "id": 10, "name": null },
+    "20": { "id": 20, "name": null }
+  },
+  "attributes": { "color": "red" },
+  "statusNotes": { "ACTIVE": "活跃" }
+}
+```
+
+规则：
+
+- Map 键与字段名互转规则由 `JpaMapKeys` 公开（与 Mapper 内部完全一致）：
+  - `String`/`CharSequence`/`Char` 原样；`boolean` 为 `true`/`false`；
+  - 数字为精确十进制文本（`NumberNode.raw`）；
+  - 枚举默认 `ORDINAL`（`@MapKeyEnumerated` 可改为 `STRING`）；
+  - `Date`/`Calendar` 按 `@MapKeyTemporal`（未标注按目标类型的自然精度），
+    `java.time` 类型为 ISO-8601，`UUID` 为 `toString()`；
+  - `byte[]`、嵌入对象和实体作为 Map 键不支持（抛 `JpaConfigException`）。
+- 键类型解析顺序：`Map<K, V>` 的泛型 `K` → `@MapKeyClass` → `@MapKey`（且泛型键为
+  `Object`/`Any`）时按目标实体的 `@Id` 或 `@MapKey(name)` 指定的属性类型；
+  仍无法确定时抛 `JpaConfigException`。
+- 写出时两个键字符串化后相同（例如 `Map<Any, ...>` 中的 `Long` 键 `1` 与
+  `String` 键 `"1"`）会抛 `JpaMappingException`；读入时两个文档字段名解析成同一个
+  键同样抛异常；非法键文本（如 `Long` 键的 `"abc"`）抛 `JpaMappingException`。
+- 空 Map 写出为空对象；null Map 值按 `nullPolicy`；Map 值中的 null 元素写出
+  `NullNode`、读回 null。
+- 深度/环检测与集合关联一致：Map 关联值按 `associationDepth` 展开，Map 元素集合
+  不消耗关联深度。
+- `@MapKey(name = "...")` 指定的目标实体属性仍按普通属性写在值对象中；读入时
+  **不会**根据 Map 键回填值对象里缺失的该属性（文档值对象自身内容优先）。
+
+## 属性转换器（@Convert / autoApply）
+
+`@Convert` 显式指定的转换器，以及通过配置注册的 autoApply 转换器都会参与映射；
+**文档中出现的是数据库列值**（`convertToDatabaseColumn` 的结果），读入时先按
+数据库列类型解析再 `convertToEntityAttribute`。
+
+```kotlin
+class Money(val amount: BigDecimal, val currency: String)
+
+class MoneyConverter : AttributeConverter<Money, String> {
+    // 与 JPA 提供者一致：null 也会传入转换器，转换器必须能处理 null
+    override fun convertToDatabaseColumn(attribute: Money?): String? =
+        attribute?.let { "${it.amount.toPlainString()} ${it.currency}" }
+
+    override fun convertToEntityAttribute(dbData: String?): Money? =
+        dbData?.let { Money(BigDecimal(it.substringBefore(' ')), it.substringAfter(' ')) }
+}
+
+@Entity
+class Order {
+    @Id
+    var id: Long? = null
+
+    @Convert(converter = MoneyConverter::class)
+    var price: Money? = null
+}
+```
+
+```kotlin
+val node = mapper.toNode(order)
+node["price"]!!.asString()          // "12.50 USD"（数据库值，而不是 Money 对象）
+val copy = mapper.fromNode(node, Order::class.java)
+```
+
+autoApply（JPA 默认规则）需要显式注册转换器类——本模块不做 classpath 扫描：
+
+```kotlin
+val mapper = JpaDocumentMapper(
+    JpaConfig.builder()
+        .autoApplyConverter(EmailConverter::class.java)   // AttributeConverter<Email, String>
+        .build(),
+)
+```
+
+- 按 `AttributeConverter<X, Y>` 的属性类型 X 匹配（基本类型与包装类型等价）；
+  `@Converter(autoApply = true)` 同样需要注册；
+- `@Convert` 显式转换器优先于 autoApply；`@Convert(disableConversion = true)` 关闭；
+- 按 JPA 规范，`@Id`/`@EmbeddedId`、关联属性、显式 `@Enumerated`/`@Temporal`/
+  `@Version` 属性不参与 autoApply；
+- 同一属性类型注册多个 autoApply 转换器会抛 `JpaConfigException`；
+- `@Convert` 也可以标注在 `@ElementCollection`（基本元素）上，对每个元素生效；
+- 转换器类必须实现 `AttributeConverter`、有可访问的无参构造器、泛型参数可解析，
+  否则 `JpaDocumentMapper` 构造时抛 `JpaConfigException`；
+- 转换器运行时抛出的异常包装为 `JpaMappingException`（cause 保留）；
+  转换器返回 null 时写出 `NullNode`；null 值在两个方向都会传入转换器；
+- 数据库类型 Y 上的 `@Enumerated`/`@Temporal` 仍生效（例如转换器输出枚举/日期）。
+- 不支持 `@Convert(attributeName = ...)`（嵌入对象内部属性覆盖）与关系属性上的
+  `@Convert`：请把转换器标注在嵌入类的基本属性上。
+
+## 继承与多态（@Inheritance）
+
+类层次声明 `@Inheritance` / `@DiscriminatorColumn` 时，文档对象额外写出
+discriminator 字段，读入时按它选择具体子类：
+
+```kotlin
+@Entity
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
+@DiscriminatorColumn(name = "animal_kind")
+abstract class Animal {
+    @Id
+    var id: Long? = null
+
+    var name: String? = null
+}
+
+@Entity
+@DiscriminatorValue("cat")
+class Cat : Animal() {
+    var lives: Int = 9
+}
+
+@Entity
+@DiscriminatorValue("dog")
+class Dog : Animal() {
+    var barkVolume: Int = 0
+}
+
+@Entity
+class Zoo {
+    @Id
+    var id: Long? = null
+
+    @OneToMany
+    var animals: MutableList<Animal> = mutableListOf()   // 关联中同样多态
+}
+
+val mapper = JpaDocumentMapper(
+    JpaConfig.builder()
+        .entityType(Cat::class.java)   // 读入 Animal 文档时必须能解析的子类
+        .entityType(Dog::class.java)
+        .build(),
+)
+
+val node = mapper.toNode(Cat().apply { id = 1; name = "tom"; lives = 7 })
+// { "animal_kind": "cat", "id": 1, "name": "tom", "lives": 7 }
+
+val restored = mapper.fromNode(node, Animal::class.java)   // Cat 实例
+```
+
+- 写出：按**实际类型**写出字段（父类字段在前、子类字段在后）与 discriminator；
+  discriminator 字段位于对象最前，字段名为列名经命名策略转换（默认 `DTYPE`）；
+- discriminator 值：`@DiscriminatorValue` 优先；STRING/CHAR 未标注时使用实体名
+  （`@Entity(name)` 或简单类名）；INTEGER 必须显式标注，写出为数字节点，
+  缺失时抛 `JpaConfigException`；
+- 读取：`fromNode(node, 父类)` 按 discriminator 查找已注册子类；未知值抛
+  `JpaMappingException`（消息列出已知值；没有任何注册子类时提示使用
+  `JpaConfig.builder().entityType(...)`）；
+- 没有 discriminator 字段时回退声明类型；声明类型是抽象类/接口时抛
+  `JpaMappingException`（提示缺少 discriminator 字段）；
+- 读入同时接受 discriminator 的节点字段名与原始列名；两者同时出现视为重复别名抛异常；
+- `@Inheritance` 的 `SINGLE_TABLE`/`JOINED`/`TABLE_PER_CLASS` 只影响 JPA 持久化，
+  **文档树表示完全一致**；`JpaDocumentMapper.discriminatorValue` /
+  `discriminatorFieldName` 可用于查询元数据；
+- 写方向不需要注册子类；只有按父类读入时需要。
+
 ## null 与未知属性
 
 - `INCLUDE`（默认）：null 属性写出 `NullNode`，读取 `NullNode` 写入 null；
@@ -235,14 +447,16 @@ import com.mingliqiye.document.jpa.exception.JpaMappingException
 try {
     mapper.fromNode(node, User::class.java)
 } catch (e: JpaMappingException) {
-    // 节点类型不匹配、未知属性、非空校验、枚举/日期转换、循环引用、无法实例化等
+    // 节点类型不匹配、未知属性、非空校验、枚举/日期/转换器转换失败、
+    // Map 键冲突/非法、未知 discriminator、循环引用、无法实例化等
 } catch (e: JpaConfigException) {
-    // 元数据非法：重复字段名、不支持的关联类型、集合关联缺少元素类型等
+    // 元数据/配置非法：重复字段名、不支持的关联类型、集合关联缺少元素类型、
+    // 转换器类型不匹配、autoApply 转换器重复、非法 Map 键类型/注解等
 }
 ```
 
 两者都继承 `JpaException`（继承 `DocumentException`），可以统一按 `DocumentException` 捕获。
-反射/构造函数抛出的底层异常作为 cause 保留。
+反射/构造函数抛出的底层异常作为原因保留。
 
 ## Hibernate 兼容说明
 
@@ -251,22 +465,31 @@ try {
 - Hibernate 代理类（子类）会沿父类找到 `@Entity` 元数据，按实体字段映射；但访问代理的
   未初始化字段可能触发 `LazyInitializationException`，请先初始化需要的字段再调用 `toNode`；
 - 集合属性建议用已加载的 `ArrayList`/`LinkedHashSet` 等普通集合（Hibernate 的
-  `PersistentBag` 等实现也按 `Collection` 处理，但写出顺序/身份受其实现影响）；
-- 实体需要无参构造器（属性和字段都可以是 `private`，反射会打开访问权限）。
+  `PersistentBag`/`PersistentMap` 等实现也按 `Collection`/`Map` 处理，但写出顺序/身份
+  受其实现影响）；
+- 实体需要无参构造器（属性和字段都可以是 `private`，反射会打开访问权限）；
+- 多态读入需要在 `JpaConfig` 中注册子类；autoApply 转换器同样需要注册（与 Hibernate
+  自身需要在 `SessionFactory` 注册转换器的要求一致）。
 
 ## 限制与注意事项
 
 - 单向/双向关联不会自动保持一致，也不做级联加载：写出的是当前内存中的对象图；
-- 不处理 `@Convert`、自定义类型、嵌入式集合表结构等数据库细节，只映射 Java 属性值；
-- 不映射多态继承（`@Inheritance`）与 `@DiscriminatorColumn`；关联目标按声明类型或
-  `targetEntity` 实例化；
-- `@ElementCollection` 元素类型为标量或普通对象；Map 类型的关联/元素集合不支持；
+- 不处理数据库表结构/级联/懒加载等数据库细节，只映射 JPA 注解描述的 Java 属性值；
+- 多态读入只识别 `JpaConfig.entityTypes` 中注册的子类（不做 classpath 扫描）；
+  discriminator 重复值/INTEGER 缺省值会抛配置异常；
+- autoApply 转换器必须显式注册；`@Convert(attributeName = ...)`、关系属性上的
+  `@Convert`、`@MapKeyJoinColumn`（实体作为 Map 键）不支持；
+- Map 键只支持基本类型，键文本冲突/无法解析会抛异常；`@MapKey(name)` 指定属性
+  不会根据键回填；
+- `@ElementCollection` 元素类型为标量或普通对象；
 - 不支持 `@Temporal` 之外的日期格式化（如 `@JsonFormat` 等），需要自定义格式请先用
   serialization 模块的 `DocumentDateTimeFormat` 或先转换成字符串；
 - `fromNode` 不做 Bean Validation（需要时先用 `validation` 模块校验）；
 - 循环引用直接抛异常，不写 `$ref`；需要引用语法请使用 serialization 的 Mapper 配置；
 - 映射结果只保证与当前 `JpaConfig` 对称：改变 `associationDepth`/`nullPolicy` 后，
   旧文档中超出深度或缺失的字段会被忽略/保持默认值，不会报错。
+- 转换器在 null 上也会被调用（与 Hibernate 一致）：转换器实现必须自行处理 null；
+  Kotlin 非空参数签名会在 null 时抛出并被包装为 `JpaMappingException`。
 
 ## 构建
 

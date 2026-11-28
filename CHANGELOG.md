@@ -5,10 +5,13 @@
 ### 新增
 
 - `jpa-hibernate` 模块：Hibernate 代理、懒加载、Session/EntityManager 集成
+- JPA 高级映射：`@Convert` / autoApply 转换器、Map 关联、`@Inheritance` 多态
+- Hibernate Map 关联与多态实体支持
 - Avro 完整 logical type：date/time/timestamp/decimal/uuid/duration
 - XML / Properties / TOML / CSV `maxDepth` 安全深度限制
 - TOML 注释保留便捷 API：`TomlMapper.parseCommented` / `formatCommented`
 - `serialization` / `jdbc` / `validation` / `jpa` 显式 MR-JAR `module-info`
+- 11 个 `format-*` 与 `jpa-hibernate` 显式 MR-JAR `module-info`（显式模块累计 21 个）
 - `alias-for` 升级 1.0.4（增加 `Automatic-Module-Name`）
 
 ## 2.3.0

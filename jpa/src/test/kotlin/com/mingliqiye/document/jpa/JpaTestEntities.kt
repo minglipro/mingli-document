@@ -292,13 +292,13 @@ internal class OpaqueEntity {
     var opaque: OpaqueValue? = null
 }
 
-/** 不支持的 Map 关联：解析元数据时应当抛配置异常。 */
+/** 单值关联声明为 Map：解析元数据时应当抛配置异常（Map 只允许用于集合关联）。 */
 @Entity
 internal class BrokenMapAssociationEntity {
     @Id
     var id: Long? = null
 
-    @jakarta.persistence.ManyToMany
+    @ManyToOne
     var links: MutableMap<String, EmployeeEntity> = mutableMapOf()
 }
 

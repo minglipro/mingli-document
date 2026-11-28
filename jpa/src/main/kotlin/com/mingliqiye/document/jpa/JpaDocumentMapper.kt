@@ -3,17 +3,22 @@ package com.mingliqiye.document.jpa
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
+import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.jpa.exception.JpaConfigException
 import com.mingliqiye.document.jpa.exception.JpaMappingException
 import com.mingliqiye.document.jpa.internal.JpaAssociationKind
 import com.mingliqiye.document.jpa.internal.JpaEntityMetadata
+import com.mingliqiye.document.jpa.internal.JpaInheritanceMetadata
 import com.mingliqiye.document.jpa.internal.JpaMetadataResolver
 import com.mingliqiye.document.jpa.internal.JpaProperty
 import com.mingliqiye.document.jpa.internal.JpaPropertyKind
 import com.mingliqiye.document.jpa.internal.JpaValueConverter
 import com.mingliqiye.document.jpa.internal.isScalarValueType
 import com.mingliqiye.document.jpa.internal.newCollectionInstance
+import com.mingliqiye.document.jpa.internal.newMapInstance
+import jakarta.persistence.DiscriminatorType
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Modifier
 import java.util.IdentityHashMap
@@ -28,6 +33,15 @@ import java.util.LinkedHashMap
  * 在 Java 实体与格式无关的文档树之间转换：
  * - [toNode]：实体 -> 对象节点；
  * - [fromNode]：对象节点 -> 实体（无参构造器 + 字段/setter 填充）。
+ *
+ * 高级特性：
+ * - `@Convert`/autoApply `AttributeConverter`：文档中出现的是数据库列值（转换器
+ *   `convertToDatabaseColumn` 的结果），读入时反向转换；null 属性不经过转换器；
+ * - Map 关联（`@OneToMany`/`@ManyToMany` 的 `Map<K, V>`）与 Map `@ElementCollection`：
+ *   文档中为对象节点，键为字符串化的 Map 键（`@MapKey`/`@MapKeyColumn`/键类型语义见
+ *   `JpaConfig` 文档）；
+ * - `@Inheritance`/`@DiscriminatorColumn`/`@DiscriminatorValue`：继承层次的对象额外
+ *   写出 discriminator 字段；读入时按 discriminator 选择已注册的子类，未知值抛异常。
  *
  * 该映射器不依赖 Hibernate 运行期，也不管理 `Session`/`EntityManager`/懒加载/事务：
  * 只处理已经加载到内存中的实体与普通字段值。Hibernate 延迟代理在写出时按其
@@ -49,7 +63,8 @@ public class JpaDocumentMapper @JvmOverloads constructor(
      * 将实体序列化为对象节点。
      *
      * 关联按 [JpaConfig.associationDepth] 递归展开；同一对象在递归路径上再次出现
-     * （循环引用）时抛出 [JpaMappingException]。
+     * （循环引用）时抛出 [JpaMappingException]。继承层次中的实体会额外写出
+     * discriminator 字段（位于对象字段最前）。
      *
      * @param entity 实体对象，不能为 `null`
      * @return 对象节点
@@ -63,7 +78,7 @@ public class JpaDocumentMapper @JvmOverloads constructor(
                 "Cannot map ${entity.javaClass.name} as entity ${metadata.entityClass.name}",
             )
         }
-        val fields = LinkedHashMap<String, Node>(metadata.properties.size)
+        val fields = LinkedHashMap<String, Node>(metadata.properties.size + 1)
         writeObject(entity, metadata, 0, "$", IdentityHashMap(), fields)
         return ObjectNode.from(fields)
     }
@@ -91,11 +106,16 @@ public class JpaDocumentMapper @JvmOverloads constructor(
      * 只写入文档中出现的属性；缺失属性保持新建对象的默认值。`@Column(nullable = false)`
      * 的标量属性读到显式 null 时抛异常；基本类型属性读到 null 同样抛异常。
      *
+     * 如果 [entityType] 位于 `@Inheritance`/`@DiscriminatorColumn` 层次中，会优先读取
+     * 文档中的 discriminator 字段，并按 [JpaConfig.entityTypes] 注册的子类实例化：
+     * 未知 discriminator 值抛 [JpaMappingException]；没有 discriminator 字段时回退到
+     * 声明类型（声明类型为抽象类/接口时抛异常）。
+     *
      * @param node 文档节点，必须是对象节点
      * @param entityType 目标实体类型
      * @return 实体对象
      * @throws JpaMappingException 节点类型不匹配、未知属性、属性不可写、值类型不匹配、
-     * 循环或无法实例化时抛出
+     * 循环、未知/缺失 discriminator 或无法实例化时抛出
      * @throws JpaConfigException 实体元数据非法时抛出
      */
     public fun <T : Any> fromNode(node: Node, entityType: Class<T>): T {
@@ -150,6 +170,28 @@ public class JpaDocumentMapper @JvmOverloads constructor(
      */
     public fun tableName(entityType: Class<*>): String? = resolver.resolve(entityType).tableName
 
+    /**
+     * 实体在继承层次中的 discriminator 值（`@DiscriminatorValue` 或 STRING/CHAR 的
+     * 实体名默认值）。
+     *
+     * @param entityType 实体类型
+     * @return discriminator 值；实体不在 `@Inheritance`/`@DiscriminatorColumn` 层次中，
+     * 或 INTEGER discriminator 缺少 `@DiscriminatorValue` 时返回 `null`
+     */
+    public fun discriminatorValue(entityType: Class<*>): String? = resolver.resolve(entityType).inheritance?.discriminatorValue
+
+    /**
+     * 继承 discriminator 的节点字段名（列名经命名策略转换）。
+     *
+     * @param entityType 实体类型
+     * @return 字段名；实体不在继承层次中时返回 `null`
+     */
+    public fun discriminatorFieldName(entityType: Class<*>): String? = resolver.resolve(entityType).inheritance?.discriminatorNodeName
+
+    // ------------------------------------------------------------------
+    // 实体 -> Node
+    // ------------------------------------------------------------------
+
     private fun writeObject(
         instance: Any,
         metadata: JpaEntityMetadata,
@@ -166,12 +208,45 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             )
         }
         try {
+            writeDiscriminator(metadata, path, fields)
+            val discriminatorKey = metadata.inheritance?.discriminatorNodeName
             for (property in metadata.readableProperties()) {
+                if (property.nodeName == discriminatorKey) {
+                    throw JpaConfigException(
+                        "Property '${property.name}' of ${metadata.entityClass.name} conflicts with the " +
+                            "discriminator field '$discriminatorKey'",
+                    )
+                }
                 writeProperty(instance, property, depth, "$path.${property.nodeName}", stack, fields)
             }
         } finally {
             stack.remove(instance)
         }
+    }
+
+    private fun writeDiscriminator(
+        metadata: JpaEntityMetadata,
+        path: String,
+        fields: MutableMap<String, Node>,
+    ) {
+        val inheritance = metadata.inheritance ?: return
+        val value = inheritance.discriminatorValue
+            ?: throw JpaConfigException(
+                "Entity ${inheritance.declaredClass.name} at $path has no @DiscriminatorValue; " +
+                    "DiscriminatorType.INTEGER requires an explicit value",
+            )
+        fields[inheritance.discriminatorNodeName] = discriminatorNode(inheritance, value, path)
+    }
+
+    private fun discriminatorNode(inheritance: JpaInheritanceMetadata, value: String, path: String): Node {
+        if (inheritance.discriminatorType != DiscriminatorType.INTEGER) {
+            return StringNode.of(value)
+        }
+        val number = value.toIntOrNull()
+            ?: throw JpaConfigException(
+                "Discriminator value '$value' of ${inheritance.declaredClass.name} at $path is not an integer",
+            )
+        return NumberNode.of(number)
     }
 
     private fun writeProperty(
@@ -187,21 +262,36 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         }
         val value = property.read(instance, path)
         if (value == null) {
+            val converter = property.converter
+            if (converter != null && property.kind == JpaPropertyKind.SCALAR) {
+                // 与 JPA 提供者一致：null 也会传入转换器，转换器可返回非 null 的数据库值。
+                val node = values.writeConverted(null, converter, property.enumType, property.temporalType, path)
+                if (!node.isNull || config.nullPolicy == JpaNullPolicy.INCLUDE) {
+                    fields[property.nodeName] = node
+                }
+                return
+            }
             if (config.nullPolicy == JpaNullPolicy.INCLUDE) {
                 fields[property.nodeName] = NullNode.INSTANCE
             }
             return
         }
         fields[property.nodeName] = when (property.kind) {
-            JpaPropertyKind.SCALAR -> if (property.transientProperty) {
-                values.writeTransient(value, property, path)
-            } else {
-                values.writeProperty(value, property, path)
-            }
-
+            JpaPropertyKind.SCALAR -> writeScalar(value, property, path)
             JpaPropertyKind.EMBEDDED -> writeEmbedded(value, property, depth, path, stack)
             JpaPropertyKind.ASSOCIATION -> writeAssociation(value, property, depth, path, stack)
             JpaPropertyKind.ELEMENT_COLLECTION -> writeElementCollection(value, property, depth, path, stack)
+        }
+    }
+
+    private fun writeScalar(value: Any, property: JpaProperty, path: String): Node {
+        val converter = property.converter
+        return if (converter != null) {
+            values.writeConverted(value, converter, property.enumType, property.temporalType, path)
+        } else if (property.transientProperty) {
+            values.writeTransient(value, property, path)
+        } else {
+            values.writeProperty(value, property, path)
         }
     }
 
@@ -230,6 +320,13 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         if (associationKind == JpaAssociationKind.ONE_TO_ONE || associationKind == JpaAssociationKind.MANY_TO_ONE) {
             return writeEntity(value, depth + 1, path, stack)
         }
+        if (property.map) {
+            val map = value as? Map<*, *>
+                ?: throw JpaMappingException(
+                    "Association property '${property.name}' expects a Map at $path but was ${value.javaClass.name}",
+                )
+            return writeAssociationMap(map, property, depth, path, stack)
+        }
         val elements = value as? Collection<*>
             ?: throw JpaMappingException(
                 "Association property '${property.name}' expects a Collection at $path but was ${value.javaClass.name}",
@@ -249,6 +346,31 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         return ArrayNode.from(nodes)
     }
 
+    private fun writeAssociationMap(
+        value: Map<*, *>,
+        property: JpaProperty,
+        depth: Int,
+        path: String,
+        stack: IdentityHashMap<Any, String>,
+    ): ObjectNode {
+        val keyType = mapKeyTypeOf(property)
+        val fields = LinkedHashMap<String, Node>(value.size)
+        for ((key, element) in value) {
+            val keyText = values.writeMapKey(key, keyType, property.mapKeyEnumerated, property.mapKeyTemporal, path)
+            if (fields.containsKey(keyText)) {
+                throw JpaMappingException(
+                    "Map key collision at $path: multiple keys of '${property.name}' are serialized as '$keyText'",
+                )
+            }
+            fields[keyText] = if (element == null) {
+                NullNode.INSTANCE
+            } else {
+                writeEntity(element, depth + 1, "$path[$keyText]", stack)
+            }
+        }
+        return ObjectNode.from(fields)
+    }
+
     private fun writeEntity(
         value: Any,
         depth: Int,
@@ -256,7 +378,7 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         stack: IdentityHashMap<Any, String>,
     ): ObjectNode {
         val metadata = resolver.resolve(value.javaClass)
-        val fields = LinkedHashMap<String, Node>(metadata.properties.size)
+        val fields = LinkedHashMap<String, Node>(metadata.properties.size + 1)
         writeObject(value, metadata, depth, path, stack, fields)
         return ObjectNode.from(fields)
     }
@@ -270,6 +392,14 @@ public class JpaDocumentMapper @JvmOverloads constructor(
     ): Node {
         val elementType = property.elementType
             ?: throw JpaConfigException("@ElementCollection property '${property.name}' has no element type")
+        if (property.map) {
+            val map = value as? Map<*, *>
+                ?: throw JpaMappingException(
+                    "@ElementCollection property '${property.name}' expects a Map at $path " +
+                        "but was ${value.javaClass.name}",
+                )
+            return writeElementCollectionMap(map, property, elementType, depth, path, stack)
+        }
         val elements = value as? Collection<*>
             ?: throw JpaMappingException(
                 "@ElementCollection property '${property.name}' expects a Collection at $path " +
@@ -279,19 +409,54 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         var index = 0
         for (element in elements) {
             val elementPath = "$path[$index]"
-            nodes.add(
-                if (element == null) {
-                    NullNode.INSTANCE
-                } else if (isScalarValueType(elementType)) {
-                    values.writeElement(element, elementType, property.enumType, elementPath)
-                } else {
-                    writeEntity(element, depth, elementPath, stack)
-                },
-            )
+            nodes.add(writeElement(element, property, elementType, depth, elementPath, stack))
             index++
         }
         return ArrayNode.from(nodes)
     }
+
+    private fun writeElementCollectionMap(
+        value: Map<*, *>,
+        property: JpaProperty,
+        elementType: Class<*>,
+        depth: Int,
+        path: String,
+        stack: IdentityHashMap<Any, String>,
+    ): ObjectNode {
+        val keyType = mapKeyTypeOf(property)
+        val fields = LinkedHashMap<String, Node>(value.size)
+        for ((key, element) in value) {
+            val keyText = values.writeMapKey(key, keyType, property.mapKeyEnumerated, property.mapKeyTemporal, path)
+            if (fields.containsKey(keyText)) {
+                throw JpaMappingException(
+                    "Map key collision at $path: multiple keys of '${property.name}' are serialized as '$keyText'",
+                )
+            }
+            fields[keyText] = writeElement(element, property, elementType, depth, "$path[$keyText]", stack)
+        }
+        return ObjectNode.from(fields)
+    }
+
+    private fun writeElement(
+        element: Any?,
+        property: JpaProperty,
+        elementType: Class<*>,
+        depth: Int,
+        path: String,
+        stack: IdentityHashMap<Any, String>,
+    ): Node {
+        val converter = property.converter
+        return when {
+            converter != null -> values.writeConverted(element, converter, property.enumType, null, path)
+            element == null -> NullNode.INSTANCE
+            isScalarValueType(elementType) -> values.writeElement(element, elementType, property.enumType, path)
+            else -> writeEntity(element, depth, path, stack)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Node -> 实体
+    // ------------------------------------------------------------------
 
     private fun readObject(
         node: ObjectNode,
@@ -299,15 +464,25 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         depth: Int,
         path: String,
     ): Any {
-        val instance = instantiate(metadata.entityClass, path)
+        val effective = resolveReadMetadata(node, metadata, path)
+        val instance = instantiate(effective.entityClass, path)
         val assigned = HashSet<String>()
+        val inheritance = effective.inheritance
+        val discriminatorKeys = if (inheritance == null) {
+            emptySet()
+        } else {
+            setOf(inheritance.discriminatorNodeName, inheritance.discriminatorColumnName)
+        }
         for ((key, child) in node.asMap()) {
-            val property = metadata.propertyFor(key)
+            if (key in discriminatorKeys) {
+                continue
+            }
+            val property = effective.propertyFor(key)
             if (property == null) {
                 if (config.unknownPropertyPolicy == JpaUnknownPropertyPolicy.FAIL) {
                     throw JpaMappingException(
-                        "Unknown property '$key' for entity ${metadata.entityName} " +
-                            "(${metadata.entityClass.name}) at $path",
+                        "Unknown property '$key' for entity ${effective.entityName} " +
+                            "(${effective.entityClass.name}) at $path",
                     )
                 }
                 continue
@@ -329,8 +504,95 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         return instance
     }
 
+    /**
+     * 按 discriminator 选择读入使用的元数据。
+     *
+     * - 类层次没有 `@Inheritance`/`@DiscriminatorColumn`：使用声明类型元数据；
+     * - 有 discriminator 字段：按已注册子类解析，未知值抛异常；
+     * - 没有 discriminator 字段：声明类型具体可实例化时回退声明类型，否则抛异常。
+     */
+    private fun resolveReadMetadata(
+        node: ObjectNode,
+        declared: JpaEntityMetadata,
+        path: String,
+    ): JpaEntityMetadata {
+        val inheritance = resolver.inheritanceOf(declared.entityClass) ?: return declared
+        val discriminatorKey = findDiscriminatorKey(node, inheritance)
+        if (discriminatorKey == null) {
+            if (isInstantiable(declared.entityClass)) {
+                return declared
+            }
+            throw JpaMappingException(
+                "Cannot instantiate abstract entity ${declared.entityClass.name} at $path: document is missing " +
+                    "the discriminator field '${inheritance.discriminatorNodeName}'",
+            )
+        }
+        val valueNode = node[discriminatorKey]!!
+        val value = readDiscriminatorValue(valueNode, inheritance, "$path.$discriminatorKey")
+        val candidates = resolver.discriminatorCandidates(declared.entityClass)
+        val hasRegisteredSubtype = candidates.values.any { it != declared.entityClass }
+        val target = candidates[value] ?: throw JpaMappingException(
+            "Unknown discriminator value '$value' for entity ${declared.entityName} at " +
+                "$path.$discriminatorKey; known values: ${candidates.keys.sorted()}${
+                    registrationHint(hasRegisteredSubtype)
+                }",
+        )
+        if (!declared.entityClass.isAssignableFrom(target)) {
+            throw JpaMappingException(
+                "Discriminator value '$value' at $path.$discriminatorKey resolves to ${target.name}, " +
+                    "which is not assignable to ${declared.entityClass.name}",
+            )
+        }
+        if (!isInstantiable(target)) {
+            throw JpaMappingException(
+                "Discriminator value '$value' at $path.$discriminatorKey resolves to abstract entity ${target.name}",
+            )
+        }
+        return resolver.resolve(target)
+    }
+
+    private fun findDiscriminatorKey(node: ObjectNode, inheritance: JpaInheritanceMetadata): String? {
+        val names = LinkedHashSet<String>()
+        names.add(inheritance.discriminatorNodeName)
+        names.add(inheritance.discriminatorColumnName)
+        val found = names.filter { node.containsKey(it) }
+        if (found.size > 1) {
+            throw JpaMappingException(
+                "Discriminator field appears more than once at $: $found " +
+                    "(通过别名重复出现)",
+            )
+        }
+        return found.firstOrNull()
+    }
+
+    private fun readDiscriminatorValue(
+        node: Node,
+        inheritance: JpaInheritanceMetadata,
+        path: String,
+    ): String = when (inheritance.discriminatorType) {
+        DiscriminatorType.INTEGER -> {
+            val number = node.asNumberOrNull()
+                ?: throw JpaMappingException("Expected number discriminator at $path but was ${node.type}")
+            val integer = try {
+                number.toInt()
+            } catch (e: ArithmeticException) {
+                throw JpaMappingException("Discriminator at $path must be a 32-bit integer", e)
+            }
+            integer.toString()
+        }
+
+        else -> node.asStringOrNull()
+            ?: throw JpaMappingException("Expected string discriminator at $path but was ${node.type}")
+    }
+
+    private fun registrationHint(hasRegisteredSubtype: Boolean): String = if (hasRegisteredSubtype) {
+        ""
+    } else {
+        "; no concrete subtypes are registered, use JpaConfig.builder().entityType(...) to register them"
+    }
+
     private fun readProperty(node: Node, property: JpaProperty, depth: Int, path: String): Any? {
-        if (node.isNull) {
+        if (node.isNull && property.converter == null) {
             if (property.primitive) {
                 throw JpaMappingException(
                     "Cannot assign null to primitive property '${property.name}' at $path",
@@ -344,15 +606,21 @@ public class JpaDocumentMapper @JvmOverloads constructor(
             return null
         }
         return when (property.kind) {
-            JpaPropertyKind.SCALAR -> if (property.transientProperty) {
-                values.readTransient(node, property, path)
-            } else {
-                values.readProperty(node, property, path)
-            }
-
+            JpaPropertyKind.SCALAR -> readScalar(node, property, path)
             JpaPropertyKind.EMBEDDED -> readEmbedded(node, property, depth, path)
             JpaPropertyKind.ASSOCIATION -> readAssociation(node, property, depth, path)
             JpaPropertyKind.ELEMENT_COLLECTION -> readElementCollection(node, property, depth, path)
+        }
+    }
+
+    private fun readScalar(node: Node, property: JpaProperty, path: String): Any? {
+        val converter = property.converter
+        return if (converter != null) {
+            values.readConverted(node, converter, property.enumType, property.temporalType, path)
+        } else if (property.transientProperty) {
+            values.readTransient(node, property, path)
+        } else {
+            values.readProperty(node, property, path)
         }
     }
 
@@ -368,6 +636,9 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         val targetMetadata = resolver.resolve(targetType)
         if (associationKind == JpaAssociationKind.ONE_TO_ONE || associationKind == JpaAssociationKind.MANY_TO_ONE) {
             return readObject(requireObject(node, path, property), targetMetadata, depth + 1, path)
+        }
+        if (property.map) {
+            return readAssociationMap(node, property, targetMetadata, depth, path)
         }
         val arrayNode = node.asArrayOrNull()
             ?: throw JpaMappingException(
@@ -386,9 +657,43 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         return collection
     }
 
+    private fun readAssociationMap(
+        node: Node,
+        property: JpaProperty,
+        targetMetadata: JpaEntityMetadata,
+        depth: Int,
+        path: String,
+    ): Any {
+        val objectNode = node.asObjectOrNull()
+            ?: throw JpaMappingException(
+                "Expected object node for Map association '${property.name}' at $path but was ${node.type}",
+            )
+        val keyType = mapKeyTypeOf(property)
+        val map = newMapInstance(property.declaredType, path)
+        for ((keyText, child) in objectNode.asMap()) {
+            val key = values.readMapKey(keyText, keyType, property.mapKeyEnumerated, property.mapKeyTemporal, "$path.$keyText")
+            if (map.containsKey(key)) {
+                throw JpaMappingException(
+                    "Map key collision at $path: multiple document keys of '${property.name}' " +
+                        "resolve to the same key",
+                )
+            }
+            val elementPath = "$path[$keyText]"
+            map[key] = if (child.isNull) {
+                null
+            } else {
+                readObject(requireObject(child, elementPath), targetMetadata, depth + 1, elementPath)
+            }
+        }
+        return map
+    }
+
     private fun readElementCollection(node: Node, property: JpaProperty, depth: Int, path: String): Any {
         val elementType = property.elementType
             ?: throw JpaConfigException("@ElementCollection property '${property.name}' has no element type")
+        if (property.map) {
+            return readElementCollectionMap(node, property, elementType, depth, path)
+        }
         val arrayNode = node.asArrayOrNull()
             ?: throw JpaMappingException(
                 "Expected array node for @ElementCollection property '${property.name}' at $path " +
@@ -402,14 +707,85 @@ public class JpaDocumentMapper @JvmOverloads constructor(
                 collection.add(null)
                 continue
             }
-            val value = if (isScalarValueType(elementType)) {
-                values.readElement(element, elementType, property.enumType, elementPath)
-            } else {
-                readObject(requireObject(element, elementPath), resolver.resolve(elementType), depth, elementPath)
-            }
-            collection.add(value)
+            collection.add(readElement(element, property, elementType, depth, elementPath))
         }
         return collection
+    }
+
+    private fun readElementCollectionMap(
+        node: Node,
+        property: JpaProperty,
+        elementType: Class<*>,
+        depth: Int,
+        path: String,
+    ): Any {
+        val objectNode = node.asObjectOrNull()
+            ?: throw JpaMappingException(
+                "Expected object node for @ElementCollection Map property '${property.name}' at $path " +
+                    "but was ${node.type}",
+            )
+        val keyType = mapKeyTypeOf(property)
+        val map = newMapInstance(property.declaredType, path)
+        for ((keyText, child) in objectNode.asMap()) {
+            val key = values.readMapKey(keyText, keyType, property.mapKeyEnumerated, property.mapKeyTemporal, "$path.$keyText")
+            if (map.containsKey(key)) {
+                throw JpaMappingException(
+                    "Map key collision at $path: multiple document keys of '${property.name}' " +
+                        "resolve to the same key",
+                )
+            }
+            val elementPath = "$path[$keyText]"
+            map[key] = readElement(child, property, elementType, depth, elementPath)
+        }
+        return map
+    }
+
+    private fun readElement(
+        node: Node,
+        property: JpaProperty,
+        elementType: Class<*>,
+        depth: Int,
+        path: String,
+    ): Any? {
+        val converter = property.converter
+        return when {
+            converter != null -> values.readConverted(node, converter, property.enumType, null, path)
+            node.isNull -> null
+            isScalarValueType(elementType) -> values.readElement(node, elementType, property.enumType, path)
+            else -> readObject(requireObject(node, path), resolver.resolve(elementType), depth, path)
+        }
+    }
+
+    /**
+     * 解析 Map 键类型：优先使用泛型 `Map<K, V>`/`@MapKeyClass`；`@MapKey` 且泛型键为
+     * `Object` 时按目标实体的主键/指定属性类型延迟解析。
+     */
+    private fun mapKeyTypeOf(property: JpaProperty): Class<*> {
+        property.mapKeyType?.let { return it }
+        val mapKeyPropertyName = property.mapKeyPropertyName
+            ?: throw JpaConfigException(
+                "Cannot determine the key type of Map property '${property.name}'; " +
+                    "declare Map<K, V>, @MapKeyClass or @MapKey",
+            )
+        val targetType = property.elementType
+            ?: throw JpaConfigException("Map property '${property.name}' has no value type")
+        val targetMetadata = resolver.resolve(targetType)
+        val keyProperty = if (mapKeyPropertyName.isEmpty()) {
+            targetMetadata.properties.firstOrNull { it.id && !it.embeddedId }
+                ?: targetMetadata.properties.firstOrNull { it.id }
+                ?: throw JpaConfigException(
+                    "@MapKey on Map property '${property.name}' requires ${targetType.name} " +
+                        "to declare an @Id property",
+                )
+        } else {
+            targetMetadata.properties.firstOrNull { it.name == mapKeyPropertyName }
+                ?: targetMetadata.propertyFor(mapKeyPropertyName)
+                ?: throw JpaConfigException(
+                    "@MapKey(name = '$mapKeyPropertyName') on Map property '${property.name}': " +
+                        "${targetType.name} has no such property",
+                )
+        }
+        return keyProperty.declaredType
     }
 
     private fun requireObject(
@@ -425,6 +801,8 @@ public class JpaDocumentMapper @JvmOverloads constructor(
         return node.asObjectOrNull()
             ?: throw JpaMappingException("Expected object node for $target at $path but was ${node.type}")
     }
+
+    private fun isInstantiable(type: Class<*>): Boolean = !type.isInterface && !Modifier.isAbstract(type.modifiers)
 
     private fun instantiate(type: Class<*>, path: String): Any {
         if (type.isInterface || Modifier.isAbstract(type.modifiers)) {

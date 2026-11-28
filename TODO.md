@@ -14,15 +14,17 @@
 - XML / Properties / TOML / CSV maxDepth
 - JPMS Automatic-Module-Name
 - 显式 module-info：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa
+- 显式 module-info：11 个 format-*（avro / cbor / csv / ion / json / properties / protobuf / smile / toml / xml / yaml）
+- 显式 module-info：jpa-hibernate
 - GraalVM Native Image 实测
 
 ## 下一批
 
 - [ ] 发布 2.4.0
-- [ ] format-* 的显式 module-info
-- [ ] jpa-hibernate 的显式 module-info
+- [ ] serialization-kotlin / codegen / codegen-test / openapi 的显式 module-info
+- [ ] format-json 去掉 jackson 内部包依赖（module path 写 Double 需要 --add-exports）
 - [ ] Maven Central 实际发布（等额度）
-- [ ] Gitea CI
+- [x] Gitea CI workflow 配置
 
 ## 发布前检查
 

@@ -104,6 +104,151 @@ internal class JpaValueConverter {
         path,
     )
 
+    /**
+     * 写出带属性转换器的值：实体属性值 → `convertToDatabaseColumn` → Node。
+     *
+     * 与 JPA 提供者一致，[value] 为 null 时也会调用转换器（转换器必须能处理 null）；
+     * 转换器返回 null 时写出 `NullNode`。
+     *
+     * @param value 实体属性值（可为 null）
+     * @param converter 属性转换器
+     * @param enumType 数据库值若为枚举时的 `@Enumerated` 策略
+     * @param temporalType 数据库值若为日期时的 `@Temporal` 策略
+     * @param path 当前文档路径
+     */
+    fun writeConverted(
+        value: Any?,
+        converter: JpaAttributeConverter,
+        enumType: EnumType?,
+        temporalType: TemporalType?,
+        path: String,
+    ): Node {
+        val databaseValue = converter.convertToDatabaseColumn(value, path)
+        return writeValue(databaseValue, converter.databaseType, enumType, temporalType, EnumType.ORDINAL, path)
+    }
+
+    /**
+     * 读入带属性转换器的值：Node → 数据库值 → `convertToEntityAttribute`。
+     *
+     * 与 JPA 提供者一致，Node 为 `NullNode` 时也会以 null 调用转换器；
+     * 转换器可以返回非 null 的实体属性值。
+     *
+     * @param node 文档节点（可为 `NullNode`）
+     * @param converter 属性转换器
+     * @param enumType 数据库值若为枚举时的 `@Enumerated` 策略
+     * @param temporalType 数据库值若为日期时的 `@Temporal` 策略
+     * @param path 当前文档路径
+     */
+    fun readConverted(
+        node: Node,
+        converter: JpaAttributeConverter,
+        enumType: EnumType?,
+        temporalType: TemporalType?,
+        path: String,
+    ): Any? {
+        val databaseValue = readValue(node, converter.databaseType, enumType, temporalType, EnumType.ORDINAL, path)
+        return converter.convertToEntityAttribute(databaseValue, path)
+    }
+
+    /**
+     * Map 关联/元素集合的键 → 文档对象字段名。
+     *
+     * 键按 [keyType] 所表示的基本类型标量化（字符串、数字、布尔、枚举、日期时间、UUID），
+     * 再取节点文本作为字段名：字符串保持原样、数字用精确十进制文本、布尔用 `true`/`false`、
+     * 枚举按 `@MapKeyEnumerated`（默认 ORDINAL）、日期时间按 ISO 文本。
+     *
+     * @param key Map 键，不能为 `null`
+     * @param keyType Map 键类型
+     * @param enumType `@MapKeyEnumerated`；`null` 表示 JPA 默认 `ORDINAL`
+     * @param temporalType `@MapKeyTemporal`；`null` 表示按目标日期类型的自然精度
+     * @param path 当前文档路径
+     * @throws JpaMappingException 键为 null、键类型不受支持或数值/日期无法格式化时抛出
+     */
+    fun writeMapKey(
+        key: Any?,
+        keyType: Class<*>,
+        enumType: EnumType?,
+        temporalType: TemporalType?,
+        path: String,
+    ): String {
+        if (key == null) {
+            throw JpaMappingException("Map key must not be null at $path")
+        }
+        val node = writeValue(key, boxedType(keyType), enumType, temporalType, EnumType.ORDINAL, path)
+        return when (node) {
+            is StringNode -> node.value
+            is NumberNode -> node.raw
+            is BooleanNode -> if (node.value) "true" else "false"
+            is BinaryNode -> throw JpaMappingException(
+                "Binary map keys are not supported (type ${keyType.name}) at $path",
+            )
+
+            else -> throw JpaMappingException("Unsupported map key value ${node.type} (type ${keyType.name}) at $path")
+        }
+    }
+
+    /**
+     * 文档对象字段名 → Map 关联/元素集合的键，是 [writeMapKey] 的逆操作。
+     *
+     * @param text 文档对象字段名
+     * @param keyType Map 键类型
+     * @param enumType `@MapKeyEnumerated`；`null` 表示 JPA 默认 `ORDINAL`
+     * @param temporalType `@MapKeyTemporal`；`null` 表示按目标日期类型的自然精度
+     * @param path 当前文档路径
+     * @throws JpaMappingException 键文本无法转换为目标键类型时抛出
+     */
+    fun readMapKey(
+        text: String,
+        keyType: Class<*>,
+        enumType: EnumType?,
+        temporalType: TemporalType?,
+        path: String,
+    ): Any {
+        val targetType = boxedType(keyType)
+        val node = mapKeyNode(text, targetType, enumType, path)
+        return try {
+            readValue(node, keyType, enumType, temporalType, EnumType.ORDINAL, path)
+                ?: throw JpaMappingException("Map key '$text' must not be null (type ${keyType.name}) at $path")
+        } catch (e: NumberFormatException) {
+            throw JpaMappingException("Map key '$text' is not a valid ${keyType.name} at $path", e)
+        }
+    }
+
+    private fun mapKeyNode(
+        text: String,
+        targetType: Class<*>,
+        enumType: EnumType?,
+        path: String,
+    ): Node = when {
+        targetType == String::class.java ||
+            targetType == CharSequence::class.java ||
+            targetType == Char::class.javaObjectType -> StringNode.of(text)
+
+        targetType == Boolean::class.javaObjectType -> when (text) {
+            "true" -> BooleanNode.of(true)
+            "false" -> BooleanNode.of(false)
+            else -> throw JpaMappingException("Map key '$text' is not a boolean at $path")
+        }
+
+        isNumberType(targetType) -> NumberNode.ofRaw(text)
+        targetType.isEnum -> if ((enumType ?: EnumType.ORDINAL) == EnumType.ORDINAL) {
+            NumberNode.ofRaw(text)
+        } else {
+            StringNode.of(text)
+        }
+
+        targetType.isArray -> throw JpaMappingException(
+            "Map key type ${targetType.name} is not supported at $path",
+        )
+
+        Date::class.java.isAssignableFrom(targetType) ||
+            Calendar::class.java.isAssignableFrom(targetType) ||
+            isJavaTimeType(targetType) ||
+            targetType == UUID::class.java -> StringNode.of(text)
+
+        else -> throw JpaMappingException("Map key type ${targetType.name} is not supported at $path")
+    }
+
     private fun writeValue(
         value: Any?,
         declaredType: Class<*>,

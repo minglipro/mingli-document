@@ -4,6 +4,10 @@ import com.mingliqiye.document.serialization.PropertyNamingStrategy
 
 /**
  * [JpaConfig] 构建器。
+ *
+ * 除常规映射策略外，还用于注册本模块无法通过 classpath 扫描发现的两类类型：
+ * - autoApply `AttributeConverter`：按属性的 Java 类型自动应用（JPA 默认规则）；
+ * - 继承层次子类：按 discriminator 值反序列化为具体子类。
  */
 public class JpaConfigBuilder {
 
@@ -13,6 +17,8 @@ public class JpaConfigBuilder {
     private var nullPolicy: JpaNullPolicy = JpaNullPolicy.INCLUDE
     private var unknownPropertyPolicy: JpaUnknownPropertyPolicy = JpaUnknownPropertyPolicy.FAIL
     private var accessType: JpaAccessType = JpaAccessType.AUTO
+    private val autoApplyConverters: LinkedHashSet<Class<*>> = LinkedHashSet()
+    private val entityTypes: LinkedHashSet<Class<*>> = LinkedHashSet()
 
     /**
      * 设置节点字段命名策略。
@@ -91,6 +97,66 @@ public class JpaConfigBuilder {
     }
 
     /**
+     * 注册 autoApply `AttributeConverter`（JPA 默认规则：按属性的 Java 类型匹配）。
+     *
+     * 本模块不做 classpath 扫描，因此 `@Converter(autoApply = true)` 的转换器也必须
+     * 通过本方法（或 [autoApplyConverters]）注册才会生效；注册后：
+     * - 属性类型与 `AttributeConverter<X, Y>` 的 X（基本类型/包装类型等价）相同时自动应用；
+     * - `@Convert` 显式指定的转换器优先于 autoApply；
+     * - `@Convert(disableConversion = true)` 可对单个属性关闭自动转换；
+     * - `@Id`/`@EmbeddedId`、关联属性、显式 `@Enumerated`/`@Temporal`/`@Version` 属性不应用；
+     * - 同一属性类型注册多个 autoApply 转换器会在映射时抛
+     *   [com.mingliqiye.document.jpa.exception.JpaConfigException]。
+     *
+     * @param converterClass 实现 [jakarta.persistence.AttributeConverter] 的类（不得为接口/抽象类，
+     * 且必须有可访问的无参构造器）
+     * @return 当前构建器
+     */
+    public fun autoApplyConverter(converterClass: Class<*>): JpaConfigBuilder {
+        autoApplyConverters.add(converterClass)
+        return this
+    }
+
+    /**
+     * 批量注册 autoApply `AttributeConverter`，语义见 [autoApplyConverter]。
+     *
+     * @param converterClasses 转换器类
+     * @return 当前构建器
+     */
+    public fun autoApplyConverters(vararg converterClasses: Class<*>): JpaConfigBuilder {
+        converterClasses.forEach { autoApplyConverters.add(it) }
+        return this
+    }
+
+    /**
+     * 注册实体类，用于多态反序列化时按 discriminator 选择子类。
+     *
+     * 读入的声明类型是父类（通常是抽象类）时，只有已注册且可赋值给声明类型的子类
+     * 会成为 discriminator 的候选；未知 discriminator 值抛
+     * [com.mingliqiye.document.jpa.exception.JpaMappingException]。
+     *
+     * 写出方向不需要注册：映射器按实际对象类型写出对应的 discriminator 值。
+     *
+     * @param entityType 实体类（或其 Hibernate 代理对应的实体类）
+     * @return 当前构建器
+     */
+    public fun entityType(entityType: Class<*>): JpaConfigBuilder {
+        entityTypes.add(entityType)
+        return this
+    }
+
+    /**
+     * 批量注册实体类，语义见 [entityType]。
+     *
+     * @param types 实体类
+     * @return 当前构建器
+     */
+    public fun entityTypes(vararg types: Class<*>): JpaConfigBuilder {
+        types.forEach { entityTypes.add(it) }
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      */
     public fun build(): JpaConfig = JpaConfig(
@@ -100,6 +166,8 @@ public class JpaConfigBuilder {
         nullPolicy,
         unknownPropertyPolicy,
         accessType,
+        autoApplyConverters.toList(),
+        entityTypes.toList(),
     )
 }
 

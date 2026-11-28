@@ -22,6 +22,13 @@ internal object HibernateTestDb {
         HibernateTestNote::class.java,
         HibernateTestTreeNode::class.java,
         HibernateTestRequiredLink::class.java,
+        HibernateTestPayment::class.java,
+        HibernateTestContact::class.java,
+        HibernateTestTeam::class.java,
+        HibernateTestMember::class.java,
+        HibernateTestAnimal::class.java,
+        HibernateTestCat::class.java,
+        HibernateTestDog::class.java,
     )
 
     val sessionFactory: SessionFactory by lazy {
@@ -37,7 +44,12 @@ internal object HibernateTestDb {
             .build()
         val sources = MetadataSources(registry)
         entityClasses.forEach { sources.addAnnotatedClass(it) }
-        sources.buildMetadata().buildSessionFactory()
+        // 本模块的 Hibernate 运行期测试需要让 SessionFactory 也认识属性转换器：
+        // 显式 @Convert 转换器按类注册，autoApply 转换器按实例注册为自动应用。
+        val metadataBuilder = sources.metadataBuilder
+        metadataBuilder.applyAttributeConverter(HibernateTestMoneyConverter())
+        metadataBuilder.applyAttributeConverter(HibernateTestEmailConverter(), true)
+        metadataBuilder.build().buildSessionFactory()
     }
 
     /** 分配测试内唯一标识符。 */

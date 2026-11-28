@@ -15,6 +15,7 @@ Hibernate 代理解包（Hibernate.unproxy）
 EntityManager / Session 两种入口
 按 id 加载实体后转 Node
 关联深度、环检测
+@Convert / autoApply、Map 关联、@Inheritance 多态（复用 jpa 模块语义）
 ```
 
 不负责持久化与事务。
@@ -65,12 +66,32 @@ Hibernate ORM 6.x
 主代码仍为 JDK 8 字节码
 ```
 
+## 高级映射
+
+高级语义（`@Convert`/autoApply、Map 关联、多态 discriminator）由 jpa 模块实现，
+本模块在 Hibernate 运行期映射中复用：
+
+```kotlin
+val mapper = HibernateDocumentMapper(
+    jpaConfig = JpaConfig.builder()
+        .autoApplyConverter(EmailConverter::class.java)  // 本模块透传 jpa 配置
+        .entityType(Cat::class.java)                     // 多态读入候选子类
+        .build(),
+)
+```
+
+- 非关联属性（含转换器）由 jpa 模块按元数据映射；
+- `MapAttribute` 关联展开为对象节点，键格式与 `JpaMapKeys` 一致；
+- 写出按实际实体类型写 discriminator；读入按 discriminator 实例化并在关联遍历中
+  使用实例的实际实体类型；
+- 持久化到数据库时 Hibernate `SessionFactory` 也需注册同一转换器。
+
 ## 限制
 
 ```text
 不管理 Session / EntityManager / 事务 / 持久化
 不识别非 Hibernate 提供者代理
 复合主键不做引用解析
-@Convert / Map 关联 / 多态鉴别器不支持
+autoApply 转换器与多态子类需通过 JpaConfig 注册
 字节码增强的单属性懒加载可能无法强制初始化
 ```

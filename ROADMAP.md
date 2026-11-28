@@ -97,12 +97,12 @@
 - [x] 自定义 Charset
 - [x] 原子文件写入
 - [x] 自动创建父目录
-- [x] CI/CD（GitHub Actions）\n- [ ] Gitea CI
+- [x] CI/CD（GitHub Actions）\n- [x] Gitea CI（workflow 配置，未在 Gitea runner 实测）
 - [x] Maven Central 发布配置
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
-- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa 九个模块；其余 format-* / serialization-kotlin / codegen / openapi / jpa-hibernate 仍为自动模块，见 docs/guide/jpms.md）
+- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa / 11 个 format-* / jpa-hibernate 共 21 个模块；其余 serialization-kotlin / codegen / codegen-test / openapi 仍为自动模块，见 docs/guide/jpms.md）
 - [x] GraalVM Native Image 实测通过（GraalVM JDK21 + VS BuildTools + Windows SDK）
 
 ---
@@ -254,11 +254,12 @@
 ## dev 开发状态（未发布）
 
 - JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` /
-  `jdbc` / `validation` / `jpa` 九个模块改为 Multi-Release JAR，JDK 9+ 使用显式 `module-info`
-  （不再作为自动模块）；JDK 8 字节码、classpath 用法与自动模块名保持不变。`alias-for` 1.0.4
-  已提供合法模块名（`com.mingliqiye.utils.aliasfor`），不再阻塞；`format-*`、
-  `serialization-kotlin`、`codegen`、`openapi`、`jpa-hibernate` 仍为自动模块，详见
-  [docs/guide/jpms.md](docs/guide/jpms.md)
+  `jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate` 共 21 个模块为
+  Multi-Release JAR，JDK 9+ 使用显式 `module-info`（不再作为自动模块）；JDK 8 字节码、
+  classpath 用法与自动模块名保持不变。`alias-for` 1.0.4 已提供合法模块名
+  （`com.mingliqiye.utils.aliasfor`）；`serialization-kotlin`、`codegen`、`codegen-test`、
+  `openapi` 仍为自动模块。`format-json` 写 `Double` 在 module path 上需要
+  `--add-exports`（jackson-core 内部包），详见 [docs/guide/jpms.md](docs/guide/jpms.md)
 
 ---
 

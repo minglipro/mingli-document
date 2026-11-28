@@ -14,6 +14,8 @@ internal class JpaEntityMetadata(
     val properties: List<JpaProperty>,
     /** 别名索引：节点字段名、列名、属性名都指向同一个属性。 */
     val aliases: Map<String, JpaProperty>,
+    /** 继承 discriminator 元数据；不在 `@Inheritance`/`@DiscriminatorColumn` 层次中时为 `null`。 */
+    val inheritance: JpaInheritanceMetadata? = null,
 ) {
 
     /** 按节点键查找属性。 */

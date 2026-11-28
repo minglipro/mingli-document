@@ -1,6 +1,10 @@
 package com.mingliqiye.document.jpa.internal
 
 import com.mingliqiye.document.jpa.exception.JpaMappingException
+import java.lang.reflect.ParameterizedType
+import java.lang.reflect.Type
+import java.lang.reflect.TypeVariable
+import java.lang.reflect.WildcardType
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -70,14 +74,46 @@ internal fun newCollectionInstance(type: Class<*>, path: String): MutableCollect
 /**
  * 创建 Map 实例。
  */
-internal fun newMapInstance(type: Class<*>, path: String): MutableMap<String, Any?> {
+internal fun newMapInstance(type: Class<*>, path: String): MutableMap<Any?, Any?> {
     if (type.isInterface) {
         return if (java.util.SortedMap::class.java.isAssignableFrom(type)) java.util.TreeMap() else LinkedHashMap()
     }
     val instance = newInstanceOf(type, path)
     @Suppress("UNCHECKED_CAST")
-    return instance as? MutableMap<String, Any?>
+    return instance as? MutableMap<Any?, Any?>
         ?: throw JpaMappingException("Type ${type.name} is not a map at $path")
+}
+
+/** 将基本类型装箱；非基本类型原样返回。 */
+internal fun boxedType(type: Class<*>): Class<*> {
+    if (!type.isPrimitive) {
+        return type
+    }
+    return when (type.name) {
+        "boolean" -> Boolean::class.javaObjectType
+        "byte" -> Byte::class.javaObjectType
+        "short" -> Short::class.javaObjectType
+        "int" -> Int::class.javaObjectType
+        "long" -> Long::class.javaObjectType
+        "float" -> Float::class.javaObjectType
+        "double" -> Double::class.javaObjectType
+        "char" -> Char::class.javaObjectType
+        else -> type
+    }
+}
+
+/**
+ * 解析泛型 [Type] 对应的原始类型。
+ *
+ * 处理 `Class`、`ParameterizedType`、`WildcardType` 与 `TypeVariable` 的界。
+ */
+internal fun rawTypeOf(type: Type?): Class<*>? = when (type) {
+    null -> null
+    is Class<*> -> type
+    is ParameterizedType -> rawTypeOf(type.rawType)
+    is WildcardType -> rawTypeOf(type.upperBounds.firstOrNull())
+    is TypeVariable<*> -> rawTypeOf(type.bounds.firstOrNull())
+    else -> null
 }
 
 /**
