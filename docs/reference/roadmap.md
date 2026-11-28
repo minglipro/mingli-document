@@ -53,7 +53,7 @@
 - [x] CBOR：可选 tag 保真（`CborConfig.preserveTags`）
 - [x] Ion：timestamp / symbol / clob / blob 类型保真（`IonConfig.preserveTypes`）
 - [x] YAML：自定义 tag（跨文档 anchor 规范不支持）
-- [ ] TOML：注释保留
+- [x] TOML：注释保留
 - [x] CSV：嵌套结构 / 多级 Schema
 - [x] Smile：多消息流
 
@@ -72,8 +72,8 @@
 - [x] 编译期枚举转换器源码生成（`DocumentCodecSourceGenerator`）
 - [x] 运行期 Bean 编解码器生成（`DocumentRuntimeCodecFactory`）
 - [x] 编译期注解处理器 / KSP（`codegen` 模块）
-- [ ] 大文件流式 Bean 映射
-- [ ] 对象池 / 零拷贝
+- [x] 大文件流式 Bean 映射
+- [x] 对象池 / 零拷贝
 
 > 未完成项：大文件流式 Bean 映射、对象池/零拷贝。
 
@@ -94,10 +94,9 @@
 - [x] JQF 集成
 - [x] 安全测试基线
 
-> 状态说明：ROADMAP 中「XML / Properties / TOML / CSV maxDepth」仍未勾选，但
-> CHANGELOG 的 1.3.0 / 2.0.0 条目提到「Properties/TOML/CSV Token 深度校验」与 XML DOM
-> 深度限制。二者描述的是不同层面的能力（格式解析器深度 vs Token 路径深度），以对应
-> 版本源码为准；`SECURITY.md` 记录安全边界基线。
+> 状态说明：XML / Properties / TOML / CSV 的解析器 `maxDepth` 已在 2.4.0 补齐；此前
+> ROADMAP 中「Token 深度校验」与「解析器深度」是两条不同路径，现在两者都有受控限制。
+> `SECURITY.md` 记录安全边界基线。
 
 ## 阶段 5：Schema 与生态
 
@@ -248,7 +247,7 @@
 - `format-json` 去除 Jackson 内部包 `DoubleToDecimal` 依赖
 - Gitea CI、Maven Central 发布（已放弃）
 
-## 当前状态（2.3.0）
+## 当前状态（2.4.0 未发布）
 
 ### 已完成的核心目标
 
@@ -269,6 +268,7 @@
 | GraalVM Native Image | ✅ 实测 |
 | 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
 | Gitea CI、Maven Central | ❌ 已放弃 |
+| Avro logical type / maxDepth / jpa-hibernate 高级映射 | ✅ 2.4.0 未发布 |
 
 ### 待办清单（2.4.0 之后）
 
@@ -279,7 +279,7 @@
 | 3 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
 | 4 | `jlink` 支持（当前仅 `annotation` 可 jlink） | 阶段 6 |
 
-> 2.4.0 代码已实现，但代码与发布当前暂停。
+> 2.4.0 功能已完成，但代码与发布当前暂停；未打 tag、未推私服、未创建 GitHub Release。
 
 > 仓库根的 `TODO.md` 记录了更细粒度的待办项，本表只列路线图级目标。
 

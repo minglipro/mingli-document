@@ -26,7 +26,8 @@
 - [x] 多态类型（type 字段 + 类型注册）
 - [x] 构造器注入
 - [x] Builder 模式实例化
-- [x] 输入本地 `$ref` 解析\n- [x] 对象身份引用序列化
+- [x] 输入本地 `$ref` 解析
+- [x] 对象身份引用序列化
 - [x] Java record（JDK 16+ 运行时）
 - [x] Kotlin value class / sealed class
 - [x] 只读属性
@@ -36,7 +37,8 @@
 
 ## 阶段 2：格式协议完整性
 
-- [x] Avro：非默认 codec、appendTo\n- [x] Avro：完整 logical type
+- [x] Avro：非默认 codec、appendTo
+- [x] Avro：完整 logical type
 - [x] Protobuf：extensions、group、MessageSet、proto3 语义
 - [x] XML：混合内容顺序保留
 - [x] CBOR sequence
@@ -54,7 +56,9 @@
 
 - [x] CSV 原生 Token Reader
 - [x] Properties 原生 Token Reader
-- [x] TOML 原生 Token Reader\n- [x] YAML 原生 Token Reader\n- [x] XML 原生 Token Reader（默认配置）
+- [x] TOML 原生 Token Reader
+- [x] YAML 原生 Token Reader
+- [x] XML 原生 Token Reader（默认配置）
 - [x] JSON 紧凑模式纯字节写出
 - [x] Schubfach Double 最短格式化
 - [x] 运行期属性访问代码生成
@@ -71,11 +75,16 @@
 - [x] Mapper 层 maxNodeDepth / maxNodeCount
 - [x] CBOR / Smile 解析器 maxDepth
 - [x] Protobuf 解析器 maxDepth
-- [x] Avro 解析器 maxDepth\n- [x] Ion 解析器 maxDepth\n- [x] YAML 解析器 maxDepth\n- [x] XML / Properties / TOML / CSV maxDepth
+- [x] Avro 解析器 maxDepth
+- [x] Ion 解析器 maxDepth
+- [x] YAML 解析器 maxDepth
+- [x] XML / Properties / TOML / CSV maxDepth
 - [x] 全格式 maxInputSize
 - [x] Node 树 maxStringLength
 - [x] YAML alias 扩张限制
-- [x] 持续 fuzz harness（fuzzContinuous）\n- [x] Jazzer 覆盖率引导 fuzz\n- [x] JQF 集成
+- [x] 持续 fuzz harness（fuzzContinuous）
+- [x] Jazzer 覆盖率引导 fuzz
+- [x] JQF 集成
 - [x] 安全测试基线
 
 ---
@@ -98,12 +107,14 @@
 - [x] 原子文件写入
 - [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）
-- [x] Maven Central 发布配置（已放弃）
+- [x] Maven Central 发布配置（已放弃，不计划发布）
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
 - [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry / serialization / jdbc / validation / jpa / 11 个 format-* / jpa-hibernate 共 21 个模块；其余 serialization-kotlin / codegen / codegen-test / openapi 仍为自动模块，见 docs/guide/jpms.md）
 - [x] GraalVM Native Image 实测通过（GraalVM JDK21 + VS BuildTools + Windows SDK）
+
+> 已放弃：Gitea CI、Maven Central。
 
 ---
 
@@ -272,3 +283,18 @@
 - GraalVM Native Image 实测通过（GraalVM JDK21 + Windows SDK）
 - 全量构建 1342 tests 通过
 - Maven Central 发布（已放弃）
+
+---
+
+## 2.4.0 状态（未发布，延期）
+
+- 2.4.0 功能已在 master/dev，但按当前决定延期发布
+- jpa-hibernate：Hibernate Session/EntityManager、懒加载、代理、Map 关联、多态
+- jpa 高级映射：@Convert、autoApply、@Inheritance
+- Avro 完整 logical type
+- XML / Properties / TOML / CSV maxDepth
+- TOML parseCommented / formatCommented
+- 显式 MR-JAR module-info 扩展到 21 个模块
+- 全量构建 1496 tests 通过
+- Gitea CI / Maven Central：已放弃
+- 未打 tag、未推私服、未创建 GitHub Release
