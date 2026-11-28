@@ -73,8 +73,19 @@ alias-for ──api────────────────────�
 | `convert(source: Any?, Class<T>)` | `T` | 任意对象/`Node` → 目标类型（先 `toNode` 再 `fromNode`） |
 | `convert(source, DocumentTypeReference<T>)` | `T` | 泛型版 `convert` |
 | `merge(node, target)` / `merge(node, target, policy)` | `T` | 文档树合并到已有对象；默认实现抛不支持 |
+| `readTree(String/ByteArray/File/Path/InputStream/Reader)` | `Node` | 树 API；内部按 `parse(source, Any::class.java)` 取节点树，顶层 `null` 返回 `NullNode.INSTANCE` |
+| `writeTree(node)` / `writeTreeAsBytes(node)` | `String` / `ByteArray` | 树写出；等价 `format` / `formatBytes` |
+| `valueToTree(value)` / `treeToValue(node, Class/TypeRef)` | `Node` / `T` | 等价 `toNode` / `fromNode` |
+| `readValue(source, Class/TypeRef)` | `T` | 六种来源的 `parse` 别名 |
+| `writeValueAsString(value)` / `writeValueAsBytes(value)` | `String` / `ByteArray` | 等价 `format` / `formatBytes` |
+| `updateValue(target, overrides)` | `T` | `merge(toNode(overrides), target)` |
+| `convertValue(source, Class/TypeRef)` | `T` | 等价 `convert` |
+| `readerFor(Class/TypeRef)` / `writer()` / `writerWithDefaultPrettyPrinter()` | `DocumentObjectReader<T>` / `DocumentObjectWriter` | 轻量 Reader / Writer 包装 |
 
-`DocumentMapperApi.Companion` 提供 reified 扩展：`parse<T>(String/ByteArray/File/Path/InputStream/Reader)`、`fromNode<T>(node)`、`convert<T>(source)`，例如 `mapper.parse<List<User>>(text)`。
+Kotlin 的 reified 扩展（`parse<T>(String/ByteArray/File/Path/InputStream/Reader)`、
+`fromNode<T>(node)`、`convert<T>(source)`、`readerFor<T>()`）位于
+`serialization-kotlin` 模块的 `com.mingliqiye.document.serialization.kotlin` 包，
+例如 `mapper.parse<List<User>>(text)`；非 reified 版本仍在 `DocumentMapperApi`。
 
 ## DocumentMapper 额外 API
 

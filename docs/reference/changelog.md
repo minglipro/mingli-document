@@ -8,7 +8,7 @@
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
-| `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info |
+| `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info、对象映射便捷 API |
 | `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
 | `2.2.0` | 数据库与扩展 | `jdbc`、`schema-registry`、`validation`、TOML 注释保留、JPMS 自动模块名 |
 | `2.1.0` | 流式与安全 | JSON Lines/数组、CSV 流式、`ByteArrayPool`、零拷贝、流式写出 |
@@ -40,6 +40,15 @@
 - `@DocumentInclude` + `DocumentIncludePolicy`：类级/字段级写出策略覆盖（ALWAYS / NON_NULL / NON_EMPTY / USE_DEFAULTS）
 - `DocumentMapperBuilder.propertyMetadataResolver(...)`：Builder 直接注册属性元数据解析器
 - `DocumentModule` 注册优先级文档化：模块覆盖直接注册、后注册模块优先、同名模块去重
+- 对象映射便捷 API（format-agnostic）：
+  - 树 API：`readTree`（String / ByteArray / File / Path / InputStream / Reader）、
+    `writeTree` / `writeTreeAsBytes`、`valueToTree`、`treeToValue`
+  - 值 API：`readValue`（六种来源 × `Class` / `DocumentTypeReference`）、
+    `writeValueAsString` / `writeValueAsBytes`、`updateValue`、`convertValue`
+  - Reader / Writer：`readerFor`、`writer()`、`writerWithDefaultPrettyPrinter()`，
+    返回轻量包装 `DocumentObjectReader` / `DocumentObjectWriter`
+  - 基于既有 `parse` / `format` / `toNode` / `fromNode` / `merge` 实现，不改变原行为；
+    `DocumentMapper` 显式覆写，Java 可直接调用
 
 ## 2.3.0
 

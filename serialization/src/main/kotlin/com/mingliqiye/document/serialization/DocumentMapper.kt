@@ -563,6 +563,110 @@ public abstract class DocumentMapper protected constructor(
      */
     override fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D = fromNode(toNode(source), destinationType)
 
+    // ------------------------------------------------------------------
+    // 对象映射便捷 API
+    //
+    // 语义在 DocumentMapperApi 默认实现里已经定义；这里逐项显式覆写，让 Java 调用方
+    // 通过 DocumentMapper / JsonMapper 等具体类型也能解析到这些方法（JVM 上接口默认
+    // 方法编译为 DefaultImpls，Java 按类的成员查找看不到它们）。
+    // ------------------------------------------------------------------
+
+    /** 将文本解析为文档树；读取规则与 `parse` 一致，顶层 `null` 返回 [NullNode.INSTANCE]。 */
+    override fun readTree(source: String): Node = parse(source, Any::class.java) as? Node ?: NullNode.INSTANCE
+
+    /** 将字节数组解析为文档树；顶层 `null` 返回 [NullNode.INSTANCE]。 */
+    override fun readTree(source: ByteArray): Node = parse(source, Any::class.java) as? Node ?: NullNode.INSTANCE
+
+    /** 从文件解析文档树。 */
+    override fun readTree(file: File): Node = parse(file, Any::class.java) as? Node ?: NullNode.INSTANCE
+
+    /** 从路径解析文档树。 */
+    override fun readTree(path: Path): Node = parse(path, Any::class.java) as? Node ?: NullNode.INSTANCE
+
+    /** 从输入流解析文档树。 */
+    override fun readTree(input: InputStream): Node = parse(input, Any::class.java) as? Node ?: NullNode.INSTANCE
+
+    /** 从字符流解析文档树；只支持文本格式。 */
+    override fun readTree(reader: Reader): Node = parse(reader, Any::class.java) as? Node ?: NullNode.INSTANCE
+
+    /** 将文档树写为文本；等价于 `format(node)`。 */
+    override fun writeTree(node: Node): String = format(node)
+
+    /** 将文档树写为字节数组；等价于 `formatBytes(node)`。 */
+    override fun writeTreeAsBytes(node: Node): ByteArray = formatBytes(node)
+
+    /** 将任意对象转换为文档树；等价于 [toNode]。 */
+    override fun valueToTree(value: Any?): Node = toNode(value)
+
+    /** 将文档树转换为指定 Java 类型；等价于 `fromNode(node, targetType)`。 */
+    override fun <T> treeToValue(node: Node, targetType: Class<T>): T = fromNode(node, targetType)
+
+    /** 将文档树转换为指定泛型类型；等价于 `fromNode(node, targetType)`。 */
+    override fun <T> treeToValue(node: Node, targetType: DocumentTypeReference<T>): T = fromNode(node, targetType)
+
+    /** 将文本解析为 Java 实体；等价于 `parse(source, targetType)`。 */
+    override fun <T> readValue(source: String, targetType: Class<T>): T = parse(source, targetType)
+
+    /** 将文本解析为指定泛型类型。 */
+    override fun <T> readValue(source: String, targetType: DocumentTypeReference<T>): T = parse(source, targetType)
+
+    /** 将字节数组解析为 Java 实体。 */
+    override fun <T> readValue(source: ByteArray, targetType: Class<T>): T = parse(source, targetType)
+
+    /** 将字节数组解析为指定泛型类型。 */
+    override fun <T> readValue(source: ByteArray, targetType: DocumentTypeReference<T>): T = parse(source, targetType)
+
+    /** 从文件解析 Java 实体。 */
+    override fun <T> readValue(file: File, targetType: Class<T>): T = parse(file, targetType)
+
+    /** 从文件解析指定泛型类型。 */
+    override fun <T> readValue(file: File, targetType: DocumentTypeReference<T>): T = parse(file, targetType)
+
+    /** 从路径解析 Java 实体。 */
+    override fun <T> readValue(path: Path, targetType: Class<T>): T = parse(path, targetType)
+
+    /** 从路径解析指定泛型类型。 */
+    override fun <T> readValue(path: Path, targetType: DocumentTypeReference<T>): T = parse(path, targetType)
+
+    /** 从输入流解析 Java 实体。 */
+    override fun <T> readValue(input: InputStream, targetType: Class<T>): T = parse(input, targetType)
+
+    /** 从输入流解析指定泛型类型。 */
+    override fun <T> readValue(input: InputStream, targetType: DocumentTypeReference<T>): T = parse(input, targetType)
+
+    /** 从字符流解析 Java 实体；只支持文本格式。 */
+    override fun <T> readValue(reader: Reader, targetType: Class<T>): T = parse(reader, targetType)
+
+    /** 从字符流解析指定泛型类型；只支持文本格式。 */
+    override fun <T> readValue(reader: Reader, targetType: DocumentTypeReference<T>): T = parse(reader, targetType)
+
+    /** 将任意对象写为文本；等价于 [format]。 */
+    override fun writeValueAsString(value: Any?): String = format(value)
+
+    /** 将任意对象写为字节数组；等价于 [formatBytes]。 */
+    override fun writeValueAsBytes(value: Any?): ByteArray = formatBytes(value)
+
+    /** 将覆盖文档合并到已有对象；等价于 `merge(toNode(overrides), target)`。 */
+    override fun <T> updateValue(target: T, overrides: Any?): T = merge(toNode(overrides), target)
+
+    /** 将任意对象转换为指定 Java 类型；等价于 [convert]。 */
+    override fun <D> convertValue(source: Any?, destinationClass: Class<D>): D = convert(source, destinationClass)
+
+    /** 将任意对象转换为指定泛型类型；等价于 [convert]。 */
+    override fun <D> convertValue(source: Any?, destinationType: DocumentTypeReference<D>): D = convert(source, destinationType)
+
+    /** 创建绑定目标类型（[Class]）的对象读取器。 */
+    override fun <T> readerFor(targetType: Class<T>): DocumentObjectReader<T> = DocumentObjectReader(this, DocumentTypeReference.of(targetType))
+
+    /** 创建绑定目标泛型类型的对象读取器。 */
+    override fun <T> readerFor(targetType: DocumentTypeReference<T>): DocumentObjectReader<T> = DocumentObjectReader(this, targetType)
+
+    /** 创建紧凑风格的对象写出器。 */
+    override fun writer(): DocumentObjectWriter = DocumentObjectWriter(this, pretty = false)
+
+    /** 创建格式化（pretty）风格的对象写出器。 */
+    override fun writerWithDefaultPrettyPrinter(): DocumentObjectWriter = DocumentObjectWriter(this, pretty = true)
+
     /**
      * 把文档树合并到已有对象，文档中没有出现的字段保持目标对象的原值。
      *

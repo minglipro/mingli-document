@@ -5,6 +5,9 @@
 ### 新增
 
 - `jpa-hibernate` 模块：Hibernate 代理、懒加载、Session/EntityManager 集成
+- reified 类型扩展迁移到 serialization-kotlin（parse<T> / romNode<T> / convert<T> / eaderFor<T>）
+- 对象映射便捷 API：readTree/writeTree/valueToTree/treeToValue/readValue/writeValueAs*/updateValue/readerFor/writer
+- DeserializationFeature、@DocumentNaming、@DocumentInclude
 - JPA 高级映射：`@Convert` / autoApply 转换器、Map 关联、`@Inheritance` 多态
 - Hibernate Map 关联与多态实体支持
 - Avro 完整 logical type：date/time/timestamp/decimal/uuid/duration
@@ -28,6 +31,15 @@
   元数据解析器的 API（模块注册仍优先）
 - 明确并文档化 `DocumentModule` / `ModuleSetupContext` 注册优先级：模块注册覆盖
   Builder 直接注册，后注册模块覆盖先注册模块，同名模块按 `moduleName` 去重
+- 对象映射便捷 API（`serialization`，format-agnostic）：
+  - 树 API：`readTree`（String / ByteArray / File / Path / InputStream / Reader）、
+    `writeTree` / `writeTreeAsBytes`、`valueToTree`、`treeToValue`
+  - 值 API：`readValue`（六种来源 × `Class` / `DocumentTypeReference`）、
+    `writeValueAsString` / `writeValueAsBytes`、`updateValue`、`convertValue`
+  - Reader / Writer：`readerFor`、`writer()`、`writerWithDefaultPrettyPrinter()`，
+    返回轻量包装 `DocumentObjectReader` / `DocumentObjectWriter`
+  - 全部基于既有 `parse` / `format` / `toNode` / `fromNode` / `merge` 实现，
+    不改变原有行为；`DocumentMapper` 显式覆写，Java 可直接通过具体 Mapper 调用
 
 ## 2.3.0
 

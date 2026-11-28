@@ -66,6 +66,7 @@ mapper.format(users, java.io.File("users.json"))
 |---|---|
 | 改字段名 / 忽略字段 / 自定义转换器 | [注解参考](./annotations.md) |
 | 把 Java Bean 与 JSON 互转 | [api.md · DocumentMapperApi](./api.md#documentmapperapi) |
+| 用 `readTree` / `readValue` / `readerFor` / `writer` 等对象映射风格 API | [io.md · 对象映射 API](../guide/io.md#对象映射-api) + [api.md](./api.md#documentmapperapi) |
 | 处理多态类型 | [注解参考](./annotations.md) + [serialization 模块](../modules/serialization.md) |
 | 处理 Kotlin data class | [serialization-kotlin](../modules/serialization-kotlin.md) |
 | 配置缺失字段 / 未知字段 / null 写出 / 命名策略 | [api.md · 配置](./api.md#documentmapperconfig) |

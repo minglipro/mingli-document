@@ -45,6 +45,14 @@ mapper.convert(user, Other::class.java)              // Bean  -> Bean（内部�
 
 因此本页所有规则对 11 种格式同时生效。
 
+此外还有一组对象映射风格的别名，语义与上面完全一致（format-agnostic）：
+`readValue` 对应 `parse`、`writeValueAsString` / `writeValueAsBytes` 对应 `format` /
+`formatBytes`、`valueToTree` 对应 `toNode`、`treeToValue` 对应 `fromNode`、
+`readTree` 对应「解析为 `Node` 树」（顶层 `null` 返回 `NullNode`）、`convertValue` 对应
+`convert`、`updateValue` 等价 `merge(toNode(overrides), target)`；需要按固定目标类型读取
+或固定输出风格写出时用 `readerFor` / `writer` / `writerWithDefaultPrettyPrinter`。
+详见 [文件与流](./io.md#对象映射-api)。
+
 ## Java Bean 识别规则
 
 Mapper 为每个类型构建一次 `BeanMetadata`，属性来源按以下顺序合并（同一属性名只取

@@ -51,13 +51,49 @@ public interface DocumentMapperApi {
     fun <D> convert(source: Any?, destinationType: DocumentTypeReference<D>): D
     fun <T> merge(node: Node, target: T): T
     fun <T> merge(node: Node, target: T, policy: MergePolicy): T
+
+    // 对象映射便捷 API（format-agnostic，语义等价于上面的入口）
+    fun readTree(source: String): Node
+    fun readTree(source: ByteArray): Node
+    fun readTree(file: File): Node
+    fun readTree(path: Path): Node
+    fun readTree(input: InputStream): Node
+    fun readTree(reader: Reader): Node
+    fun writeTree(node: Node): String
+    fun writeTreeAsBytes(node: Node): ByteArray
+    fun valueToTree(value: Any?): Node
+    fun <T> treeToValue(node: Node, targetType: Class<T>): T
+    fun <T> treeToValue(node: Node, targetType: DocumentTypeReference<T>): T
+    fun <T> readValue(source: String, targetType: Class<T>): T
+    fun <T> readValue(source: String, targetType: DocumentTypeReference<T>): T
+    fun <T> readValue(source: ByteArray, targetType: Class<T>): T
+    fun <T> readValue(source: ByteArray, targetType: DocumentTypeReference<T>): T
+    fun <T> readValue(file: File, targetType: Class<T>): T
+    fun <T> readValue(file: File, targetType: DocumentTypeReference<T>): T
+    fun <T> readValue(path: Path, targetType: Class<T>): T
+    fun <T> readValue(path: Path, targetType: DocumentTypeReference<T>): T
+    fun <T> readValue(input: InputStream, targetType: Class<T>): T
+    fun <T> readValue(input: InputStream, targetType: DocumentTypeReference<T>): T
+    fun <T> readValue(reader: Reader, targetType: Class<T>): T
+    fun <T> readValue(reader: Reader, targetType: DocumentTypeReference<T>): T
+    fun writeValueAsString(value: Any?): String
+    fun writeValueAsBytes(value: Any?): ByteArray
+    fun <T> updateValue(target: T, overrides: Any?): T
+    fun <D> convertValue(source: Any?, destinationClass: Class<D>): D
+    fun <D> convertValue(source: Any?, destinationType: DocumentTypeReference<D>): D
+    fun <T> readerFor(targetType: Class<T>): DocumentObjectReader<T>
+    fun <T> readerFor(targetType: DocumentTypeReference<T>): DocumentObjectReader<T>
+    fun writer(): DocumentObjectWriter
+    fun writerWithDefaultPrettyPrinter(): DocumentObjectWriter
 }
 ```
 
-### reified 扩展（`DocumentMapperApi.Companion`）
+### reified 扩展（`serialization-kotlin`）
 
 `parse<T>(String/ByteArray/File/Path/InputStream/Reader)`、`fromNode<T>(node)`、
-`convert<T>(source)` 等价于对应方法传入 `DocumentTypeReference.of<T>()`。
+`convert<T>(source)`、`readerFor<T>()` 位于 `serialization-kotlin` 模块的
+`com.mingliqiye.document.serialization.kotlin` 包，等价于对应方法传入
+`DocumentTypeReference.of<T>()`。纯 Java 的 `serialization` 模块不包含这些 reified API。
 
 ### 默认实现与异常
 
@@ -68,6 +104,40 @@ public interface DocumentMapperApi {
 | `merge(node, target)` | 委托 `merge(node, target, MergePolicy.REPLACE)` |
 | `merge(node, target, policy)` | 抛 `DocumentSerializationException("... does not support merge")`（`DocumentMapper` 覆写） |
 | `formatPretty(value, file/path/output/writer)` | 基类按 UTF-8 写出（`DocumentMapper` 覆写为可配置字符集） |
+| `readTree(...)` | 委托 `parse(..., Any::class.java)` 取得节点；顶层 `null` 返回 `NullNode.INSTANCE` |
+| `writeTree` / `writeTreeAsBytes` / `valueToTree` / `treeToValue` | 分别委托 `format` / `formatBytes` / `toNode` / `fromNode` |
+| `readValue(...)` / `writeValueAs*` / `convertValue(...)` | 分别委托 `parse` / `format`、`formatBytes` / `convert` |
+| `updateValue(target, overrides)` | 委托 `merge(toNode(overrides), target)`，默认 `MergePolicy.REPLACE` |
+| `readerFor(...)` / `writer()` / `writerWithDefaultPrettyPrinter()` | 返回轻量包装 `DocumentObjectReader` / `DocumentObjectWriter` |
+
+### 对象映射便捷 API 的语义
+
+- 树/值 API 不新增格式绑定，行为与 `parse` / `format` / `toNode` / `fromNode` 一致；
+- `readTree` 的六种来源覆盖 String / ByteArray / File / Path / InputStream / Reader；
+  `readValue` 同；`DocumentObjectWriter.writeValue` 覆盖 File / Path / OutputStream / Writer；
+- 文本专用的重载在二进制格式上抛 `DocumentSerializationException`；
+- `DocumentMapper` 显式覆写全部便捷方法，保证 Java 通过具体 Mapper 类型可直接调用
+  （接口默认方法在 JVM 上编译为 `DefaultImpls`，Java 按类成员查找看不到）。
+
+## DocumentObjectReader
+
+`DocumentMapperApi.readerFor(...)` 返回的轻量读取器，绑定目标类型：
+
+| 成员 | 说明 |
+|---|---|
+| `targetType: DocumentTypeReference<T>` | 绑定的目标类型 |
+| `readValue(source: String/ByteArray/File/Path/InputStream/Reader): T` | 等价对应 `parse` / `readValue` 重载 |
+
+## DocumentObjectWriter
+
+`DocumentMapperApi.writer()` / `writerWithDefaultPrettyPrinter()` 返回的轻量写出器：
+
+| 成员 | 说明 |
+|---|---|
+| `pretty: Boolean` | 是否格式化输出（Java 访问器为 `getPretty()`） |
+| `writeValueAsString(value: Any?): String` | 紧凑/格式化文本，等价 `format` / `formatPretty` |
+| `writeValueAsBytes(value: Any?): ByteArray` | 紧凑/格式化字节 |
+| `writeValue(value: Any?, file: File / path: Path / output: OutputStream / writer: Writer)` | 写入目标；流由调用方关闭 |
 
 ## DocumentMapper
 
@@ -81,6 +151,9 @@ public interface DocumentMapperApi {
 | `fromTokens(reader, Class/TypeRef/Type)` | Token 流 → 实体/泛型/`Type` |
 | `writeTo(value: Any?, writer: DocumentValueWriter)` | 实体 → 流式写出器（不构建完整树） |
 | `merge(node, target, policy): T` | 合并实现 |
+| `readTree` / `writeTree` / `writeTreeAsBytes` / `valueToTree` / `treeToValue` | 树 API 便捷方法（显式覆写，Java 可直接调用） |
+| `readValue` / `writeValueAsString` / `writeValueAsBytes` / `updateValue` / `convertValue` | 值 API 便捷方法（显式覆写） |
+| `readerFor` / `writer` / `writerWithDefaultPrettyPrinter` | `DocumentObjectReader` / `DocumentObjectWriter` 工厂（显式覆写） |
 | `validateNodeLimits(node: Node)`（`protected`） | 校验节点限制，供格式层复用 |
 | `usesTextFormat: Boolean`（`protected open`） | 默认 `true`；二进制格式覆写 `false` |
 | `prettyOutputEnabled(): Boolean`（`protected open`） | 默认输出是否 pretty |

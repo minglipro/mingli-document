@@ -298,6 +298,41 @@ NullNode
 | `format(value, file)` / `format(value, outputStream)` | 实体 -> 文件/流 |
 | `fromTokens(reader, Class)` / `fromTokens(reader, DocumentTypeReference)` | Token -> 实体 |
 | `convert(source, Class)` | 实体/Node -> 实体 |
+| `readTree(source)` / `writeTree(node)` | 文本 -> Node 树 / Node 树 -> 文本 |
+| `readValue(source, Class)` / `writeValueAsString(value)` | `parse` / `format` 的对象映射风格别名 |
+| `updateValue(target, overrides)` | 把覆盖内容合并到已有对象 |
+| `convertValue(source, Class)` | `convert` 的别名 |
+| `readerFor(Class)` / `writer()` | 绑定类型的读取器 / 写出器 |
+
+### 对象映射 API
+
+`DocumentMapperApi` 提供 `readTree` / `writeTree` / `valueToTree` / `treeToValue` /
+`readValue` / `writeValueAsString` / `writeValueAsBytes` / `updateValue` / `convertValue` /
+`readerFor` / `writer` 等对象映射风格便捷方法，全部 format-agnostic，语义与
+`parse` / `format` / `toNode` / `fromNode` / `convert` / `merge` 一致：
+
+```kotlin
+val mapper = JsonMapper()
+
+val tree = mapper.readTree("""{"name":"小于","age":18}""")   // Node 树
+val user = mapper.treeToValue(tree, User::class.java)         // 树 -> 实体
+val text = mapper.writeValueAsString(user)                    // 实体 -> 文本
+val updated = mapper.updateValue(user, mapOf("age" to 20))    // 合并覆盖字段
+
+val reader = mapper.readerFor(User::class.java)               // 绑定目标类型
+val fromFile = reader.readValue(File("user.json"))
+val pretty = mapper.writerWithDefaultPrettyPrinter()          // 格式化写出器
+pretty.writeValue(user, File("user.json"))
+```
+
+要点：
+
+- `readTree("null")` 返回 `NullNode.INSTANCE`；`readValue` / `readTree` 支持
+  String / ByteArray / File / Path / InputStream / Reader 六种来源；
+- `updateValue` 对可变 Bean 就地修改并返回同一实例，对 record / 构造器 Bean 返回新实例；
+- 二进制格式支持字节/文件/流重载；文本专用的 `readTree(String)`、`Writer`、
+  `writeValueAsString`、格式化 writer 会抛 `DocumentSerializationException`；
+- Java 可直接通过 `JsonMapper` 等具体类型调用（`DocumentMapper` 显式覆写了这些方法）。
 
 ## 文件与流
 

@@ -205,21 +205,19 @@ class DocumentMapperApiContractTest {
     }
 
     @Test
-    fun reifiedHelpersDelegateToDocumentTypeReference() {
+    fun typedOverloadsDelegateToDocumentTypeReference() {
         val mapper = JsonMapper()
         val node = ObjectNode.of("id" to NumberNode.of(7), "name" to StringNode.of("seven"))
 
-        with(DocumentMapperApi) {
-            val bean: AccountBean = mapper.fromNode(node)
-            assertEquals(7, bean.id)
-            assertEquals("seven", bean.name)
+        val bean: AccountBean = mapper.fromNode(node, DocumentTypeReference.of<AccountBean>())
+        assertEquals(7, bean.id)
+        assertEquals("seven", bean.name)
 
-            val parsed: AccountBean = mapper.parse("""{"id":8,"name":"eight"}""")
-            assertEquals("eight", parsed.name)
+        val parsed: AccountBean = mapper.parse("""{"id":8,"name":"eight"}""", DocumentTypeReference.of<AccountBean>())
+        assertEquals("eight", parsed.name)
 
-            val list: List<Int> = mapper.convert(listOf(1, 2))
-            assertEquals(listOf(1, 2), list)
-        }
+        val list: List<Int> = mapper.convert(listOf(1, 2), DocumentTypeReference.of<List<Int>>())
+        assertEquals(listOf(1, 2), list)
     }
 }
 

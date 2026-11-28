@@ -270,6 +270,7 @@
 | Gitea CI、Maven Central | ❌ 已放弃 |
 | Avro logical type / maxDepth / jpa-hibernate 高级映射 | ✅ 2.4.0 未发布 |
 | DeserializationFeature / @DocumentNaming / @DocumentInclude | ✅ 2.4.0 未发布 |
+| 对象映射便捷 API / reified 迁移到 serialization-kotlin | ✅ 2.4.0 未发布 |
 
 ### 待办清单（2.4.0 之后）
 

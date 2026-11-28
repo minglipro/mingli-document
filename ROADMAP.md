@@ -295,6 +295,8 @@
 - XML / Properties / TOML / CSV maxDepth
 - TOML parseCommented / formatCommented
 - 显式 MR-JAR module-info 扩展到 21 个模块
+- 对象映射便捷 API：readTree / writeTree / readValue / writeValueAs* / readerFor / writer
+- Kotlin reified 扩展迁移到 serialization-kotlin
 - DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES
 - @DocumentNaming / @DocumentInclude 类级与字段级注解
 - DocumentModule 的 converter/serializer/deserializer 注册完善

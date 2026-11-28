@@ -11,6 +11,7 @@ title: 文件与流
 ## 目录
 
 - [API 总览](#api-总览)
+- [对象映射 API](#对象映射-api)
 - [文本格式与二进制格式的规则](#文本格式与二进制格式的规则)
 - [字符串 API](#字符串-api)
 - [字节数组 API](#字节数组-api)
@@ -43,9 +44,80 @@ title: 文件与流
 | 写 | `OutputStream` | `format(value, output)` / `formatPretty(value, output)` |
 | 写 | `Writer` | `format(value, writer)` / `formatPretty(value, writer)` |
 
-Kotlin 还有 reified 扩展（`parse<T>(file)` 等），声明在
-`DocumentMapperApi.Companion` 中，需要时导入
-`com.mingliqiye.document.serialization.DocumentMapperApi.Companion.parse`。
+Kotlin 的 reified 扩展（`parse<T>(file)` 等）位于 `serialization-kotlin` 模块，
+需要添加该依赖并导入：
+
+```kotlin
+import com.mingliqiye.document.serialization.kotlin.parse
+```
+
+## 对象映射 API
+
+`DocumentMapperApi` 在 `parse` / `format` / `toNode` / `fromNode` / `convert` / `merge`
+之上提供了一组对象映射风格（`ObjectMapper` 风格）的便捷命名，全部 **format-agnostic**，
+语义与既有入口一致，只是多了一组来源/目标重载：
+
+| 方向 | 方法 | 等价底层方法 |
+|---|---|---|
+| 树 | `readTree(source)` | 内部按 `parse(source, Any::class.java)` 取节点树（顶层 `null` 返回 `NullNode`） |
+| 树 | `writeTree(node)` / `writeTreeAsBytes(node)` | `format(node)` / `formatBytes(node)` |
+| 树 | `valueToTree(value)` | `toNode(value)` |
+| 树 | `treeToValue(node, Class/DocumentTypeReference)` | `fromNode(node, ...)` |
+| 值 | `readValue(source, Class/DocumentTypeReference)` | `parse(source, ...)` |
+| 值 | `writeValueAsString(value)` / `writeValueAsBytes(value)` | `format` / `formatBytes` |
+| 值 | `updateValue(target, overrides)` | `merge(toNode(overrides), target)` |
+| 值 | `convertValue(source, Class/DocumentTypeReference)` | `convert(source, ...)` |
+| Reader | `readerFor(Class/DocumentTypeReference)` → `DocumentObjectReader<T>` | 绑定目标类型的读取器 |
+| Writer | `writer()` / `writerWithDefaultPrettyPrinter()` → `DocumentObjectWriter` | 固定输出风格的写出器 |
+
+`readTree` / `readValue` 的「来源」覆盖本文所有读取入口：
+
+```kotlin
+val mapper = JsonMapper()
+
+// 与 parse 相同的六种来源
+val fromText = mapper.readTree("""{"name":"小于"}""")
+val fromBytes = mapper.readTree(bytes)
+val fromFile = mapper.readTree(File("user.json"))
+val fromPath = mapper.readTree(Paths.get("user.json"))
+val fromInput = mapper.readTree(inputStream)   // 不关闭流
+val fromReader = mapper.readTree(reader)       // 仅文本格式；不关闭 Reader
+
+// 树 <-> 实体
+val user = mapper.treeToValue(fromText, User::class.java)
+val text = mapper.writeTree(mapper.valueToTree(user))
+val bytesOut = mapper.writeTreeAsBytes(mapper.valueToTree(user))
+
+// 绑定类型的读取器：同一目标类型可复用
+val reader = mapper.readerFor(User::class.java)
+val a = reader.readValue(File("a.json"))
+val b = reader.readValue("""{"name":"b"}""")
+
+// 固定风格的写出器：writeValueAsString / writeValueAsBytes / writeValue(File/Path/OutputStream/Writer)
+val pretty = mapper.writerWithDefaultPrettyPrinter()
+pretty.writeValue(user, File("user.json"))
+pretty.writeValue(user, outputStream)          // 只 flush，不关闭流
+```
+
+语义约定：
+
+- **与既有入口完全等价**：字符集、`maxInputSize`、Node 限制、`$ref` 解析、Bean 校验、
+  原子写等行为都沿用 `parse` / `format` 的规则；
+- **顶层 `null`**：`readTree("null")` 返回 `NullNode.INSTANCE`（`parse("null", Node::class.java)`
+  返回 `null`），便于把结果直接当树使用；
+- **二进制格式**：树/值 API 的字节、文件、流重载可用；文本专用的
+  `readTree(String)`、`writeTree`、`writeValueAsString`、`Writer`、格式化 writer 会抛
+  `DocumentSerializationException`；
+- **Reader/Writer 是轻量包装**：只固定目标类型或输出风格，不提供完整配置能力，
+  读取/写出行为仍由创建它们的 Mapper 决定；
+- **Java 可用**：`DocumentMapper` 显式覆写了这些方法，Java 直接用 `JsonMapper` 等具体
+  类型即可调用；Kotlin 自定义 `DocumentMapperApi` 实现可以依赖接口默认方法，无需改动。
+
+::: tip 什么时候用
+需要「同一种来源 + 同一个目标类型」反复读取时用 `readerFor`；需要固定紧凑/格式化输出
+时用 `writer` / `writerWithDefaultPrettyPrinter`；其余场景直接用 `readTree` / `readValue`
+等便捷方法即可，等价于 `parse` / `format` 系列。
+:::
 
 ## 文本格式与二进制格式的规则
 

@@ -15,6 +15,9 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 - Bean 元数据缓存与访问器
 - Java record、只读属性与构造器注入
 - `merge` 合并到已有对象（`MergePolicy`）
+- 对象映射便捷 API：`readTree` / `readValue` / `writeValueAs*` / `updateValue` /
+  `convertValue` / `readerFor` / `writer`（format-agnostic，`DocumentObjectReader` /
+  `DocumentObjectWriter` 轻量包装）
 - `DocumentTokenReader` / `DocumentTokenWriter`
 - `BinaryDocumentMapper`
 - `NodeTokenReader`
@@ -43,7 +46,142 @@ mapper.formatPretty(value, outputStream)    // 格式化文本写入 OutputStrea
 mapper.formatPretty(value, writer)          // 格式化文本写入 Writer
 mapper.merge(node, target)                    // 合并到已有对象，未出现字段保留
 mapper.merge(node, target, MergePolicy.DEEP)  // 嵌套 Bean 深合并
+
+// 对象映射便捷 API（全部 format-agnostic，语义等价于上面的 parse/format/toNode/fromNode）
+mapper.readTree(text)                          // 文本 -> Node 树（支持 String/ByteArray/File/Path/InputStream/Reader）
+mapper.writeTree(node)                         // Node 树 -> 文本
+mapper.writeTreeAsBytes(node)                  // Node 树 -> 字节
+mapper.valueToTree(user)                       // 等价 toNode
+mapper.treeToValue(node, User::class.java)     // 等价 fromNode
+mapper.readValue(text, User::class.java)       // 等价 parse
+mapper.writeValueAsString(user)                // 等价 format
+mapper.writeValueAsBytes(user)                 // 等价 formatBytes
+mapper.updateValue(user, overrides)            // 覆盖内容合并到已有对象
+mapper.convertValue(source, User::class.java)  // convert 的别名
+mapper.readerFor(User::class.java)             // DocumentObjectReader：绑定目标类型
+mapper.writerWithDefaultPrettyPrinter()        // DocumentObjectWriter：格式化输出
 ```
+
+## 对象映射 API
+
+`DocumentMapperApi` 在既有 `parse` / `format` / `toNode` / `fromNode` / `convert` /
+`merge` 之上提供了一组便捷命名。它们不引入新的格式绑定，也不改变原有语义，只是为了
+迁移与日常使用更直观；所有 `format-*` Mapper（JSON、YAML、XML、CBOR、Avro 等）都可共用。
+
+### 树 API
+
+| 方法 | 说明 |
+|---|---|
+| `readTree(String/ByteArray/File/Path/InputStream/Reader)` | 解析为 `Node` 树；读取规则与 `parse` 一致，顶层 `null` 返回 `NullNode.INSTANCE` |
+| `writeTree(node)` | `Node` 树写为文本，等价 `format(node)` |
+| `writeTreeAsBytes(node)` | `Node` 树写为字节，等价 `formatBytes(node)` |
+| `valueToTree(value)` | 任意对象转树，等价 `toNode(value)` |
+| `treeToValue(node, Class/DocumentTypeReference)` | 树转实体，等价 `fromNode(node, ...)` |
+
+```kotlin
+val tree = mapper.readTree("""{"name":"小于","age":18}""")
+val name = tree.asObject()["name"]?.asString()   // 小于
+val user = mapper.treeToValue(tree, User::class.java)
+val compact = mapper.writeTree(tree)              // {"name":"小于","age":18}
+```
+
+`readTree` 与 `parse(source, Node::class.java)` 的差别只在顶层 `null`：`parse` 返回
+`null`，`readTree` 统一返回 `NullNode.INSTANCE`，便于直接当树使用。同理，
+`treeToValue(NullNode.INSTANCE, User::class.java)` 返回 `null`，可空场景请用可空变量接收。
+
+### 值 API
+
+| 方法 | 说明 |
+|---|---|
+| `readValue(source, Class/DocumentTypeReference)` | 六种来源（`String` / `ByteArray` / `File` / `Path` / `InputStream` / `Reader`）解析为实体，等价 `parse` |
+| `writeValueAsString(value)` | 等价 `format(value)` |
+| `writeValueAsBytes(value)` | 等价 `formatBytes(value)` |
+| `updateValue(target, overrides)` | `toNode(overrides)` 后按 `MergePolicy.REPLACE` 合并到 `target` |
+| `convertValue(source, Class/DocumentTypeReference)` | 等价 `convert(source, ...)` |
+
+`updateValue` 的返回值即合并结果：
+
+```kotlin
+val user = mapper.readValue("""{"name":"a","age":18}""", User::class.java)
+
+val updated = mapper.updateValue(user, mapOf("age" to 20))
+// 可变 Bean：就地修改并返回同一实例；记录/构造器 Bean 返回新实例，必须接收返回值
+```
+
+语义注意事项：
+
+- `overrides` 可以是实体、`Map` 或对象 `Node`；没有出现的字段保留目标对象原值；
+- `overrides` 为 `null`（`NullNode`）或 `target` 为 `null` 时抛
+  `DocumentSerializationException`；
+- 合并规则、深合并与 null 策略与 `merge` 完全一致（详见下文「合并已有对象」）。
+
+### Reader / Writer
+
+`readerFor` / `writer` 是对 Mapper 的轻量包装，只固定「目标类型」或「输出风格」，
+不复制完整配置能力（没有逐字段过滤器、schema 切换等进阶配置）；字符集、输入大小限制、
+`$ref` 解析、未知字段策略等仍然由 Mapper 决定。
+
+| 方法 | 返回 | 说明 |
+|---|---|---|
+| `readerFor(Class)` / `readerFor(DocumentTypeReference)` | `DocumentObjectReader<T>` | 绑定目标类型的读取器 |
+| `writer()` | `DocumentObjectWriter` | 紧凑风格写出器 |
+| `writerWithDefaultPrettyPrinter()` | `DocumentObjectWriter` | 格式化风格写出器 |
+
+```kotlin
+val reader = mapper.readerFor(User::class.java)
+val fromFile = reader.readValue(File("user.json"))
+val fromText = reader.readValue("""{"name":"a"}""")
+
+val addresses = mapper.readerFor(DocumentTypeReference.of<List<Address>>()).readValue(text)
+```
+
+Kotlin reified 版本位于 `serialization-kotlin`：
+
+```kotlin
+import com.mingliqiye.document.serialization.kotlin.readerFor
+import com.mingliqiye.document.serialization.kotlin.parse
+
+val typed: List<User> = mapper.readerFor<List<User>>().readValue(text)
+val user: User = mapper.parse<User>(text)
+```
+
+val writer = mapper.writerWithDefaultPrettyPrinter()
+writer.writeValueAsString(user)
+writer.writeValue(user, File("user.json"))
+writer.writeValue(user, outputStream)   // 只 flush，不关闭流
+writer.writeValue(user, stringWriter)   // 只 flush，不关闭 Writer
+```
+
+`DocumentObjectReader` 的 `readValue` 覆盖 `String` / `ByteArray` / `File` / `Path` /
+`InputStream` / `Reader`；`DocumentObjectWriter` 的 `writeValue` 覆盖 `File` / `Path` /
+`OutputStream` / `Writer`，另有 `writeValueAsString` / `writeValueAsBytes`。
+
+### 与常见对象映射 API 对照
+
+| 常见对象映射库写法 | 本库写法 | 等价底层方法 |
+|---|---|---|
+| `readTree(source)` | `readTree(source)` / `readTree(file)` / `readTree(input)` … | 内部以 `parse(source, Any::class.java)` 取节点，顶层 `null` 返回 `NullNode` |
+| `writeTree(node)` | `writeTree(node)` / `writeTreeAsBytes(node)` | `format(node)` / `formatBytes(node)` |
+| `valueToTree(value)` | `valueToTree(value)` | `toNode(value)` |
+| `treeToValue(node, type)` | `treeToValue(node, type)` | `fromNode(node, type)` |
+| `readValue(source, type)` | `readValue(source, type)` | `parse(source, type)` |
+| `writeValueAsString(value)` | `writeValueAsString(value)` | `format(value)` |
+| `writeValueAsBytes(value)` | `writeValueAsBytes(value)` | `formatBytes(value)` |
+| `updateValue(target, overrides)` | `updateValue(target, overrides)` | `merge(toNode(overrides), target)` |
+| `convertValue(source, type)` | `convertValue(source, type)` | `convert(source, type)` |
+| `readerFor(type)` | `readerFor(type)` | 返回 `DocumentObjectReader<T>` |
+| `writer()` / pretty writer | `writer()` / `writerWithDefaultPrettyPrinter()` | 返回 `DocumentObjectWriter` |
+
+### 兼容与限制
+
+- 树/值 API 全部基于既有入口，`parse` / `format` / `toNode` / `fromNode` 的行为、
+  异常类型、`$ref`、Node 限制、Bean 校验、文件写入选项都保持不变；
+- 二进制格式同样支持树 API 与字节 API；文本专用的 `readTree(String)`、`Writer`、
+  `writeValueAsString`、`writerWithDefaultPrettyPrinter()` 在二进制格式上抛
+  `DocumentSerializationException`；
+- `readTree`/`readValue` 走与 `parse` 相同的 Token/Node 路径，因此不额外改变配置语义；
+- 接口默认方法保证 Kotlin 自定义 `DocumentMapperApi` 实现无需改动；`DocumentMapper`
+  显式覆写全部新方法，Java 直接通过 `JsonMapper` 等具体类型即可调用，无需类型转换。
 
 ## 配置示例
 

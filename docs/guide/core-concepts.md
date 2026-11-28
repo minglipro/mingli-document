@@ -426,7 +426,8 @@ mapper.parse(json, users);
 ```
 
 `parse` / `fromNode` / `convert` 都有接受 `DocumentTypeReference` 的重载；
-Kotlin 还提供了 reified 扩展（位于 `DocumentMapperApi.Companion`），需要时导入。
+Kotlin 的 reified 扩展位于 `serialization-kotlin` 模块的
+`com.mingliqiye.document.serialization.kotlin` 包，需要添加该依赖并导入。
 
 ## 一次解析发生了什么
 

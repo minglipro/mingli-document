@@ -141,6 +141,35 @@ val mapper = JsonMapper.builder()
     .build()
 ```
 
+## Kotlin reified 扩展
+
+依赖 reified 类型参数的 Mapper 扩展函数统一放在本模块：
+
+```kotlin
+import com.mingliqiye.document.serialization.kotlin.parse
+import com.mingliqiye.document.serialization.kotlin.fromNode
+import com.mingliqiye.document.serialization.kotlin.convert
+import com.mingliqiye.document.serialization.kotlin.readerFor
+
+val user: User = mapper.parse<User>(json)
+val list: List<User> = mapper.parse<List<User>>(json)
+
+val node = mapper.readTree(json)
+val fromTree: User = mapper.fromNode<User>(node)
+
+val converted: User = mapper.convert<User>(node)
+val reader: DocumentObjectReader<User> = mapper.readerFor<User>()
+```
+
+这些 API 需要添加：
+
+```kotlin
+implementation("com.mingliqiye.document:serialization-kotlin")
+```
+
+纯 Java 的 `serialization` 模块不包含 reified 扩展；非 reified 的
+`parse(..., DocumentTypeReference)` / `fromNode(..., DocumentTypeReference)` 仍然可用。
+
 ## 限制与不支持场景
 
 以下场景会抛出 `com.mingliqiye.document.serialization.exception.DocumentSerializationException`

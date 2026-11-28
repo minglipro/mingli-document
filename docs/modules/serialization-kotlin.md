@@ -308,6 +308,28 @@ val order = mapper.parse(json, Order::class.java)
    resolver；与 Kotlin resolver 同时存在时，Mapper 会按构建顺序取模块上下文中的
    最后一个（`ModuleSetupContext.setPropertyMetadataResolver` 覆盖）。
 
+## Kotlin reified 扩展
+
+依赖 reified 类型参数的 Mapper 扩展函数放在本模块：
+
+| 扩展 | 说明 |
+|---|---|
+| `DocumentMapperApi.parse<T>(String/ByteArray/File/Path/InputStream/Reader)` | 解析为 `T` |
+| `DocumentMapperApi.fromNode<T>(Node)` | 节点转 `T` |
+| `DocumentMapperApi.convert<T>(Any?)` | 对象转换 |
+| `DocumentMapperApi.readerFor<T>()` | 创建 `DocumentObjectReader<T>` |
+
+```kotlin
+import com.mingliqiye.document.serialization.kotlin.parse
+import com.mingliqiye.document.serialization.kotlin.readerFor
+
+val user: User = mapper.parse<User>(json)
+val list: List<User> = mapper.parse<List<User>>(json)
+val reader = mapper.readerFor<User>()
+```
+
+非 reified 版本位于 `serialization` 的 `DocumentMapperApi`，不需要本模块。
+
 ## 限制与不支持场景
 
 以下场景会抛 `com.mingliqiye.document.serialization.exception.DocumentSerializationException`
