@@ -87,7 +87,8 @@
 - [x] OpenAPI 3.0 生成
 - [x] Bean Validation 集成
 - [x] JDBC 数据库集成
-- [ ] JPA / ORM 集成
+- [x] JPA 实体注解映射（jpa 模块）
+- [ ] Hibernate Session / EntityManager 集成
 
 ---
 
@@ -101,7 +102,7 @@
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
-- [ ] JPMS `module-info`（Multi-Release jar，见 docs/guide/jpms.md）
+- [x] JPMS `module-info`（Multi-Release jar：annotation / exception / core / schema / schema-registry；其余模块待上游依赖修复模块名，见 docs/guide/jpms.md）
 - [x] GraalVM Native Image 配置与 JVM smoke（native 构建需 GraalVM JDK17+）
 
 ---
@@ -247,3 +248,12 @@
 - P2 完成：JDBC、TOML 注释保留、JPMS Automatic-Module-Name、GraalVM 配置
 - Maven Central 实际发布暂缓（额度原因）
 - 显式 module-info / native-image 构建仍需后续 CI 验证
+
+---
+
+## dev 开发状态（未发布）
+
+- JPMS：`annotation` / `exception` / `core` / `schema` / `schema-registry` 五个模块改为
+  Multi-Release JAR，JDK 9+ 使用显式 `module-info`（不再作为自动模块）；JDK 8 字节码、
+  classpath 用法与自动模块名保持不变。其余可发布模块仍为自动模块（`alias-for` 模块名非法），
+  详见 [docs/guide/jpms.md](docs/guide/jpms.md)

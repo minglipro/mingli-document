@@ -1,7 +1,14 @@
+import org.gradle.api.attributes.LibraryElements
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JavaToolchainService
 import org.gradle.plugins.signing.SigningExtension
+import org.gradle.process.CommandLineArgumentProvider
+import java.io.File
 import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -205,6 +212,86 @@ allprojects {
                             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSSS")),
                     ),
                 )
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // JPMS：显式 module-info 的 Multi-Release jar（JDK 9+）
+    // ------------------------------------------------------------------
+    //
+    // 本库主 classes 的目标字节码是 JDK 8，不能直接编译 module-info.java（module-info.class
+    // 是 class file 53 / JDK 9+ 格式）。这里的做法：
+    //   1. 模块把 module-info.java 放在 src/main/java9/，不加入主 source set；
+    //   2. 用 JDK 17 工具链的 javac --release 9 单独编译；用 --patch-module 把已编译的
+    //      主 classes 挂到待编译模块上（否则 javac 会报 exports 的包不存在）；
+    //   3. jar 任务把它放进 META-INF/versions/9/module-info.class，并在清单写
+    //      Multi-Release: true。JDK 8 会把 META-INF/versions/9 当作普通资源忽略，
+    //      JDK 9+ 才会用这里的模块描述替换「自动模块」。
+    //
+    // module path 使用本构建内依赖模块的 jar（它们各自带 Multi-Release module-info）与
+    // 第三方依赖 jar。compileClasspath 默认以 classes 目录消费同构建内的 project 依赖
+    // （compile avoidance），因此这里用 artifactView 重新选择 LibraryElements=jar 的变体；
+    // 依赖模块 jar 的构建由 artifact 的 buildDependencies 保证在本任务之前完成。
+    val java9ModuleInfoSource = file("src/main/java9/module-info.java")
+    if (automaticModuleName != null && java9ModuleInfoSource.isFile) {
+        val moduleName = automaticModuleName
+        // 一致性校验：module-info.java 里的模块名必须与 Automatic-Module-Name 相同。
+        val declaredModuleName = java9ModuleInfoSource.readText().lineSequence()
+            .map { it.trim() }
+            .firstOrNull { it.startsWith("module ") }
+            ?.removePrefix("module ")
+            ?.substringBefore(' ')
+            ?.trim()
+        require(declaredModuleName == moduleName) {
+            "src/main/java9/module-info.java declares module '$declaredModuleName' " +
+                "but Automatic-Module-Name is '$moduleName' (project ${project.path})."
+        }
+
+        val java9ModuleInfoClassesDir = layout.buildDirectory.dir("classes/java9ModuleInfo")
+        val java17Compiler = extensions.getByType<JavaToolchainService>().compilerFor {
+            languageVersion.set(JavaLanguageVersion.of(17))
+        }
+        val java9ModulePath = configurations.named("compileClasspath").get().incoming.artifactView {
+            attributes {
+                attribute(
+                    LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                    objects.named(LibraryElements::class.java, LibraryElements.JAR),
+                )
+            }
+        }.files
+        val mainClassesDirs = extensions.getByType<SourceSetContainer>().named("main").map { it.output.classesDirs }
+
+        val compileJava9ModuleInfo = tasks.register<JavaCompile>("compileJava9ModuleInfo") {
+            group = "build"
+            description = "Compiles src/main/java9/module-info.java with --release 9 for the Multi-Release jar."
+            source(java9ModuleInfoSource)
+            dependsOn(tasks.named("classes"))
+            dependsOn(java9ModulePath)
+            javaCompiler.set(java17Compiler)
+            destinationDirectory.set(java9ModuleInfoClassesDir)
+            classpath = files()
+            options.release.set(9)
+            options.encoding = "UTF-8"
+            options.compilerArgs.add("-proc:none")
+            options.compilerArgumentProviders.add(CommandLineArgumentProvider {
+                val patchPath = mainClassesDirs.get().files
+                    .filter { it.exists() }
+                    .joinToString(File.pathSeparator)
+                listOf(
+                    "--module-path", java9ModulePath.asPath,
+                    "--patch-module", "$moduleName=$patchPath",
+                )
+            })
+        }
+
+        tasks.named<Jar>("jar") {
+            dependsOn(compileJava9ModuleInfo)
+            manifest {
+                attributes("Multi-Release" to "true")
+            }
+            from(compileJava9ModuleInfo) {
+                into("META-INF/versions/9")
             }
         }
     }

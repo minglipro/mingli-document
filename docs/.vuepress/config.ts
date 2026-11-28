@@ -60,7 +60,6 @@ export default defineUserConfig({
             '/guide/jpms.md',
             '/guide/graalvm.md',
             '/guide/migration.md',
-            '/guide/jpms.md',
             '/guide/faq.md',
           ],
         },
@@ -99,6 +98,7 @@ export default defineUserConfig({
             '/modules/schema-registry.md',
             '/modules/validation.md',
             '/modules/jdbc.md',
+            '/modules/jpa.md',
           ],
         },
         {

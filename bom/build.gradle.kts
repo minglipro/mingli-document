@@ -18,6 +18,7 @@ dependencies {
         api(project(":schema-registry"))
         api(project(":validation"))
         api(project(":jdbc"))
+        api(project(":jpa"))
         api(project(":serialization"))
         api(project(":serialization-kotlin"))
         api(project(":codegen"))

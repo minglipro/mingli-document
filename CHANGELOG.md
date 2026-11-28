@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.3.0（未发布）
+
+### 新增
+
+- `jpa` 模块：JPA / Hibernate 实体注解映射，实体 ↔ Node
+- 显式 `module-info` + Multi-Release JAR：annotation / exception / core / schema / schema-registry
+
+### JPMS
+
+- JDK 8 继续使用 classpath
+- JDK 9+ 使用 `META-INF/versions/9/module-info.class`
+- 其余模块依赖 alias-for，仍为自动模块
+
 ## 2.2.0
 
 ### 新增

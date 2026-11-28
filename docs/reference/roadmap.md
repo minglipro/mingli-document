@@ -120,10 +120,12 @@
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`）
-- [ ] JPMS `module-info`（Multi-Release jar）
+- [x] JPMS `module-info`（Multi-Release jar：`annotation` / `exception` / `core` /
+  `schema` / `schema-registry`；其余模块待上游依赖修复模块名，见
+  [JPMS 指南](../guide/jpms.md)）
 - [ ] GraalVM Native Image
 
-> 未完成项：Gitea CI、JPMS `module-info`、GraalVM Native Image。
+> 未完成项：Gitea CI、其余模块的 JPMS `module-info`、GraalVM Native Image。
 
 ## 批次计划
 
@@ -278,7 +280,7 @@
 | 7 | Bean Validation 集成 | 阶段 5 |
 | 8 | 数据库 / ORM 集成 | 阶段 5 |
 | 9 | Gitea CI | 阶段 6 |
-| 10 | JPMS `module-info`（自动模块名已完成，见 [JPMS 指南](../guide/jpms.md)） | 阶段 6 |
+| 10 | 其余模块的 JPMS `module-info`（5 个基础模块已完成 Multi-Release 显式模块，见 [JPMS 指南](../guide/jpms.md)） | 阶段 6 |
 | 11 | GraalVM Native Image | 阶段 6 |
 | 12 | Maven Central 实际发布（需凭据/GPG） | 阶段 6 |
 
