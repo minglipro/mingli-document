@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/.vuepress/public/logo-dark.svg" />
+    <img src="docs/.vuepress/public/logo.svg" width="120" alt="mingli-document logo" />
+  </picture>
+</p>
+
 # mingli-document
 
 一个格式无关的 Java / Kotlin 文档处理库。

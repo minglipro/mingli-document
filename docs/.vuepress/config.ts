@@ -11,6 +11,8 @@ export default defineUserConfig({
   head: [
     ['meta', { name: 'theme-color', content: '#3eaf7c' }],
     ['meta', { name: 'description', content: 'mingli-document 官方文档' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/mingli-document/favicon.svg' }],
+    ['link', { rel: 'apple-touch-icon', href: '/mingli-document/logo-1024.png' }],
   ],
   bundler: viteBundler({
     viteOptions: {
@@ -18,7 +20,8 @@ export default defineUserConfig({
     },
   }),
   theme: defaultTheme({
-    logo: false,
+    logo: '/logo.svg',
+    logoDark: '/logo-dark.svg',
     repo: 'minglipro/mingli-document',
     docsDir: 'docs',
     editLink: true,
