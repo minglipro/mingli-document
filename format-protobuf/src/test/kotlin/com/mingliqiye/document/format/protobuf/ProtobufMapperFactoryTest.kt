@@ -30,4 +30,14 @@ class ProtobufMapperFactoryTest {
         val restored = mapper.parse(mapper.formatBytes(node), Node::class.java)
         assertEquals(node, restored)
     }
+
+    @Test
+    fun explicitDescriptorOverridesMapperDescriptor() {
+        val mapper = ProtobufMapper(ProtobufTestFixtures.proto3Sample)
+        val descriptor = ProtobufTestFixtures.extendedExtra
+        val node = ObjectNode.of("value" to StringNode.of("x"))
+
+        val bytes = mapper.formatBytes(node, descriptor)
+        assertEquals(node, mapper.parseToNode(bytes, descriptor))
+    }
 }

@@ -188,4 +188,14 @@ val orderMapper = factory.mapper(orderDescriptor)
 
 Mapper 是线程安全的读对象，建议按 Descriptor 复用，而不是每次调用都新建。
 Descriptor / FileDescriptor / extension 注册表也应只构建一次。
+
+也可以只创建一个 Mapper，在 parse/format 时传入本次使用的 Descriptor：
+
+```kotlin
+val mapper = ProtobufMapper(defaultDescriptor)
+val bytes = mapper.formatBytes(value, currentDescriptor)
+val node = mapper.parseToNode(bytes, currentDescriptor)
+val bean = mapper.parse(bytes, currentDescriptor, User::class.java)
+```
+
 '

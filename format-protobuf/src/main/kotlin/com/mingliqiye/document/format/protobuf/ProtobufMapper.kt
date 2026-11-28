@@ -1,6 +1,8 @@
 package com.mingliqiye.document.format.protobuf
 
 import com.google.protobuf.Descriptors.Descriptor
+import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 
@@ -104,6 +106,43 @@ public class ProtobufMapper @JvmOverloads constructor(
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         extensions: ProtobufExtensionRegistry,
     ) : this(descriptor, unknownFieldPolicy, 0, extensions)
+
+    /**
+     * 使用显式 Descriptor 将字节解析为 Node。
+     *
+     * 允许同一个 Mapper 实例处理多个 message 类型，无需为每个 Descriptor 创建 Mapper。
+     *
+     * @param source Protobuf 二进制
+     * @param descriptor 本次解析使用的 message Descriptor
+     * @return 文档树
+     */
+    public fun parseToNode(source: ByteArray, descriptor: Descriptor): Node {
+        checkInputSize(source.size.toLong())
+        return ProtobufWireCodec.decode(descriptor, source, unknownFieldPolicy, maxDepth, extensions)
+    }
+
+    /**
+     * 使用显式 Descriptor 将字节解析为 Bean。
+     */
+    public fun <T> parse(source: ByteArray, descriptor: Descriptor, targetType: Class<T>): T = fromNode(parseToNode(source, descriptor), targetType)
+
+    /**
+     * 使用显式 Descriptor 将字节解析为泛型 Bean。
+     */
+    public fun <T> parse(
+        source: ByteArray,
+        descriptor: Descriptor,
+        targetType: DocumentTypeReference<T>,
+    ): T = fromNode(parseToNode(source, descriptor), targetType)
+
+    /**
+     * 使用显式 Descriptor 将值写成 Protobuf 字节。
+     *
+     * @param value Java 实体、Map、集合或 Node
+     * @param descriptor 本次写出使用的 message Descriptor
+     * @return Protobuf 二进制
+     */
+    public fun formatBytes(value: Any?, descriptor: Descriptor): ByteArray = ProtobufWireCodec.encode(descriptor, toNode(value), unknownFieldPolicy, extensions)
 
     public companion object {
 
