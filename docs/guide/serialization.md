@@ -122,6 +122,8 @@ Java 类型与 Node 的对应（写出方向）：
 | 注解 | 目标 | 作用 |
 |---|---|---|
 | `@DocumentName("name")` | 字段 / 属性 / getter / 构造参数 | 指定文档字段名 |
+| `@DocumentNaming(DocumentNamingStrategy.SnakeCaseStrategy)` | 类 / 字段 / getter / 构造参数 | 类级/字段级命名策略覆盖 |
+| `@DocumentInclude(DocumentIncludePolicy.NON_NULL)` | 类 / 字段 / getter / 构造参数 | 类级/字段级写出策略覆盖 |
 | `@DocumentIgnore` | 字段 / 属性 / getter | 忽略该属性 |
 | `@DocumentConverter(Xxx::class)` | 字段 / getter / setter | 字段级**双向**转换器 |
 | `@DocumentSerializer(Xxx::class)` | 字段 / getter / setter | 字段级序列化器 |
@@ -188,8 +190,10 @@ class Event {
 
 1. 字段级 `@DocumentName`
 2. 构造参数上的 `@DocumentName`（`@DocumentCreator` / Kotlin data class）
-3. `DocumentMapperConfig.namingStrategy`（默认 `AS_IS`）
-4. Java 属性名
+3. 字段/getter 上的 `@DocumentNaming`（字段级命名策略）
+4. 类上的 `@DocumentNaming`（类级命名策略）
+5. `DocumentMapperConfig.namingStrategy`（默认 `AS_IS`）
+6. Java 属性名
 
 ```kotlin
 import com.mingliqiye.document.serialization.DocumentMapperConfig
@@ -209,7 +213,29 @@ class User {
 mapper.format(User().apply { userName = "x" }) // {"user_name":"x"}
 ```
 
-`PropertyNamingStrategy` 五种取值：
+### 类级 / 字段级命名覆盖
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentNaming
+import com.mingliqiye.document.annotation.DocumentNamingStrategy
+import com.mingliqiye.document.annotation.DocumentNamingStrategy.KebabCaseStrategy
+import com.mingliqiye.document.annotation.DocumentNamingStrategy.SnakeCaseStrategy
+
+@DocumentNaming(SnakeCaseStrategy)      // 类级：该类所有未显式命名的属性
+class Account {
+    var userName: String = ""           // user_name
+
+    @field:DocumentNaming(KebabCaseStrategy)  // 字段级覆盖类级
+    var displayName: String = ""        // display-name
+}
+```
+
+- `@DocumentName` 始终最高优先级，不受 `@DocumentNaming` 影响；
+- `@DocumentNaming` 支持 Java getter（`FUNCTION` target）与 `@DocumentCreator` 构造参数；
+- Kotlin 使用 `@field:` / `@get:` 等 use-site target；
+- 类级策略对嵌套 Bean、集合元素分别按各自声明类型生效。
+
+`PropertyNamingStrategy` 五种取值（`DocumentNamingStrategy` 一一对应）：
 
 | 策略 | `userName` -> | `URLValue` -> |
 |---|---|---|
@@ -503,6 +529,57 @@ class User { var name: String? = null }
 mapper.format(User()) // {}
 ```
 
+### 写出策略（@DocumentInclude）
+
+`@DocumentInclude` 可标注在类或字段/getter 上，按属性覆盖全局 `writeNulls`：
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentInclude
+import com.mingliqiye.document.annotation.DocumentIncludePolicy
+import com.mingliqiye.document.annotation.DocumentIncludePolicy.NON_EMPTY
+
+@DocumentInclude(NON_EMPTY)
+class Order {
+    var id: String = ""               // 空字符串不写出
+
+    @field:DocumentInclude(DocumentIncludePolicy.ALWAYS)
+    var remark: String? = null        // 总是写出 null
+}
+```
+
+| 策略 | 行为 |
+|---|---|
+| `ALWAYS` | 总是写出（包括 `null`） |
+| `NON_NULL` | `null` 不写出 |
+| `NON_EMPTY` | `null`/空字符串/空集合/空 `Map`/空数组不写出 |
+| `USE_DEFAULTS` | 回退到下一优先级，最终使用全局 `writeNulls` |
+
+优先级：字段级 > 类级 > 全局 `writeNulls`；只影响序列化，反序列化不受影响；
+嵌套对象与集合元素按各自类型的策略处理。
+
+### null → 基本类型（DeserializationFeature）
+
+默认行为：文档 `null` 赋给 Java 基本类型时使用 Java 默认值（`0` / `false`），
+不抛异常。需要严格校验时开启 `FAIL_ON_NULL_FOR_PRIMITIVES`：
+
+```kotlin
+import com.mingliqiye.document.serialization.DocumentMapperConfig
+
+val mapper = JsonMapper(
+    DocumentMapperConfig.builder()
+        .failOnNullForPrimitives(true)
+        .build(),
+)
+
+class User { var age: Int = 0 }
+
+mapper.parse("""{"age":null}""", User::class.java)
+// -> DocumentSerializationException: Cannot assign null to primitive type int at $.age
+```
+
+覆盖字段注入、`@DocumentCreator` 构造参数、Builder 属性、Java record 组件与基本类型
+数组元素；`fromNode` / `fromTokens` / `parse` 均生效。
+
 ### 缺少字段
 
 `MissingFieldPolicy` 控制「文档里没有这个属性」时的行为：
@@ -734,10 +811,16 @@ val mapper = JsonMapper.builder()
     .build()
 ```
 
-- 模块按 `moduleName` 去重（同名模块后者覆盖）；
-- 转换器合并顺序：先收集 Builder 上直接 `addConverter` 的项，再合并各模块
-  `setupModule` 注册的项；同一类型 key 冲突时**模块注册覆盖 Builder 注册**。
-  实际使用中应避免对同一类型同时注册，以免依赖合并顺序；
+- 模块按 `moduleName` 去重（同名模块后者覆盖）；多个模块注册同一类型时后注册模块
+  覆盖先注册模块；
+- 转换器合并顺序：先收集 Builder 上直接 `addConverter` / `addSerializer` /
+  `addDeserializer` 的项，再合并各模块 `setupModule` 注册的项；同一类型 key 冲突时
+  **模块注册覆盖 Builder 注册**。实际使用中应避免对同一类型同时注册，以免依赖合并
+  顺序；
+- 模块注册的 `ObjectInstantiator` / `PropertyMetadataResolver` 优先于 Builder 上直接
+  `.objectInstantiator(...)` / `.propertyMetadataResolver(...)` 设置的实例；
+- 不需要模块时也可直接注册：`addConverter` / `addSerializer` / `addDeserializer`
+  与 `.propertyMetadataResolver(resolver)`；
 - 内置示例：`kotlinModule()` 就是通过模块注册 `ObjectInstantiator`、
   `PropertyMetadataResolver` 与 value class 转换器。
 

@@ -349,6 +349,8 @@ val fromReader = mapper.parse(StringReader(writer.toString()), User::class.java)
 | 注解 | 作用 |
 |---|---|
 | `@DocumentName("name")` | 指定文档字段名 |
+| `@DocumentNaming(DocumentNamingStrategy.SnakeCaseStrategy)` | 类级/字段级命名策略覆盖 |
+| `@DocumentInclude(DocumentIncludePolicy.NON_NULL)` | 类级/字段级 null/空值写出策略 |
 | `@DocumentIgnore` | 忽略字段 |
 | `@DocumentConverter(XxxConverter::class)` | 字段专用双向转换器 |
 | `@DocumentSerializer(XxxSerializer::class)` | 字段专用序列化器 |
@@ -386,6 +388,7 @@ val config = DocumentMapperConfig.builder()
     .missingFieldPolicy(MissingFieldPolicy.FAIL)
     .failOnUnknownFields(true)
     .writeNulls(false)
+    .failOnNullForPrimitives(true) // 可选：null -> 基本类型抛异常（默认关闭）
     .build()
 ```
 

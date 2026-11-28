@@ -31,7 +31,7 @@ Mapper 构造          JsonMapper(config) / YamlMapper(config) ...
 Mapper Builder       JsonMapper.builder().config(config).build()
 格式专属 Config       JsonMapper(JsonConfig.builder()...build())
 模块                  addModule(...)（kotlinModule、代码生成模块等）
-字段注解              优先级高于配置（@DocumentName 覆盖 namingStrategy 等）
+类级/字段级注解       优先级高于配置（@DocumentName、@DocumentNaming、@DocumentInclude 等）
 ```
 
 同一个配置对象可以传给多个 Mapper；配置构建完成后不可变。
@@ -56,6 +56,7 @@ Mapper Builder       JsonMapper.builder().config(config).build()
 | `resolveReferences` | `Boolean` | `false` | 反序列化前解析本地/远程 `$ref` |
 | `writeReferences` | `Boolean` | `false` | `toNode` 时按对象身份写出 `$ref` |
 | `remoteReferenceResolver` | `RemoteReferenceResolver?` | `null` | 远程 `$ref` 解析器；未配置时远程引用报错 |
+| `deserializationFeatures` | `Set<DeserializationFeature>` | 空集合（全部关闭） | 显式开启的反序列化特性，如 `FAIL_ON_NULL_FOR_PRIMITIVES` |
 | `fieldConverters`（内部） | `Map<FieldKey, Converter>` | 空 | 通过 `field(...)` 注册的字段级转换器 |
 | `subtypeRegistries`（内部） | `Map<Class, SubtypeRegistry>` | 空 | 通过 `subtype(...)` 注册的多态绑定 |
 
@@ -125,6 +126,9 @@ val config = DocumentMapperConfig.builder()
 | `resolveReferences(resolve)` | 解析 `$ref` |
 | `writeReferences(write)` | 写出对象身份 `$ref` |
 | `remoteReferenceResolver(resolver)` | 远程 `$ref` 解析器 |
+| `enable(feature)` / `disable(feature)` | 开启 / 关闭反序列化特性 |
+| `configure(feature, enabled)` | 按布尔值设置反序列化特性 |
+| `failOnNullForPrimitives(fail)` | 便捷设置 `FAIL_ON_NULL_FOR_PRIMITIVES` |
 | `build()` | 构建不可变配置 |
 
 `DocumentMapperConfig.empty()` 返回全默认空配置。
@@ -142,6 +146,7 @@ val config = DocumentMapperConfig.builder()
 | 输入大小 / 深度 / 节点数 / 字符串长度 | 不限制 |
 | `$ref` 解析 / 写出 | 关闭 |
 | 远程 `$ref` | 禁用 |
+| 反序列化特性 | 全部关闭（`null` → 基本类型使用默认值） |
 | 多态 | 未注册 |
 | JSON 注释 | 允许（`allowComments` 默认 true） |
 | JSON 重复 key | `LAST_WINS` |
@@ -562,6 +567,102 @@ val config = DocumentMapperConfig.builder()
 
 `field(declaringClass, name, converter)` 把转换器绑定到「声明类 + Java 属性名」。
 优先级低于字段注解、高于全局注册的转换器。
+
+## 反序列化特性（DeserializationFeature）
+
+Jackson 风格的特性开关，默认全部关闭（与 Jackson 默认一致）：
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `FAIL_ON_NULL_FOR_PRIMITIVES` | 关闭 | 开启后 `null` → Java 基本类型抛 `DocumentSerializationException`（含路径与类型）；关闭时使用基本类型默认值 |
+
+```kotlin
+import com.mingliqiye.document.serialization.DeserializationFeature
+import com.mingliqiye.document.serialization.DocumentMapperConfig
+
+val strict = DocumentMapperConfig.builder()
+    .failOnNullForPrimitives(true)                              // 便捷方法
+    // 等价：
+    // .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+    // .configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true)
+    .build()
+
+val config = DocumentMapperConfig.builder()
+    .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+    .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+    .build()
+
+config.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)        // false
+config.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true)  // true
+```
+
+- 覆盖 `fromNode` / `fromTokens` / `parse` 与文件、流入口；
+- 覆盖字段注入、`@DocumentCreator` 构造参数、Builder 属性、Java record 组件、
+  基本类型数组元素；
+- 特性集合随复制构造和格式专属 `Config`（`JsonConfig` 等）一起传递；
+- 默认关闭，因此升级不改变既有行为。
+
+## 类级 / 字段级命名（@DocumentNaming）
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentNaming
+import com.mingliqiye.document.annotation.DocumentNamingStrategy.KebabCaseStrategy
+import com.mingliqiye.document.annotation.DocumentNamingStrategy.SnakeCaseStrategy
+
+@DocumentNaming(SnakeCaseStrategy)
+class User {
+    var userName: String = ""       // user_name
+
+    @field:DocumentNaming(KebabCaseStrategy)
+    var displayName: String = ""    // display-name
+
+    @field:DocumentName("custom")   // 最高优先级
+    var explicit: String = ""
+}
+```
+
+优先级（从高到低）：
+
+```text
+@DocumentName > 字段级 @DocumentNaming > 类级 @DocumentNaming
+  > 全局 namingStrategy
+```
+
+`DocumentNamingStrategy` 取值：`AsIsStrategy`、`SnakeCaseStrategy`、`KebabCaseStrategy`、
+`UpperCamelStrategy`、`LowerCamelStrategy`。
+
+## 类级 / 字段级写出（@DocumentInclude）
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentInclude
+import com.mingliqiye.document.annotation.DocumentIncludePolicy
+import com.mingliqiye.document.annotation.DocumentIncludePolicy.NON_EMPTY
+
+@DocumentInclude(NON_EMPTY)
+class Order {
+    var id: String = ""
+
+    @field:DocumentInclude(DocumentIncludePolicy.ALWAYS)
+    var remark: String? = null
+}
+```
+
+| 策略 | 行为 |
+|---|---|
+| `ALWAYS` | 总是写出（包括 `null`） |
+| `NON_NULL` | `null` 不写出 |
+| `NON_EMPTY` | `null`/空字符串/空集合/空 `Map`/空数组不写出 |
+| `USE_DEFAULTS` | 回退到下一优先级，最终使用全局 `writeNulls` |
+
+优先级（从高到低）：
+
+```text
+字段级 @DocumentInclude > 类级 @DocumentInclude > 全局 writeNulls
+```
+
+- 只影响序列化，反序列化不受影响；
+- 嵌套对象与集合元素分别按各自类型的策略处理；
+- `toNode` 与流式写出（`format` 等）行为一致。
 
 ## 配置的不可变性与线程安全
 

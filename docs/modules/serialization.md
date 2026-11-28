@@ -19,6 +19,7 @@
 | 构建器 / 配置 / 策略 | `DocumentMapperBuilder`、`DocumentMapperConfig(Builder)`、`PropertyNamingStrategy`、`MissingFieldPolicy`、`MergePolicy` |
 | 转换器 / 模块 | `DocumentBaseConverter`、`DocumentBaseSerializer`、`DocumentBaseDeserializer`、`DocumentModule`、`ModuleSetupContext` |
 | 字段元数据 / 扩展实例化 / 多态 / 引用 | `DocumentProperty`、`PropertyMetadataResolver`、`ObjectInstantiator`、`SubtypeRegistry`、`RemoteReferenceResolver` |
+| 反序列化特性 | `DeserializationFeature`（`FAIL_ON_NULL_FOR_PRIMITIVES`） |
 | Token / 流式 | `DocumentTokenType`、`DocumentToken`、`DocumentTokenReader/Writer`、`DocumentValueReader/Writer`、`NodeTokenReader` |
 | 代码生成（运行期/源码） | `DocumentAccessorCodegen`、`DocumentRuntimeCodecFactory`、`DocumentCodecSourceGenerator` |
 | 异常 | `DocumentSerializationException` |
@@ -141,6 +142,7 @@ val config = DocumentMapperConfig.builder()
 | `maxInputSize` / `maxStringLength` / `maxNodeDepth` / `maxNodeCount` | `Long/Int` | `0`（不限） | 输入字节、字符串长度、树深度、节点数限制 |
 | `resolveReferences` / `writeReferences` | `Boolean` | `false` | 输入解析 `$ref` / 输出对象身份 `$ref` |
 | `remoteReferenceResolver` | `RemoteReferenceResolver?` | `null` | 远程 `$ref` 解析器；`null` 时远程引用报错 |
+| `deserializationFeatures` | `Set<DeserializationFeature>` | 空集合 | 显式开启的反序列化特性（`FAIL_ON_NULL_FOR_PRIMITIVES` 等） |
 
 ### DocumentMapperConfigBuilder
 
@@ -156,9 +158,38 @@ val config = DocumentMapperConfig.builder()
 | `fileCharset(charset)` / `atomicFileWrite(boolean)` / `createParentDirectories(boolean)` | 文件读写 |
 | `maxInputSize(long)` / `maxStringLength(int)` / `maxNodeDepth(int)` / `maxNodeCount(long)` | 安全限制；负数抛 `IllegalArgumentException` |
 | `resolveReferences(boolean)` / `writeReferences(boolean)` / `remoteReferenceResolver(resolver)` / `build()` | `$ref` / 生成不可变配置 |
+| `enable(feature)` / `disable(feature)` / `configure(feature, enabled)` | 反序列化特性开关 |
+| `failOnNullForPrimitives(fail)` | 便捷设置 `FAIL_ON_NULL_FOR_PRIMITIVES` |
 
 `DocumentMapperConfig.empty()` 提供全默认配置；各格式的 `XxxConfig` 继承
-`DocumentMapperConfig`，在拷贝构造中保留通用配置。
+`DocumentMapperConfig`，在拷贝构造中保留通用配置（含 `deserializationFeatures`）。
+
+## DeserializationFeature
+
+默认全部关闭（与 Jackson 默认一致）：
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `FAIL_ON_NULL_FOR_PRIMITIVES` | 关闭 | 开启后 `null` → Java 基本类型（字段注入/构造参数/Builder/record/基本类型数组元素）抛 `DocumentSerializationException`；关闭时使用基本类型默认值 |
+
+```kotlin
+val strict = DocumentMapperConfig.builder()
+    .failOnNullForPrimitives(true)
+    .build()
+strict.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES) // true
+```
+
+## 类级/字段级注解
+
+`serialization` 识别两个覆盖型注解（定义在 `annotation` 模块）：
+
+| 注解 | 覆盖对象 | 优先级 |
+|---|---|---|
+| `@DocumentNaming` | 字段名 | `@DocumentName` > 字段级 > 类级 > 全局 `namingStrategy` |
+| `@DocumentInclude` | 写出策略 | 字段级 > 类级 > 全局 `writeNulls`（`ALWAYS` / `NON_NULL` / `NON_EMPTY` / `USE_DEFAULTS`） |
+
+详见 [注解参考](../reference/annotations.md#documentnaming) 与
+[Bean 序列化](../guide/serialization.md)。
 
 ## 策略枚举
 
@@ -331,10 +362,14 @@ val mapper = JsonMapper.builder()
     .build()
 ```
 
-- `addModule` 以 `moduleName` 去重；模块注册项在 Builder 之后 `putAll`，会覆盖同名项；
+- `addModule` / `addModules` 以 `moduleName` 去重：同名模块后者覆盖；模块注册项在
+  Builder 直接注册之后合并，**模块注册覆盖直接注册**；后注册模块覆盖先注册模块；
+- 模块可通过 `context.addConverter` / `addSerializer` / `addDeserializer` 注册三种
+  转换器，分别进入双向/序列化/反序列化注册表；
 - `ObjectInstantiator` 接管无无参构造器的类型；`PropertyMetadataResolver` 补充 Java
-  反射不可见的属性注解；
-- 转换器查找优先级：字段注解（单向 > 双向）> 全局注册 > 内置映射。
+  反射不可见的属性注解；模块注册的实例优先于 Builder 上
+  `.objectInstantiator(...)` / `.propertyMetadataResolver(...)` 直接设置；
+- 转换器查找优先级：字段注解（单向 > 双向）> 模块/Builder 注册 > 内置映射。
 
 ## 示例：完整流程
 

@@ -58,6 +58,14 @@ public open class DocumentMapperConfig protected constructor(
      * [com.mingliqiye.document.serialization.exception.DocumentSerializationException]。
      */
     public val beanValidator: DocumentBeanValidator? = null,
+    /**
+     * 显式开启的反序列化特性集合；默认空集合，即所有特性保持关闭
+     * （与 Jackson 默认配置一致）。
+     *
+     * 通过 [DocumentMapperConfigBuilder.enable] / [DocumentMapperConfigBuilder.configure]
+     * 等 API 配置，查询使用 [isEnabled]。复制构造与格式专属 Config 都会携带该集合。
+     */
+    public val deserializationFeatures: Set<DeserializationFeature> = emptySet(),
 ) {
 
     private val subtypeRegistryMap: SubtypeRegistries = SubtypeRegistries(subtypeRegistries)
@@ -83,7 +91,27 @@ public open class DocumentMapperConfig protected constructor(
         other.remoteReferenceResolver,
         other.subtypeRegistries,
         other.beanValidator,
+        other.deserializationFeatures,
     )
+
+    /**
+     * 指定反序列化特性是否被显式开启。
+     *
+     * @param feature 反序列化特性
+     * @return 显式开启时返回 `true`
+     */
+    public fun isEnabled(feature: DeserializationFeature): Boolean = feature in deserializationFeatures
+
+    /**
+     * 指定反序列化特性是否开启；未显式开启时返回 [default]。
+     *
+     * 用于将来引入默认开启的特性：配置未显式提及该特性时由调用方决定默认值。
+     *
+     * @param feature 反序列化特性
+     * @param default 未显式配置时的默认值
+     * @return 显式开启返回 `true`，否则返回 [default]
+     */
+    public fun isEnabled(feature: DeserializationFeature, default: Boolean): Boolean = if (feature in deserializationFeatures) true else default
 
     internal fun fieldConverter(property: DocumentProperty): DocumentBaseConverter<*>? = fieldConverters[FieldKey(property.declaringClass, property.name)]
 
@@ -138,6 +166,7 @@ public open class DocumentMapperConfig protected constructor(
             remoteReferenceResolver: RemoteReferenceResolver? = null,
             subtypes: SubtypeRegistries = SubtypeRegistries.EMPTY,
             beanValidator: DocumentBeanValidator? = null,
+            deserializationFeatures: Set<DeserializationFeature> = emptySet(),
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
             missingFieldPolicy,
@@ -156,6 +185,7 @@ public open class DocumentMapperConfig protected constructor(
             remoteReferenceResolver,
             subtypes.toMap(),
             beanValidator,
+            deserializationFeatures,
         )
     }
 }

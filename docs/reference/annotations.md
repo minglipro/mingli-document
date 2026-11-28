@@ -4,7 +4,7 @@
 `serialization` 与各 `format-*` 模块在运行时读取。通常由依赖传递引入，无需单独声明：
 
 ```kotlin
-implementation("com.mingliqiye.document:annotation:2.3.0")
+implementation("com.mingliqiye.document:annotation:2.4.0")
 ```
 
 ## 总表
@@ -12,6 +12,8 @@ implementation("com.mingliqiye.document:annotation:2.3.0")
 | 注解 | 保留 | 目标（`@Target`） | 属性 | 作用 |
 |---|---|---|---|---|
 | `@DocumentName` | RUNTIME | FIELD、PROPERTY、FUNCTION、VALUE_PARAMETER | `value: String` | 文档字段名 |
+| `@DocumentNaming` | RUNTIME | CLASS、FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION、VALUE_PARAMETER | `value: DocumentNamingStrategy` | 类级/字段级命名策略覆盖 |
+| `@DocumentInclude` | RUNTIME | CLASS、FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION、VALUE_PARAMETER | `value: DocumentIncludePolicy` | 类级/字段级写出策略覆盖 |
 | `@DocumentIgnore` | RUNTIME | FIELD、PROPERTY、FUNCTION | — | 忽略字段 |
 | `@DocumentConverter` | RUNTIME | FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION | `KClass<out DocumentBaseConverter<*>>` | 字段双向转换 |
 | `@DocumentSerializer` | RUNTIME | 同上 | `KClass<out DocumentBaseSerializer<*>>` | 字段单向序列化 |
@@ -55,14 +57,19 @@ public interface DocumentBaseDeserializer<T> : annotation.DocumentBaseDeserializ
 ```text
 @DocumentSerializer / @DocumentDeserializer（单向，最高）
   > @DocumentConverter（字段级双向）
-  > 全局注册（DocumentMapperBuilder.addConverter/...）
+  > 模块注册的转换器（DocumentModule / ModuleSetupContext）
+  > Builder 直接注册（DocumentMapperBuilder.addConverter/...）
   > DocumentMapperConfigBuilder.field(...)
   > 内置 Bean / 标量映射
 ```
 
-显式 `@DocumentName` 优先于命名策略；`typeProperty(...)` 优先于
-`@DocumentTypeInfo.property`；Kotlin 属性注解默认落字段，需 getter/setter 时用
-`@get:` / `@set:`，构造参数用 `@param:`。
+字段名：`@DocumentName` > 字段级 `@DocumentNaming` > 类级 `@DocumentNaming` >
+全局 `namingStrategy`。
+
+写出策略：字段级 `@DocumentInclude` > 类级 `@DocumentInclude` > 全局 `writeNulls`。
+
+其他优先级：`typeProperty(...)` 优先于 `@DocumentTypeInfo.property`；Kotlin 属性注解
+默认落字段，需 getter/setter 时用 `@get:` / `@set:`，构造参数用 `@param:`。
 ---
 
 ## @DocumentName
@@ -84,6 +91,80 @@ class User {
 }
 
 data class UserDto(@param:DocumentName("user_name") val name: String, val age: Int)
+```
+
+## @DocumentNaming
+
+```kotlin
+@Retention(AnnotationRetention.RUNTIME)
+@Target(CLASS, FIELD, PROPERTY_GETTER, PROPERTY_SETTER, FUNCTION, VALUE_PARAMETER)
+public annotation class DocumentNaming(val value: DocumentNamingStrategy)
+
+public enum class DocumentNamingStrategy {
+    AsIsStrategy, SnakeCaseStrategy, KebabCaseStrategy,
+    UpperCamelStrategy, LowerCamelStrategy,
+}
+```
+
+类级/字段级命名策略覆盖：
+
+- 类级标注作用于该类型所有**未显式命名**的属性/构造参数/record 组件；
+- 字段级标注覆盖类级；`@DocumentName` 仍是最高优先级；
+- 都没有时回退到全局 `DocumentMapperConfig.namingStrategy`；
+- `@DocumentCreator` 构造参数未标注 `@DocumentName` 时，先看参数上的
+  `@DocumentNaming`，再看类级策略；
+- Builder 模式：目标类上的类级注解会通过 Builder 的封闭类继承到 Builder 属性。
+
+```kotlin
+@DocumentNaming(DocumentNamingStrategy.SnakeCaseStrategy)
+class User {
+    var userName: String = ""                        // user_name
+
+    @field:DocumentNaming(DocumentNamingStrategy.KebabCaseStrategy)
+    var displayName: String = ""                     // display-name
+
+    @field:DocumentName("explicit")                  // 最高优先级
+    var raw: String = ""
+}
+```
+
+Java 写法为 `@DocumentNaming(DocumentNamingStrategy.SnakeCaseStrategy)`；Kotlin 可导入
+枚举项后写 `@DocumentNaming(SnakeCaseStrategy)`。
+
+## @DocumentInclude
+
+```kotlin
+@Retention(AnnotationRetention.RUNTIME)
+@Target(CLASS, FIELD, PROPERTY_GETTER, PROPERTY_SETTER, FUNCTION, VALUE_PARAMETER)
+public annotation class DocumentInclude(val value: DocumentIncludePolicy)
+
+public enum class DocumentIncludePolicy {
+    ALWAYS, NON_NULL, NON_EMPTY, USE_DEFAULTS,
+}
+```
+
+类级/字段级写出策略覆盖，只影响序列化：
+
+| 策略 | 行为 |
+|---|---|
+| `ALWAYS` | 总是写出（包括 `null`） |
+| `NON_NULL` | `null` 不写出 |
+| `NON_EMPTY` | `null`、空字符串、空集合、空 `Map`、空数组不写出 |
+| `USE_DEFAULTS` | 回退到下一优先级，最终使用全局 `writeNulls` |
+
+- 字段级 > 类级 > 全局 `DocumentMapperConfig.writeNulls`；
+- 嵌套对象与集合元素分别按各自类型/字段的策略处理；
+- `toNode` 与流式写出路径行为一致；
+- `DocumentRuntimeCodecFactory` 运行期转换器不读取该注解。
+
+```kotlin
+@DocumentInclude(DocumentIncludePolicy.NON_EMPTY)
+class Order {
+    var id: String = ""                               // 空字符串不写出
+
+    @field:DocumentInclude(DocumentIncludePolicy.ALWAYS)
+    var remark: String? = null                        // 总是写出 null
+}
 ```
 
 ## @DocumentIgnore
@@ -376,6 +457,8 @@ val mapper = JsonMapper.builder().addModule(GeneratedDocumentModule()).build()
 | 场景 | Kotlin | Java |
 |---|---|---|
 | 字段名 | `@field:DocumentName("x")`（或属性默认落点） | 字段或 getter |
+| 命名策略 | `@field:DocumentNaming(...)` / `@get:DocumentNaming(...)` / 类上直接标注 | 字段、getter 或类上 |
+| 写出策略 | `@field:DocumentInclude(...)` / `@get:DocumentInclude(...)` / 类上直接标注 | 字段、getter 或类上 |
 | 忽略 | `@field:DocumentIgnore` / `@get:DocumentIgnore` | 字段或 getter |
 | 构造参数 | `@param:DocumentName("x")` | 参数上 |
 | 转换器 | 属性上（目标含 getter/setter） | 字段或 getter/setter |
@@ -385,6 +468,7 @@ val mapper = JsonMapper.builder().addModule(GeneratedDocumentModule()).build()
 ## 常见问题
 
 **Q：`@DocumentName` 与命名策略冲突？** 显式注解优先，命名策略只处理未注解字段。
+`@DocumentNaming` 字段级 > 类级 > 全局 `namingStrategy`。
 
 **Q：多态子类没注册会怎样？** 反序列化遇到未知类型名抛 `DocumentSerializationException`；
 请显式 `subtype(...)` 或 `kotlinSealedSubtypes(...)`。

@@ -314,8 +314,8 @@ YAML 自定义 tag、JQF fuzz、全格式原生 Token Reader
 | `@JsonProperty("name")` | `@DocumentName("name")` |
 | `@JsonIgnore` | `@DocumentIgnore` |
 | `@JsonCreator` + `@JsonProperty` 参数 | `@DocumentCreator` + `@DocumentName` 参数 |
-| `@JsonNaming(SnakeCaseStrategy)` | `namingStrategy(PropertyNamingStrategy.SNAKE_CASE)` |
-| `@JsonInclude(NON_NULL)` | `writeNulls(false)` |
+| `@JsonNaming(SnakeCaseStrategy)` | `@DocumentNaming(DocumentNamingStrategy.SnakeCaseStrategy)` / `namingStrategy(...)` |
+| `@JsonInclude(NON_NULL)` | `@DocumentInclude(DocumentIncludePolicy.NON_NULL)` / `writeNulls(false)` |
 | `@JsonSerialize(using=...)` | `@DocumentSerializer(...)` |
 | `@JsonDeserialize(using=...)` | `@DocumentDeserializer(...)` |
 | `@JsonTypeInfo` / `@JsonSubTypes` | `@DocumentTypeInfo` + `config.subtype(...)` / `kotlinSealedSubtypes(...)` |
@@ -323,7 +323,7 @@ YAML 自定义 tag、JQF fuzz、全格式原生 Token Reader
 | `registerModule(module)` | `JsonMapper.builder().addModule(module).build()` |
 | `FAIL_ON_UNKNOWN_PROPERTIES` | `failOnUnknownFields(true)` |
 | `SerializationFeature.INDENT_OUTPUT` | `formatPretty` / `JsonConfig.pretty(true)` |
-| `DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES` | 无直接开关（null 写基本类型会抛异常） |
+| `DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES` | `.failOnNullForPrimitives(true)`（默认关闭：`null` 写基本类型使用默认值） |
 | `JsonParser` / `JsonGenerator` | `DocumentTokenReader` / `DocumentTokenWriter` |
 | `JsonSchema`（第三方模块） | `format-json` 内置轻量 `JsonSchema`（仅 JSON 文本校验） |
 

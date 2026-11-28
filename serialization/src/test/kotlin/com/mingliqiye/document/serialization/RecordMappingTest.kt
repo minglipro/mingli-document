@@ -3,6 +3,7 @@ package com.mingliqiye.document.serialization
 import com.mingliqiye.document.annotation.DocumentCreator
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NodeType
+import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
@@ -98,6 +99,66 @@ class RecordMappingTest {
             mapper.parse("""{"display_name":"x"}""", recordClass(RecordModels.userType()))
         }
         assertTrue(exception.message.orEmpty().contains("Missing field 'age'"), exception.message.orEmpty())
+    }
+
+    @Test
+    fun recordNullPrimitiveUsesDefaultWhenFeatureDisabled() {
+        val fromJson = parseRecord("""{"display_name":"x","age":null}""")
+        assertEquals("x", RecordModels.value(fromJson, "name"))
+        assertEquals(0, RecordModels.value(fromJson, "age"))
+
+        val fromNode = fromRecordNode(
+            ObjectNode.of(
+                "display_name" to stringNode("x"),
+                "age" to NullNode.INSTANCE,
+            ),
+        )
+        assertEquals(0, RecordModels.value(fromNode, "age"))
+    }
+
+    @Test
+    fun recordNullPrimitiveFailsWhenFeatureEnabled() {
+        val mapper = JsonMapper(
+            DocumentMapperConfig.builder()
+                .failOnNullForPrimitives(true)
+                .build(),
+        )
+
+        val fromJson = assertFailsWith<DocumentSerializationException> {
+            parseRecord("""{"display_name":"x","age":null}""", mapper = mapper)
+        }
+        assertTrue(fromJson.message.orEmpty().contains("$.age"), fromJson.message.orEmpty())
+        assertTrue(fromJson.message.orEmpty().contains("int"), fromJson.message.orEmpty())
+
+        val fromNode = assertFailsWith<DocumentSerializationException> {
+            mapper.fromNode(
+                ObjectNode.of(
+                    "display_name" to stringNode("x"),
+                    "age" to NullNode.INSTANCE,
+                ),
+                recordClass(RecordModels.userType()),
+            )
+        }
+        assertTrue(fromNode.message.orEmpty().contains("$.age"), fromNode.message.orEmpty())
+        assertTrue(fromNode.message.orEmpty().contains("int"), fromNode.message.orEmpty())
+    }
+
+    @Test
+    fun explicitDocumentCreatorRecordNullPrimitiveFailsWhenFeatureEnabled() {
+        val mapper = JsonMapper(
+            DocumentMapperConfig.builder()
+                .failOnNullForPrimitives(true)
+                .build(),
+        )
+
+        val exception = assertFailsWith<DocumentSerializationException> {
+            mapper.parse("""{"record_id":"r1","record_count":null}""", recordClass(RecordModels.annotatedType()))
+        }
+        assertTrue(exception.message.orEmpty().contains("$.record_count"), exception.message.orEmpty())
+        assertTrue(exception.message.orEmpty().contains("int"), exception.message.orEmpty())
+
+        val disabled = parseRecord("""{"record_id":"r1","record_count":null}""", type = RecordModels.annotatedType())
+        assertEquals(0, RecordModels.value(disabled, "count"))
     }
 
     @Test

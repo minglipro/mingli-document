@@ -35,6 +35,11 @@
 - `serialization` / `jdbc` / `validation` / `jpa` 显式 MR-JAR `module-info`
 - 11 个 `format-*` 与 `jpa-hibernate` 显式 MR-JAR `module-info`（显式模块累计 21 个）
 - `alias-for` 1.0.4
+- `DeserializationFeature` 反序列化特性开关：`FAIL_ON_NULL_FOR_PRIMITIVES`（null → 基本类型可抛异常，默认关闭）
+- `@DocumentNaming` + `DocumentNamingStrategy`：类级/字段级命名策略覆盖
+- `@DocumentInclude` + `DocumentIncludePolicy`：类级/字段级写出策略覆盖（ALWAYS / NON_NULL / NON_EMPTY / USE_DEFAULTS）
+- `DocumentMapperBuilder.propertyMetadataResolver(...)`：Builder 直接注册属性元数据解析器
+- `DocumentModule` 注册优先级文档化：模块覆盖直接注册、后注册模块优先、同名模块去重
 
 ## 2.3.0
 

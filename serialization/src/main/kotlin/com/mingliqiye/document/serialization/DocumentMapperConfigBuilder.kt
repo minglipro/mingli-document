@@ -29,6 +29,7 @@ public class DocumentMapperConfigBuilder {
     private var writeReferences = false
     private var remoteReferenceResolver: RemoteReferenceResolver? = null
     private var beanValidator: DocumentBeanValidator? = null
+    private val deserializationFeatures = LinkedHashSet<DeserializationFeature>()
 
     /**
      * 为指定字段绑定转换器。
@@ -298,6 +299,48 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 开启指定反序列化特性。
+     *
+     * @param feature 反序列化特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: DeserializationFeature): DocumentMapperConfigBuilder {
+        deserializationFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭指定反序列化特性（从显式开启集合中移除）。
+     *
+     * 特性默认关闭，因此 [disable] 主要用于覆盖之前调用 [enable] 或
+     * [configure] 的结果。
+     *
+     * @param feature 反序列化特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: DeserializationFeature): DocumentMapperConfigBuilder {
+        deserializationFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭指定反序列化特性。
+     *
+     * @param feature 反序列化特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: DeserializationFeature, enabled: Boolean): DocumentMapperConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 便捷设置 [DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES]。
+     *
+     * @param fail 是否在 `null` 赋给基本类型时抛出异常
+     * @return 当前构建器
+     */
+    public fun failOnNullForPrimitives(fail: Boolean): DocumentMapperConfigBuilder = configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, fail)
+
+    /**
      * 构建不可变配置。
      *
      * @throws IllegalArgumentException 子类型注册项非法（如子类不可赋值给基类、
@@ -321,5 +364,6 @@ public class DocumentMapperConfigBuilder {
         remoteReferenceResolver,
         SubtypeRegistries.build(subtypeRegistrations, subtypeTypeProperties),
         beanValidator,
+        deserializationFeatures.toSet(),
     )
 }

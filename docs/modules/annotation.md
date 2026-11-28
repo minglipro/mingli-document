@@ -5,7 +5,7 @@
 多态类型、实例化方式、日期/数字格式等行为。
 
 - 坐标：`com.mingliqiye.document:annotation`
-- 当前版本：`2.3.0`
+- 当前版本：`2.4.0`
 - 包名：`com.mingliqiye.document.annotation`
 - 目标字节码：JDK 8
 - 保留策略：除 `@DocumentEnumCodec` 外全部为 `RUNTIME`
@@ -15,6 +15,8 @@
 | 能力 | 对应注解 |
 |---|---|
 | 文档字段名 | `@DocumentName` |
+| 类级/字段级命名策略 | `@DocumentNaming`（`DocumentNamingStrategy`） |
+| 类级/字段级写出策略 | `@DocumentInclude`（`DocumentIncludePolicy`） |
 | 忽略字段 | `@DocumentIgnore` |
 | 字段级转换器（双向 / 单向） | `@DocumentConverter`、`@DocumentSerializer`、`@DocumentDeserializer` |
 | 多态类型协议 | `@DocumentTypeInfo`、`@DocumentTypeName` |
@@ -45,6 +47,8 @@ serialization-kotlin
 | 注解 | 目标（`@Target`） | 保留 | 属性 | 默认值 |
 |---|---|---|---|---|
 | `@DocumentName` | FIELD、PROPERTY、FUNCTION、VALUE_PARAMETER | RUNTIME | `value: String` | 无 |
+| `@DocumentNaming` | CLASS、FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION、VALUE_PARAMETER | RUNTIME | `value: DocumentNamingStrategy` | 无 |
+| `@DocumentInclude` | CLASS、FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION、VALUE_PARAMETER | RUNTIME | `value: DocumentIncludePolicy` | 无 |
 | `@DocumentIgnore` | FIELD、PROPERTY、FUNCTION | RUNTIME | 无 | — |
 | `@DocumentConverter` | FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION | RUNTIME | `value: KClass<out DocumentBaseConverter<*>>` | 无 |
 | `@DocumentSerializer` | FIELD、PROPERTY_GETTER、PROPERTY_SETTER、FUNCTION | RUNTIME | `value: KClass<out DocumentBaseSerializer<*>>` | 无 |
@@ -79,6 +83,74 @@ class Profile {
 
     @get:DocumentName("created_at")
     val createdAt: String = ""
+}
+```
+
+## @DocumentNaming
+
+```kotlin
+@Retention(AnnotationRetention.RUNTIME)
+@Target(CLASS, FIELD, PROPERTY_GETTER, PROPERTY_SETTER, FUNCTION, VALUE_PARAMETER)
+public annotation class DocumentNaming(val value: DocumentNamingStrategy)
+
+public enum class DocumentNamingStrategy {
+    AsIsStrategy, SnakeCaseStrategy, KebabCaseStrategy,
+    UpperCamelStrategy, LowerCamelStrategy,
+}
+```
+
+类级/字段级命名策略覆盖，优先级：
+
+```text
+@DocumentName > 字段级 @DocumentNaming > 类级 @DocumentNaming
+  > 全局 DocumentMapperConfig.namingStrategy
+```
+
+- 类级策略作用于该类型所有未显式命名的属性/构造参数/record 组件；
+- 字段级覆盖类级；`@DocumentName` 始终最高；
+- `@DocumentCreator` 构造参数未标注 `@DocumentName` 时先看参数上的
+  `@DocumentNaming`，再看类级策略；
+- Builder 模式：目标类上的类级注解通过 Builder 的封闭类继承。
+
+```kotlin
+@DocumentNaming(DocumentNamingStrategy.SnakeCaseStrategy)
+class User {
+    var userName: String = ""
+
+    @field:DocumentNaming(DocumentNamingStrategy.KebabCaseStrategy)
+    var displayName: String = ""
+}
+```
+
+## @DocumentInclude
+
+```kotlin
+@Retention(AnnotationRetention.RUNTIME)
+@Target(CLASS, FIELD, PROPERTY_GETTER, PROPERTY_SETTER, FUNCTION, VALUE_PARAMETER)
+public annotation class DocumentInclude(val value: DocumentIncludePolicy)
+
+public enum class DocumentIncludePolicy { ALWAYS, NON_NULL, NON_EMPTY, USE_DEFAULTS }
+```
+
+类级/字段级写出策略覆盖，只影响序列化：
+
+| 策略 | 行为 |
+|---|---|
+| `ALWAYS` | 总是写出（包括 `null`） |
+| `NON_NULL` | `null` 不写出 |
+| `NON_EMPTY` | `null`、空字符串、空集合、空 `Map`、空数组不写出 |
+| `USE_DEFAULTS` | 回退到下一优先级，最终使用全局 `writeNulls` |
+
+优先级：字段级 > 类级 > 全局 `DocumentMapperConfig.writeNulls`；嵌套对象与集合元素
+按各自类型/字段的策略处理；`toNode` 与流式写出路径一致。
+
+```kotlin
+@DocumentInclude(DocumentIncludePolicy.NON_EMPTY)
+class Order {
+    var id: String = ""
+
+    @field:DocumentInclude(DocumentIncludePolicy.ALWAYS)
+    var remark: String? = null
 }
 ```
 

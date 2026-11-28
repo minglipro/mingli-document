@@ -269,6 +269,7 @@
 | 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
 | Gitea CI、Maven Central | ❌ 已放弃 |
 | Avro logical type / maxDepth / jpa-hibernate 高级映射 | ✅ 2.4.0 未发布 |
+| DeserializationFeature / @DocumentNaming / @DocumentInclude | ✅ 2.4.0 未发布 |
 
 ### 待办清单（2.4.0 之后）
 

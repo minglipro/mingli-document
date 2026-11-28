@@ -13,6 +13,21 @@
 - `serialization` / `jdbc` / `validation` / `jpa` 显式 MR-JAR `module-info`
 - 11 个 `format-*` 与 `jpa-hibernate` 显式 MR-JAR `module-info`（显式模块累计 21 个）
 - `alias-for` 升级 1.0.4（增加 `Automatic-Module-Name`）
+- `DeserializationFeature` 反序列化特性开关（`enable` / `disable` / `configure` /
+  `failOnNullForPrimitives`，`isEnabled` 查询）：`FAIL_ON_NULL_FOR_PRIMITIVES`
+  可让 `null` → 基本类型（字段/构造参数/Builder/record/基本类型数组元素）抛出
+  `DocumentSerializationException`；默认关闭，保持基本类型默认值行为
+- `@DocumentNaming` + `DocumentNamingStrategy`：类级/字段级命名策略覆盖
+  （`SnakeCaseStrategy`、`KebabCaseStrategy`、`UpperCamelStrategy`、
+  `LowerCamelStrategy`、`AsIsStrategy`），优先级
+  `@DocumentName` > 字段级 > 类级 > 全局 `namingStrategy`
+- `@DocumentInclude` + `DocumentIncludePolicy`：类级/字段级写出策略覆盖
+  （`ALWAYS` / `NON_NULL` / `NON_EMPTY` / `USE_DEFAULTS`），优先级
+  字段级 > 类级 > 全局 `writeNulls`，支持嵌套对象与集合元素
+- `DocumentMapperBuilder.propertyMetadataResolver(...)`：补齐 Builder 直接注册属性
+  元数据解析器的 API（模块注册仍优先）
+- 明确并文档化 `DocumentModule` / `ModuleSetupContext` 注册优先级：模块注册覆盖
+  Builder 直接注册，后注册模块覆盖先注册模块，同名模块按 `moduleName` 去重
 
 ## 2.3.0
 

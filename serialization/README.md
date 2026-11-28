@@ -139,6 +139,197 @@ val mapper = JsonMapper(
 
 `remoteReferenceResolver` 默认 `null`，此时远程引用直接报错；URI 校验、IO 与缓存由调用方负责。
 
+## DeserializationFeature
+
+Jackson 风格的反序列化特性开关，默认**全部关闭**（与 Jackson 默认配置一致，升级不改变
+既有行为）。通过 `DocumentMapperConfigBuilder` 配置：
+
+```kotlin
+import com.mingliqiye.document.serialization.DeserializationFeature
+import com.mingliqiye.document.serialization.DocumentMapperConfig
+
+val config = DocumentMapperConfig.builder()
+    .failOnNullForPrimitives(true)                               // 便捷方法
+    .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)  // 等价写法
+    .build()
+val mapper = JsonMapper(config)
+```
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `FAIL_ON_NULL_FOR_PRIMITIVES` | 关闭 | 开启后反序列化 `null` 到 Java 基本类型时抛 `DocumentSerializationException`（信息含字段路径与类型）；关闭时使用 `0` / `false` / `'\u0000'` 等基本类型默认值，不抛异常 |
+
+覆盖位置：
+
+```text
+fromNode / fromTokens / parse（含 ByteArray/File/Stream）
+字段注入、@DocumentCreator 构造参数、Builder 属性、Java record 组件、
+基本类型数组元素
+```
+
+查询与开关：
+
+```kotlin
+val config = DocumentMapperConfig.builder()
+    .configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, true)
+    .build()
+
+config.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)        // true
+config.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, false) // true
+config.deserializationFeatures // Set<DeserializationFeature>
+```
+
+- `enable(feature)` / `disable(feature)` / `configure(feature, enabled)` 均返回 Builder，
+  可链式调用；
+- 特性集合会随复制构造器、`JsonConfig` 等格式专属 `Config` 一起传递；
+- `disable` 只是从显式开启集合中移除，特性默认关闭。
+
+```kotlin
+// 严格校验：文档中的 null 不允许静默变成 0/false
+val strict = JsonMapper(
+    DocumentMapperConfig.builder()
+        .failOnNullForPrimitives(true)
+        .build(),
+)
+strict.parse("""{"name":"a","age":null}""", User::class.java)
+// -> DocumentSerializationException: Cannot assign null to primitive type int at $.age
+```
+
+## 类级 / 字段级注解覆盖
+
+### @DocumentNaming：命名策略
+
+`@DocumentNaming` 可标注在**类**或**字段/getter** 上，覆盖全局
+`namingStrategy`；显式 `@DocumentName` 仍然最高优先级：
+
+```text
+@DocumentName
+  > 字段级 @DocumentNaming
+  > 类级 @DocumentNaming
+  > 全局 DocumentMapperConfig.namingStrategy
+```
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentNaming
+import com.mingliqiye.document.annotation.DocumentNamingStrategy.SnakeCaseStrategy
+
+@DocumentNaming(SnakeCaseStrategy)
+class User {
+    var userName: String = ""        // 写出 user_name
+
+    @field:DocumentNaming(DocumentNamingStrategy.KebabCaseStrategy)
+    var displayName: String = ""     // 写出 display-name
+
+    @field:DocumentName("custom")    // 显式名最高优先级
+    var explicit: String = ""
+}
+```
+
+- 类级策略作用于该类型所有未显式命名的属性/构造参数/record 组件；
+- 字段级策略覆盖类级；
+- `@DocumentCreator` 构造参数未标注 `@DocumentName` 时，同样优先取参数上的
+  `@DocumentNaming`，其次类级策略，最后全局 `namingStrategy`，保证读写字段名对称；
+- Builder 模式：目标类上的类级 `@DocumentNaming` 会通过 Builder 的封闭类继承到
+  Builder 属性上（Builder 需声明为目标类型的内部类）。
+
+### @DocumentInclude：写出策略
+
+`@DocumentInclude` 可标注在**类**或**字段/getter** 上，控制 null/空值是否写出；
+反序列化不受影响：
+
+```text
+字段级 @DocumentInclude
+  > 类级 @DocumentInclude
+  > 全局 DocumentMapperConfig.writeNulls
+```
+
+| 策略 | 行为 |
+|---|---|
+| `ALWAYS` | 总是写出，即使值为 `null` |
+| `NON_NULL` | `null` 不写出 |
+| `NON_EMPTY` | `null`、空字符串、空集合、空 `Map`、空数组不写出 |
+| `USE_DEFAULTS` | 回退到下一优先级，最终使用全局 `writeNulls` |
+
+```kotlin
+import com.mingliqiye.document.annotation.DocumentInclude
+import com.mingliqiye.document.annotation.DocumentIncludePolicy
+import com.mingliqiye.document.annotation.DocumentIncludePolicy.NON_EMPTY
+
+@DocumentInclude(NON_EMPTY)
+class Order {
+    var id: String = ""                    // 空字符串不写出
+
+    @field:DocumentInclude(DocumentIncludePolicy.ALWAYS)
+    var remark: String? = null             // 总是写出 null
+
+    @field:DocumentInclude(DocumentIncludePolicy.NON_NULL)
+    var coupon: String? = null             // null 不写出
+}
+```
+
+- 类级策略作用于该类型所有属性；字段级覆盖类级；
+- 嵌套对象与集合元素分别按各自类型的类级/字段级策略处理；
+- Node 路径（`toNode`）与流式写出路径（`format` / `format(value, outputStream)` 等）
+  行为一致；
+- `DocumentRuntimeCodecFactory` 生成的运行期转换器仍只使用其构造参数中的
+  `writeNulls`，不读取该注解。
+
+## DocumentModule 模块注册
+
+`DocumentModule` 等价于 Jackson 的 `Module`，把一组转换器/策略打包注册：
+
+```kotlin
+import com.mingliqiye.document.serialization.DocumentModule
+import com.mingliqiye.document.serialization.ModuleSetupContext
+
+class MoneyModule : DocumentModule {
+    override val moduleName: String = "money"
+
+    override fun setupModule(context: ModuleSetupContext) {
+        context.addConverter(MoneyConverter())       // 双向：序列化 + 反序列化
+        context.addSerializer(MoneySerializer())     // 只序列化
+        context.addDeserializer(MoneyDeserializer()) // 只反序列化
+        context.setObjectInstantiator(...)           // 可选：实例化策略
+        context.setPropertyMetadataResolver(...)     // 可选：属性元数据解析器
+    }
+}
+
+val mapper = JsonMapper.builder()
+    .addModule(MoneyModule())
+    .addModules(OtherModule(), ThirdModule())
+    .build()
+```
+
+三种注册方式分别进入独立的注册表，同一 `getType()` 原始类型为 key：
+
+```kotlin
+context.addConverter(converter)       // = addSerializer(converter) + addDeserializer(converter)
+context.addSerializer(serializer)     // 只影响序列化
+context.addDeserializer(deserializer) // 只影响反序列化
+```
+
+优先级/覆盖关系（`DocumentMapperBuilder.build()` 时合并）：
+
+```text
+字段级注解转换器（@DocumentSerializer / @DocumentDeserializer / @DocumentConverter）
+  > 模块注册的序列化器/反序列化器
+  > Builder 上直接 addSerializer/addDeserializer/addConverter 注册
+  > 内置 Bean / 标量映射
+```
+
+- 模块按 `moduleName` 去重：同名模块后注册的实例覆盖先注册的实例（保持首次注册顺序）；
+- 多个模块注册同一类型时，后注册模块覆盖先注册模块；
+- 模块注册的 `ObjectInstantiator` / `PropertyMetadataResolver` 优先于 Builder 上
+  `.objectInstantiator(...)` / `.propertyMetadataResolver(...)` 直接设置的实例；
+- 直接注册也可用于非模块场景：
+
+```kotlin
+val mapper = JsonMapper.builder()
+    .addConverter(MoneyConverter())
+    .propertyMetadataResolver(resolver) // 2.4.0 新增：Builder 直接注册属性元数据解析器
+    .build()
+```
+
 ## 转换器
 
 实现 `DocumentBaseSerializer` 与/或 `DocumentBaseDeserializer`，通过：

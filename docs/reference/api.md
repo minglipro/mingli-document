@@ -119,8 +119,10 @@ public interface DocumentMapperApi {
 | `resolveReferences` | `Boolean` | `false` |
 | `writeReferences` | `Boolean` | `false` |
 | `remoteReferenceResolver` | `RemoteReferenceResolver?` | `null` |
+| `deserializationFeatures` | `Set<DeserializationFeature>` | 空集合（全部关闭） |
 
 工厂：`DocumentMapperConfig.builder()`、`DocumentMapperConfig.empty()`。
+查询：`isEnabled(feature)`、`isEnabled(feature, default)`。
 
 ### DocumentMapperConfigBuilder
 
@@ -135,6 +137,7 @@ public interface DocumentMapperApi {
 | `maxInputSize(Long)` | `>= 0` |
 | `maxStringLength(Int)` / `maxNodeDepth(Int)` / `maxNodeCount(Long)` | `>= 0` |
 | `resolveReferences` / `writeReferences` / `remoteReferenceResolver` | 无 |
+| `enable(feature)` / `disable(feature)` / `configure(feature, enabled)` / `failOnNullForPrimitives(fail)` | 无 |
 | `build()` | 非法子类型注册抛 `IllegalArgumentException` |
 
 ### 策略类型
@@ -143,6 +146,7 @@ public interface DocumentMapperApi {
 |---|---|
 | `MissingFieldPolicy` | `KEEP_DEFAULT`、`SET_NULL`、`SET_EMPTY`、`FAIL` |
 | `PropertyNamingStrategy` | `AS_IS`、`SNAKE_CASE`、`KEBAB_CASE`、`UPPER_CAMEL`、`LOWER_CAMEL`；`translate(name)` |
+| `DeserializationFeature` | `FAIL_ON_NULL_FOR_PRIMITIVES` |
 | `MergePolicy` | `REPLACE`、`DEEP`、`SKIP_NULLS`、`DEEP_SKIP_NULLS`、`of(deepMerge, skipNulls)`；属性 `deepMerge`、`skipNulls` |
 
 ## DocumentMapperBuilder
@@ -158,6 +162,7 @@ public interface DocumentMapperApi {
 | `addModules(vararg modules)` | 批量 |
 | `config(config: DocumentMapperConfig)` | 设置 Mapper 配置 |
 | `objectInstantiator(instantiator: ObjectInstantiator?)` | 设置实例化策略 |
+| `propertyMetadataResolver(resolver: PropertyMetadataResolver?)` | 设置属性元数据解析器 |
 | `build(): M` | 执行模块 `setupModule` 后创建 Mapper；模块注册项覆盖 Builder 同名项 |
 
 格式模块入口：`JsonMapper.builder()`、`YamlMapper.builder()`、`XmlMapper.builder()`、

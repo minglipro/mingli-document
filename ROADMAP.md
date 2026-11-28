@@ -295,6 +295,9 @@
 - XML / Properties / TOML / CSV maxDepth
 - TOML parseCommented / formatCommented
 - 显式 MR-JAR module-info 扩展到 21 个模块
-- 全量构建 1496 tests 通过
+- DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES
+- @DocumentNaming / @DocumentInclude 类级与字段级注解
+- DocumentModule 的 converter/serializer/deserializer 注册完善
+- 全量构建 1539 tests 通过
 - Gitea CI / Maven Central：已放弃
 - 未打 tag、未推私服、未创建 GitHub Release

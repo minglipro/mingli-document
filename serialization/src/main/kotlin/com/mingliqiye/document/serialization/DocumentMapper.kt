@@ -6,7 +6,10 @@ import com.mingliqiye.document.annotation.DocumentConverter
 import com.mingliqiye.document.annotation.DocumentCreator
 import com.mingliqiye.document.annotation.DocumentDateTimeFormat
 import com.mingliqiye.document.annotation.DocumentDeserializer
+import com.mingliqiye.document.annotation.DocumentInclude
+import com.mingliqiye.document.annotation.DocumentIncludePolicy
 import com.mingliqiye.document.annotation.DocumentName
+import com.mingliqiye.document.annotation.DocumentNaming
 import com.mingliqiye.document.annotation.DocumentNumberFormat
 import com.mingliqiye.document.annotation.DocumentSerializer
 import com.mingliqiye.document.core.ArrayNode
@@ -968,6 +971,9 @@ public abstract class DocumentMapper protected constructor(
         path: String,
     ): Any? {
         if (reader.tryReadNull()) {
+            if (type is Class<*> && type.isPrimitive) {
+                return nullPrimitiveValue(type, path)
+            }
             return null
         }
         val rawType = when (type) {
@@ -1088,7 +1094,7 @@ public abstract class DocumentMapper protected constructor(
             ?: throw DocumentSerializationException("No current token at $path")
         if (token == DocumentTokenType.NULL) {
             if (type is Class<*> && type.isPrimitive) {
-                throw DocumentSerializationException("Cannot assign null to primitive type at $path")
+                return nullPrimitiveValue(type, path.toString())
             }
             return null
         }
@@ -1851,6 +1857,23 @@ public abstract class DocumentMapper protected constructor(
         return value
     }
 
+    /**
+     * 处理文档 `null` 赋给 Java 基本类型的场景。
+     *
+     * [DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES] 开启时抛出
+     * [DocumentSerializationException]（信息包含字段路径与目标基本类型）；
+     * 关闭（默认）时返回该基本类型的 Java 默认值，保持既有行为。
+     */
+    private fun nullPrimitiveValue(type: Class<*>, path: String): Any {
+        if (config.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)) {
+            throw DocumentSerializationException(
+                "Cannot assign null to primitive type ${type.name} at $path " +
+                    "(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES is enabled)",
+            )
+        }
+        return primitiveDefault(type)
+    }
+
     private fun primitiveDefault(type: Class<*>): Any = when (type) {
         java.lang.Boolean.TYPE -> false
         java.lang.Character.TYPE -> '\u0000'
@@ -2236,7 +2259,7 @@ public abstract class DocumentMapper protected constructor(
             for (accessor in beanMetadata(bean.javaClass).readableProperties) {
                 val metadata = accessor.metadata
                 val value = accessor.read(bean)
-                if (!config.writeNulls && value == null) {
+                if (!shouldWriteProperty(value, metadata, bean.javaClass)) {
                     continue
                 }
                 writer.fieldName(serializedDocumentName(creator, metadata))
@@ -2385,6 +2408,53 @@ public abstract class DocumentMapper protected constructor(
         }
     }
 
+    /**
+     * 判断 Bean 属性是否写出。
+     *
+     * 字段级 [DocumentInclude] > 类级 [DocumentInclude] > 全局 `writeNulls`。
+     * [DocumentIncludePolicy.USE_DEFAULTS] 表示回退到下一优先级。
+     */
+    private fun shouldWriteProperty(value: Any?, metadata: DocumentProperty, beanClass: Class<*>): Boolean = when (resolveIncludePolicy(metadata, beanClass)) {
+        DocumentIncludePolicy.ALWAYS -> true
+        DocumentIncludePolicy.NON_NULL -> value != null
+        DocumentIncludePolicy.NON_EMPTY -> !isEmptyPropertyValue(value)
+        null, DocumentIncludePolicy.USE_DEFAULTS -> config.writeNulls || value != null
+    }
+
+    /** 解析字段级/类级 [DocumentInclude]；都没有显式策略时返回 `null`，由全局配置决定。 */
+    private fun resolveIncludePolicy(metadata: DocumentProperty, beanClass: Class<*>): DocumentIncludePolicy? {
+        val fieldPolicy = metadata.getAnnotation(DocumentInclude::class.java)?.value
+        if (fieldPolicy != null && fieldPolicy != DocumentIncludePolicy.USE_DEFAULTS) {
+            return fieldPolicy
+        }
+        val classPolicy = classIncludePolicy(beanClass)
+        if (classPolicy != null && classPolicy != DocumentIncludePolicy.USE_DEFAULTS) {
+            return classPolicy
+        }
+        return null
+    }
+
+    /** 查找类级 [DocumentInclude]（含父类链）。 */
+    private fun classIncludePolicy(type: Class<*>): DocumentIncludePolicy? {
+        var current: Class<*>? = type
+        while (current != null && current != Any::class.java) {
+            current.getAnnotation(DocumentInclude::class.java)?.let { return it.value }
+            current = current.superclass
+        }
+        return null
+    }
+
+    /** [DocumentIncludePolicy.NON_EMPTY] 判空：null、空字符串、空集合/Map/数组都算空值。 */
+    private fun isEmptyPropertyValue(value: Any?): Boolean = when (value) {
+        null -> true
+        is CharSequence -> value.isEmpty()
+        is Collection<*> -> value.isEmpty()
+        is Map<*, *> -> value.isEmpty()
+        is ByteArray -> value.isEmpty()
+        is Array<*> -> value.isEmpty()
+        else -> value.javaClass.isArray && ReflectArray.getLength(value) == 0
+    }
+
     private fun serializeBean(
         bean: Any,
         seen: IdentityHashMap<Any, Boolean>,
@@ -2400,7 +2470,7 @@ public abstract class DocumentMapper protected constructor(
             for (accessor in beanMetadata(bean.javaClass).readableProperties) {
                 val metadata = accessor.metadata
                 val value = accessor.read(bean)
-                if (!config.writeNulls && value == null) {
+                if (!shouldWriteProperty(value, metadata, bean.javaClass)) {
                     continue
                 }
                 val documentName = serializedDocumentName(creator, metadata)
@@ -2428,7 +2498,7 @@ public abstract class DocumentMapper protected constructor(
     ): Any? {
         if (node is NullNode) {
             if (type is Class<*> && type.isPrimitive) {
-                throw DocumentSerializationException("Cannot assign null to primitive type at $path")
+                return nullPrimitiveValue(type, path)
             }
             return null
         }
@@ -2964,9 +3034,20 @@ public abstract class DocumentMapper protected constructor(
 
     private fun createBeanCreatorParameter(type: Class<*>, index: Int, parameter: Parameter): BeanCreatorParameter {
         val annotation = parameter.getAnnotation(DocumentName::class.java)
+        val namingAnnotation = parameter.getAnnotation(DocumentNaming::class.java)
         val javaName = parameter.name.takeIf { parameter.isNamePresent }
-        val documentName = annotation?.value
-            ?: javaName?.let { config.namingStrategy.translate(it) }
+        val parameterNaming = namingAnnotation?.value?.toPropertyNamingStrategy()
+        val explicitDocumentName = annotation?.value
+            ?: parameterNaming?.let { strategy ->
+                javaName?.let { strategy.translate(it) }
+                    ?: throw DocumentSerializationException(
+                        "Constructor parameter $index of ${type.name} has no @DocumentName annotation and its name " +
+                            "is not available at runtime; annotate the parameter with @DocumentName or compile with -parameters",
+                    )
+            }
+        val documentName = explicitDocumentName
+            ?: javaName?.let { creatorParameterProperty(type, it)?.documentName }
+            ?: javaName?.let { (classNamingStrategy(type) ?: config.namingStrategy).translate(it) }
             ?: throw DocumentSerializationException(
                 "Constructor parameter $index of ${type.name} has no @DocumentName annotation and its name " +
                     "is not available at runtime; annotate the parameter with @DocumentName or compile with -parameters",
@@ -2975,9 +3056,19 @@ public abstract class DocumentMapper protected constructor(
             index,
             javaName,
             documentName,
-            annotation?.value,
+            explicitDocumentName,
             parameter.parameterizedType,
         )
+    }
+
+    /**
+     * 查找与构造参数同名的 JavaBeans 属性元数据，用于让构造参数继承字段/getter 上的
+     * [DocumentName] / [DocumentNaming] 命名结果，保证读写字段名对称。
+     */
+    private fun creatorParameterProperty(type: Class<*>, javaName: String): DocumentProperty? = try {
+        beanProperties(type).firstOrNull { it.name == javaName }?.let { documentProperty(type, it) }
+    } catch (_: DocumentSerializationException) {
+        null
     }
 
     /**

@@ -8,9 +8,11 @@ import java.lang.reflect.Type
  *
  * @property index 构造参数位置（从 0 开始）
  * @property javaName 反射可见的 Java 参数名；未保留参数名时为 `null`
- * @property documentName 文档字段名，已应用参数上的
- *   [com.mingliqiye.document.annotation.DocumentName]
- * @property explicitDocumentName 参数上显式标注的文档字段名；未标注时为 `null`
+ * @property documentName 文档字段名：显式命名的翻译结果，或继承自字段/getter 元数据、
+ *   类级 [com.mingliqiye.document.annotation.DocumentNaming] 与全局命名策略的结果
+ * @property explicitDocumentName 由参数上显式标注（[com.mingliqiye.document.annotation.DocumentName]
+ *   或参数级 [com.mingliqiye.document.annotation.DocumentNaming]）得到的文档字段名；
+ *   未标注时为 `null`，序列化时用于保证读写字段名对称
  * @property type 参数泛型类型
  * @property ignored 参数对应的 record 组件被 `@DocumentIgnore` 标记：不参与文档字段
  *   匹配，构造时始终使用 Java 默认值
