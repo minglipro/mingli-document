@@ -6,7 +6,7 @@ import java.nio.charset.Charset
  * Mapper 配置。
  *
  * 支持字段级转换器、缺字段策略、未知字段策略、null 字段写出策略、
- * 字段命名策略、多态子类型注册与文件读写选项。
+ * 字段命名策略、多态子类型注册、根对象 Bean 校验与文件读写选项。
  */
 public open class DocumentMapperConfig protected constructor(
     private val fieldConverters: Map<FieldKey, DocumentBaseConverter<*>>,
@@ -49,6 +49,15 @@ public open class DocumentMapperConfig protected constructor(
     /** 可选远程 `$ref` 解析器；为 `null` 时远程引用会报错。 */
     public val remoteReferenceResolver: RemoteReferenceResolver? = null,
     private val subtypeRegistries: Map<Class<*>, SubtypeRegistry> = emptyMap(),
+    /**
+     * 可选根对象 Bean 校验器；为 `null` 时不校验（默认）。
+     *
+     * 配置后在根对象序列化入口（`toNode`/`writeTo`）与反序列化出口
+     * （`fromNode`/`fromTokens`/`readFrom`）各调用一次，嵌套调用不重复校验。
+     * 校验失败统一抛出
+     * [com.mingliqiye.document.serialization.exception.DocumentSerializationException]。
+     */
+    public val beanValidator: DocumentBeanValidator? = null,
 ) {
 
     private val subtypeRegistryMap: SubtypeRegistries = SubtypeRegistries(subtypeRegistries)
@@ -73,6 +82,7 @@ public open class DocumentMapperConfig protected constructor(
         other.writeReferences,
         other.remoteReferenceResolver,
         other.subtypeRegistries,
+        other.beanValidator,
     )
 
     internal fun fieldConverter(property: DocumentProperty): DocumentBaseConverter<*>? = fieldConverters[FieldKey(property.declaringClass, property.name)]
@@ -127,6 +137,7 @@ public open class DocumentMapperConfig protected constructor(
             writeReferences: Boolean = false,
             remoteReferenceResolver: RemoteReferenceResolver? = null,
             subtypes: SubtypeRegistries = SubtypeRegistries.EMPTY,
+            beanValidator: DocumentBeanValidator? = null,
         ): DocumentMapperConfig = DocumentMapperConfig(
             fieldConverters,
             missingFieldPolicy,
@@ -144,6 +155,7 @@ public open class DocumentMapperConfig protected constructor(
             writeReferences,
             remoteReferenceResolver,
             subtypes.toMap(),
+            beanValidator,
         )
     }
 }

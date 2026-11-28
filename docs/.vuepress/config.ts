@@ -47,6 +47,7 @@ export default defineUserConfig({
           children: [
             '/guide/serialization.md',
             '/guide/io.md',
+            '/guide/streaming.md',
             '/guide/configuration.md',
             '/guide/token-stream.md',
           ],
@@ -92,6 +93,8 @@ export default defineUserConfig({
             '/modules/core.md',
             '/modules/exception.md',
             '/modules/schema.md',
+            '/modules/schema-registry.md',
+            '/modules/validation.md',
           ],
         },
         {

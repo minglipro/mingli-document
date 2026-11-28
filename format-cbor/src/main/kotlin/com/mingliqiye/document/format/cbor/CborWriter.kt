@@ -5,6 +5,7 @@ import com.fasterxml.jackson.dataformat.cbor.CBORGenerator
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.BooleanNode
+import com.mingliqiye.document.core.ByteArrayPool
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.NumberNode
@@ -13,6 +14,7 @@ import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.cbor.exception.CborException
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -36,12 +38,18 @@ private val CBOR_FACTORY: CBORFactory = CBORFactory()
  * 只有恰好两个字段、tag 为 `>= 0` 整数且包含 `value` 字段的对象才算包装；
  * 其余对象（tag 非整数、value 缺失或多字段）按普通对象写出。
  *
+ * [bufferPool] 非空时使用池化中间缓冲区写出：缓冲区从池借出、随容量增长换用更大的
+ * 池缓冲区、写出完成后归还，返回的 `ByteArray` 仍是一次复制（所有权归调用方）。
+ * 默认 `null` 使用普通 `ByteArrayOutputStream`，行为与不加池时完全一致。
+ *
  * @param canonical 是否按 canonical map key 顺序写出
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
+ * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
  */
-public class CborWriter(
+public class CborWriter @JvmOverloads constructor(
     private val canonical: Boolean = false,
     private val preserveTags: Boolean = false,
+    private val bufferPool: ByteArrayPool? = null,
 ) {
 
     /**
@@ -61,17 +69,27 @@ public class CborWriter(
      * @throws CborException 生成 CBOR 失败，或 [NumberNode.raw] 不是合法数字时抛出
      */
     internal fun writeAll(nodes: Iterable<Node>): ByteArray {
-        val buffer = ByteArrayOutputStream()
+        val pooledOutput = bufferPool?.let { PooledByteArrayOutputStream(it) }
+        val output: OutputStream = pooledOutput ?: ByteArrayOutputStream()
+        var generator: CBORGenerator? = null
         try {
-            CBOR_FACTORY.createGenerator(buffer).use { generator ->
-                for (node in nodes) {
-                    writeValue(generator, node)
-                }
+            val created = CBOR_FACTORY.createGenerator(output)
+            generator = created
+            for (node in nodes) {
+                writeValue(created, node)
+            }
+            created.flush()
+            return if (pooledOutput != null) {
+                pooledOutput.toByteArray()
+            } else {
+                (output as ByteArrayOutputStream).toByteArray()
             }
         } catch (e: IOException) {
             throw CborException("Failed to write CBOR: ${e.message}", e)
+        } finally {
+            closeQuietly(generator)
+            pooledOutput?.close()
         }
-        return buffer.toByteArray()
     }
 
     private fun writeValue(generator: CBORGenerator, node: Node) {
@@ -152,16 +170,28 @@ public class CborWriter(
             else -> generator.writeNumber(value)
         }
     }
+
+    private fun closeQuietly(generator: CBORGenerator?) {
+        try {
+            generator?.close()
+        } catch (_: IOException) {
+            // 写出结果已经确定（返回或已抛出），关闭失败不覆盖原结果。
+        }
+    }
 }
 
 /**
  * 将文档树写成 CBOR 字节。
  *
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
+ * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
  * @return CBOR 二进制内容
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
-public fun Node.toCborBytes(preserveTags: Boolean = false): ByteArray = CborWriter(preserveTags = preserveTags).write(this)
+public fun Node.toCborBytes(
+    preserveTags: Boolean = false,
+    bufferPool: ByteArrayPool? = null,
+): ByteArray = CborWriter(preserveTags = preserveTags, bufferPool = bufferPool).write(this)
 
 /**
  * 将文档树按 canonical map key 顺序写成 CBOR 字节。
@@ -170,10 +200,14 @@ public fun Node.toCborBytes(preserveTags: Boolean = false): ByteArray = CborWrit
  * 整数已使用最短编码形式。
  *
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
+ * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
  * @return CBOR 二进制内容
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
-public fun Node.toCanonicalCborBytes(preserveTags: Boolean = false): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags).write(this)
+public fun Node.toCanonicalCborBytes(
+    preserveTags: Boolean = false,
+    bufferPool: ByteArrayPool? = null,
+): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags, bufferPool = bufferPool).write(this)
 
 private val CANONICAL_KEY_ORDER: Comparator<Map.Entry<String, Node>> =
     Comparator { left, right ->

@@ -15,6 +15,8 @@ dependencies {
         api(project(":exception"))
         api(project(":core"))
         api(project(":schema"))
+        api(project(":schema-registry"))
+        api(project(":validation"))
         api(project(":serialization"))
         api(project(":serialization-kotlin"))
         api(project(":codegen"))

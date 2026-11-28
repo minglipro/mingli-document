@@ -80,6 +80,9 @@ private const val MAX_SERIALIZATION_DEPTH = 128
  * - 只读属性（没有 setter 且不是可写构造参数）：序列化正常写出；反序列化跳过该字段
  *   而不是当作未知字段报错；存在 canonical / [DocumentCreator] 构造器时按参数注入。
  * - 通过 [merge] 把文档树合并到已有对象，保留文档中没有出现的字段。
+ * - 通过 [DocumentMapperConfig.beanValidator] 在根对象序列化入口与反序列化出口执行一次
+ *   Bean 校验（嵌套对象与内部编解码器回调不会重复校验），校验失败抛
+ *   [DocumentSerializationException]。
  * - 通过配置显式注册的多态基类/接口（字段声明为基类时写入/读取子类型信息）
  *
  * 优先使用 [com.mingliqiye.document.annotation.DocumentCreator] 构造器；没有标注的实体
@@ -147,6 +150,70 @@ public abstract class DocumentMapper protected constructor(
     private val noConverter = Any()
 
     /**
+     * 当前线程是否已处于一次带校验的根操作内。
+     *
+     * 生成式编解码器、值类转换器等内部实现会回调公开的 [toNode]/[fromNode]；
+     * 这些嵌套调用不应再次触发 Bean 校验，由该标记保证每次根操作只校验一次。
+     */
+    private val beanValidationScope: ThreadLocal<Boolean> = ThreadLocal()
+
+    /**
+     * 序列化根入口：先校验根对象，再在“已校验”作用域内执行序列化。
+     */
+    private inline fun <T> validatingSerializationRoot(value: Any?, block: () -> T): T {
+        if (!beanValidationEnabled()) {
+            return block()
+        }
+        validateRootBean(value)
+        beanValidationScope.set(java.lang.Boolean.TRUE)
+        try {
+            return block()
+        } finally {
+            beanValidationScope.remove()
+        }
+    }
+
+    /**
+     * 反序列化根出口：在“已校验”作用域内完成反序列化，最后校验结果对象。
+     */
+    private inline fun <T> validatingDeserializationRoot(block: () -> T): T {
+        if (!beanValidationEnabled()) {
+            return block()
+        }
+        beanValidationScope.set(java.lang.Boolean.TRUE)
+        try {
+            val result = block()
+            validateRootBean(result)
+            return result
+        } finally {
+            beanValidationScope.remove()
+        }
+    }
+
+    /** 是否需要在当前调用层执行根对象校验；嵌套调用返回 `false`。 */
+    private fun beanValidationEnabled(): Boolean = config.beanValidator != null && beanValidationScope.get() == null
+
+    /**
+     * 调用配置的校验器校验根对象。
+     *
+     * 校验器直接抛出的 [DocumentSerializationException] 原样传播；其他异常包装为
+     * [DocumentSerializationException] 并通过 cause 保留原始异常。
+     */
+    private fun validateRootBean(value: Any?) {
+        val validator = config.beanValidator ?: return
+        if (value == null) {
+            return
+        }
+        try {
+            validator.validate(value)
+        } catch (e: DocumentSerializationException) {
+            throw e
+        } catch (e: Exception) {
+            throw DocumentSerializationException("Bean validation failed for ${value.javaClass.name}", e)
+        }
+    }
+
+    /**
      * 将 Java 对象序列化为文档树。
      *
      * [DocumentMapperConfig.writeReferences] 开启时按对象身份写出本地 `$ref`：
@@ -156,13 +223,14 @@ public abstract class DocumentMapper protected constructor(
      *
      * @param value Java 对象
      * @return 文档树
-     * @throws DocumentSerializationException 序列化失败或存在循环引用时抛出
+     * @throws DocumentSerializationException 序列化失败、存在循环引用或配置了
+     * [DocumentMapperConfig.beanValidator] 且根对象校验失败时抛出
      */
-    override fun toNode(value: Any?): Node {
+    override fun toNode(value: Any?): Node = validatingSerializationRoot(value) {
         val references = if (config.writeReferences) IdentityReferenceTracker() else null
         val node = serializeValue(value, IdentityHashMap(), 0, null, "$", references = references)
         NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
-        return node
+        node
     }
 
     /**
@@ -178,13 +246,15 @@ public abstract class DocumentMapper protected constructor(
      * @param node 文档树
      * @param targetType 目标类型
      * @return Java 对象
-     * @throws DocumentSerializationException 反序列化失败时抛出
+     * @throws DocumentSerializationException 反序列化失败或根对象校验失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: Class<T>): T {
-        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
-        val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
         @Suppress("UNCHECKED_CAST")
-        return deserializeValue(source, targetType, "$") as T
+        return validatingDeserializationRoot {
+            NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
+            val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
+            deserializeValue(source, targetType, "$")
+        } as T
     }
 
     /**
@@ -193,9 +263,11 @@ public abstract class DocumentMapper protected constructor(
      * @param node 文档树
      * @param targetType 目标泛型类型，例如 List&lt;String&gt;
      * @return Java 对象
-     * @throws DocumentSerializationException 反序列化失败时抛出
+     * @throws DocumentSerializationException 反序列化失败或根对象校验失败时抛出
      */
-    public fun fromNode(node: Node, targetType: Type): Any? = deserializeValue(node, targetType, "$")
+    public fun fromNode(node: Node, targetType: Type): Any? = validatingDeserializationRoot {
+        deserializeValue(node, targetType, "$")
+    }
 
     /**
      * 将文档树反序列化为指定泛型类型。
@@ -203,13 +275,15 @@ public abstract class DocumentMapper protected constructor(
      * @param node 文档树
      * @param targetType 目标类型引用
      * @return Java 对象
-     * @throws DocumentSerializationException 反序列化失败时抛出
+     * @throws DocumentSerializationException 反序列化失败或根对象校验失败时抛出
      */
     override fun <T> fromNode(node: Node, targetType: DocumentTypeReference<T>): T {
-        NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
-        val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
         @Suppress("UNCHECKED_CAST")
-        return deserializeValue(source, targetType.type, "$") as T
+        return validatingDeserializationRoot {
+            NodeLimits.validate(node, config.maxNodeDepth, config.maxNodeCount, config.maxStringLength)
+            val source = if (config.resolveReferences) ReferenceResolver.resolve(node, config.remoteReferenceResolver) else node
+            deserializeValue(source, targetType.type, "$")
+        } as T
     }
 
     /**
@@ -878,10 +952,13 @@ public abstract class DocumentMapper protected constructor(
      * @param reader 格式读取器
      * @param targetType 目标类型
      * @return 实体
+     * @throws DocumentSerializationException 反序列化失败或根对象校验失败时抛出
      */
     public fun <T> readFrom(reader: DocumentValueReader, targetType: DocumentTypeReference<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return readValue(reader, targetType.type, null, "$") as T
+        return validatingDeserializationRoot {
+            readValue(reader, targetType.type, null, "$")
+        } as T
     }
 
     private fun readValue(
@@ -990,14 +1067,15 @@ public abstract class DocumentMapper protected constructor(
      * @param reader Token 读取器
      * @param targetType 目标类型
      * @return Java 实体
+     * @throws DocumentSerializationException 反序列化失败或根对象校验失败时抛出
      */
-    public fun fromTokens(reader: DocumentTokenReader, targetType: Type): Any? {
+    public fun fromTokens(reader: DocumentTokenReader, targetType: Type): Any? = validatingDeserializationRoot {
         reader.nextToken() ?: throw DocumentSerializationException("Empty token stream")
         val result = readTokenValue(reader, targetType, null, DecodePath("$"))
         if (reader.nextToken() != null) {
             throw DocumentSerializationException("Unexpected trailing token content")
         }
-        return result
+        result
     }
 
     private fun readTokenValue(
@@ -2021,9 +2099,13 @@ public abstract class DocumentMapper protected constructor(
      *
      * @param value 任意实体、集合、Map 或 [Node]
      * @param writer 格式写出器
+     * @throws DocumentSerializationException 序列化失败或配置了
+     * [DocumentMapperConfig.beanValidator] 且根对象校验失败时抛出
      */
     public fun writeTo(value: Any?, writer: DocumentValueWriter) {
-        writeValue(value, IdentityHashMap(), 0, null, DecodePath("$"), writer)
+        validatingSerializationRoot(value) {
+            writeValue(value, IdentityHashMap(), 0, null, DecodePath("$"), writer)
+        }
     }
 
     private fun writeValue(

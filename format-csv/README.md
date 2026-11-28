@@ -20,6 +20,7 @@ CsvSchemaBuilder
 CsvNestedMode
 CsvSchemaReader
 CsvSchemaWriter
+CsvMapper.parseStream
 ```
 
 ## 示例
@@ -39,6 +40,52 @@ val users = mapper.parse(
 )
 val text = mapper.format(users)
 ```
+
+## 流式读取（大文件）
+
+`CsvMapper.parseStream` 逐行解析 CSV 并逐条回调 Bean，不把整个文件读成 String；
+表头、类型推断、`CsvConfig.nestedMode` 与 `CsvSchema` 规则和整段 `parse` 完全一致。
+
+```kotlin
+import com.mingliqiye.document.core.DocumentTypeReference
+import com.mingliqiye.document.format.csv.CsvMapper
+import java.io.FileInputStream
+
+val mapper = CsvMapper() // 或 CsvMapper(schema) / CsvMapper(CsvConfig.builder()...build())
+
+FileInputStream("users.csv").use { input ->
+    mapper.parseStream(input, User::class.java) { user ->
+        // 逐行处理：首次回调时尚未读完整个文件
+    }
+}
+```
+
+也支持 `Reader`、`DocumentTypeReference` 与 `maxRows` 上限：
+
+```kotlin
+// Reader 输入
+mapper.parseStream(reader, User::class.java) { user -> }
+
+// 泛型目标类型
+mapper.parseStream(reader, DocumentTypeReference.of(User::class.java)) { user -> }
+
+// 最多回调 1000 行（-1 表示不限制，默认）；达到上限后停止读取
+mapper.parseStream(reader, User::class.java, maxRows = 1000) { user -> }
+```
+
+语义与限制：
+
+- 逐行读取：首次回调后不会读完整个输入；带引号的多行单元格按“一条记录”解析。
+- 空输入、只有表头时不产生回调。
+- CSV 语法/编码错误与 Schema 校验失败抛
+  `com.mingliqiye.document.format.csv.exception.CsvParseException`；Bean 反序列化失败抛
+  `com.mingliqiye.document.serialization.exception.DocumentSerializationException`；
+  `consumer` 抛出的异常原样传播。
+- 不关闭调用方传入的流（只读取），调用方负责关闭。
+- `maxInputSize` 按“累计已从输入读取的字节数（`InputStream`）/ 字符数（`Reader`）”
+  校验（可能包含缓冲区预读），超限抛 `DocumentSerializationException`。
+- 只支持顺序单遍读取；Schema 校验按行进行，不跨行共享上下文；流式 API 不改变写出行为。
+- `maxRows` 达到上限后剩余输入不再读取，流中未消费的部分由调用方自行处理（不提供游标 API）。
 
 ## CSV Schema
 
@@ -162,6 +209,7 @@ name,address.city,address.zip,address.geo.lat,address.geo.lon,members
 - 嵌套对象 / 数组（JSON 文本单元格、点分列名）
 - 多级 Schema（嵌套子 Schema、数组元素 Schema）
 - 文件/流读写
+- 大文件流式逐行解析（`CsvMapper.parseStream`，支持 `maxRows` 与 Schema/嵌套复用）
 - Token 直读 Bean
 - 原生 CSV Token Reader
 

@@ -10,6 +10,7 @@ Java Bean / Kotlin 实体与文档树之间的通用映射模块。
 - `DocumentMapperBuilder`
 - `DocumentMapperConfig`
 - 字段转换器、日期格式、数字格式
+- 根对象 Bean 校验扩展点 `DocumentBeanValidator`（配合 `validation` 模块）
 - 多态类型注册与类型属性
 - Bean 元数据缓存与访问器
 - Java record、只读属性与构造器注入
@@ -148,6 +149,47 @@ val mapper = JsonMapper(
 - 字段级配置
 
 注册。
+
+## Bean Validation 集成
+
+`serialization` 只定义扩展点 `DocumentBeanValidator`，不绑定具体校验框架；
+使用 Jakarta Bean Validation 时配合 `validation` 模块的
+`JakartaDocumentBeanValidator`：
+
+```kotlin
+val config = DocumentMapperConfig.builder()
+    .beanValidator(JakartaDocumentBeanValidator.create()) // validation 模块
+    .build()
+val mapper = JsonMapper(config)
+```
+
+- 序列化根入口 `toNode` / `writeTo` 校验一次根对象
+- 反序列化根出口 `fromNode` / `fromTokens` / `readFrom` 校验一次结果对象
+- `format` / `parse` / 文件与流 API 经过上述根路径，同样生效
+- 嵌套对象、生成式编解码器与值类转换器回调 Mapper 的嵌套调用不会重复校验
+- 未配置 `beanValidator`（默认 `null`）时保持原有行为
+
+校验失败的处理：
+
+```text
+DocumentBeanValidator 直接抛 DocumentSerializationException 时原样传播；
+抛其他异常时 Mapper 包装为 DocumentSerializationException 并通过 cause 保留原异常。
+```
+
+实现 `DocumentBeanValidator` 即可接入任意校验框架：
+
+```kotlin
+val validator = DocumentBeanValidator { value ->
+    if (value is Order && value.amount < 0) {
+        throw DocumentSerializationException("amount must be >= 0")
+    }
+}
+```
+
+限制：
+
+- 只对根对象校验一次；嵌套对象是否级联校验由校验器自身决定（Jakarta 用 `@Valid`）
+- `writeTo` 与 `toNode` 都在写出前校验；`merge` 等不经过根出入口的 API 不自动校验
 
 ## 多态类型
 

@@ -61,8 +61,8 @@
 - [x] 编译期枚举转换器源码生成
 - [x] 运行期 Bean 编解码器生成
 - [x] 编译期注解处理器 / KSP
-- [ ] 大文件流式 Bean 映射
-- [ ] 对象池 / 零拷贝
+- [x] 大文件流式 Bean 映射
+- [x] 对象池 / 零拷贝
 
 ---
 
@@ -83,9 +83,9 @@
 ## 阶段 5：Schema 与生态
 
 - [x] JSON Schema（常用 draft-07 子集）
-- [ ] Schema Registry 适配
+- [x] Schema Registry 适配
 - [x] OpenAPI 3.0 生成
-- [ ] Bean Validation 集成
+- [x] Bean Validation 集成
 - [ ] 数据库 / ORM 集成
 
 ---

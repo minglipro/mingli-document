@@ -28,6 +28,7 @@ public class DocumentMapperConfigBuilder {
     private var resolveReferences = false
     private var writeReferences = false
     private var remoteReferenceResolver: RemoteReferenceResolver? = null
+    private var beanValidator: DocumentBeanValidator? = null
 
     /**
      * 为指定字段绑定转换器。
@@ -282,6 +283,21 @@ public class DocumentMapperConfigBuilder {
     }
 
     /**
+     * 设置根对象 Bean 校验器。
+     *
+     * 配置后在根对象序列化入口（`toNode`/`writeTo`）与反序列化出口
+     * （`fromNode`/`fromTokens`/`readFrom`）各调用一次；嵌套对象与内部编解码器
+     * 回调不会重复校验。传入 `null` 表示关闭校验。
+     *
+     * @param validator 根对象校验器；`null` 表示不校验
+     * @return 当前构建器
+     */
+    public fun beanValidator(validator: DocumentBeanValidator?): DocumentMapperConfigBuilder {
+        this.beanValidator = validator
+        return this
+    }
+
+    /**
      * 构建不可变配置。
      *
      * @throws IllegalArgumentException 子类型注册项非法（如子类不可赋值给基类、
@@ -304,5 +320,6 @@ public class DocumentMapperConfigBuilder {
         writeReferences,
         remoteReferenceResolver,
         SubtypeRegistries.build(subtypeRegistrations, subtypeTypeProperties),
+        beanValidator,
     )
 }

@@ -211,7 +211,9 @@ public class CborReader @JvmOverloads constructor(
     private fun embeddedBytes(parser: CBORParser): ByteArray {
         val embedded = parser.embeddedObject
         if (embedded is ByteArray) {
-            return embedded.copyOf()
+            // Jackson 的 CBORParser 对 byte string 会分配新数组，这里不再提前复制；
+            // BinaryNode.of 仍会防御性复制一次，保证节点不可变。
+            return embedded
         }
         throw CborParseException("Unsupported CBOR embedded object: ${embedded?.javaClass?.name}")
     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.0
+
+### 新增
+
+- 大文件流式 Bean 映射：JSON Lines / NDJSON、JSON 顶层数组流式、CSV 逐行流式
+- `ByteArrayPool` 缓冲池与 `BinaryNode.ofShared` 零拷贝
+- CBOR 可配置缓冲池
+- `schema-registry` 模块：内存 Schema Registry、版本/兼容性策略、远程 SPI
+- `validation` 模块：Jakarta Bean Validation 集成
+- `DocumentBeanValidator` 校验扩展点
+
 ## 2.0.0
 
 ### 新增

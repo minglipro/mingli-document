@@ -1,5 +1,6 @@
 package com.mingliqiye.document.format.cbor
 
+import com.mingliqiye.document.core.ByteArrayPool
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
@@ -13,6 +14,8 @@ import com.mingliqiye.document.serialization.PropertyMetadataResolver
 import java.io.OutputStream
 
 private fun preserveTagsOf(config: DocumentMapperConfig): Boolean = (config as? CborConfig)?.preserveTags == true
+
+private fun bufferPoolOf(config: DocumentMapperConfig): ByteArrayPool? = (config as? CborConfig)?.bufferPool
 
 /**
  * CBOR 文档映射器。
@@ -44,7 +47,7 @@ public open class CborMapper internal constructor(
 ) : BinaryDocumentMapper(
     "cbor",
     { source -> CborReader(source, config.maxNodeDepth, preserveTagsOf(config)).read() },
-    { node, _ -> CborWriter(preserveTags = preserveTagsOf(config)).write(node) },
+    { node, _ -> CborWriter(preserveTags = preserveTagsOf(config), bufferPool = bufferPoolOf(config)).write(node) },
     serializers,
     deserializers,
     objectInstantiator,
@@ -54,6 +57,7 @@ public open class CborMapper internal constructor(
 
     private val preserveTags: Boolean = preserveTagsOf(config)
     private val maxNodeDepth: Int = config.maxNodeDepth
+    private val bufferPool: ByteArrayPool? = bufferPoolOf(config)
 
     /**
      * 创建默认 CBOR 映射器。
@@ -112,9 +116,9 @@ public open class CborMapper internal constructor(
      */
     override fun formatBytes(value: Any?): ByteArray {
         if (preserveTags) {
-            return CborWriter(preserveTags = true).write(toNode(value))
+            return CborWriter(preserveTags = true, bufferPool = bufferPool).write(toNode(value))
         }
-        val writer = CborTokenWriter()
+        val writer = newTokenWriter()
         return try {
             writeTo(value, writer)
             writer.toByteArray()
@@ -134,7 +138,7 @@ public open class CborMapper internal constructor(
      * @return CBOR 二进制内容
      * @throws com.mingliqiye.document.format.cbor.exception.CborException 写出失败时抛出
      */
-    public fun formatCanonicalBytes(value: Any?): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags).write(toNode(value))
+    public fun formatCanonicalBytes(value: Any?): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags, bufferPool = bufferPool).write(toNode(value))
 
     /**
      * 解析 CBOR sequence（连续多个自描述数据项），按出现顺序返回全部文档树。
@@ -199,9 +203,9 @@ public open class CborMapper internal constructor(
      */
     public fun formatAll(values: Iterable<Any?>): ByteArray {
         if (preserveTags) {
-            return CborSequenceWriter(preserveTags = true).writeAll(values.map(::toNode))
+            return CborSequenceWriter(preserveTags = true, bufferPool = bufferPool).writeAll(values.map(::toNode))
         }
-        val writer = CborTokenWriter()
+        val writer = newTokenWriter()
         return try {
             for (value in values) {
                 writeTo(value, writer)
@@ -210,6 +214,11 @@ public open class CborMapper internal constructor(
         } finally {
             writer.close()
         }
+    }
+
+    private fun newTokenWriter(): CborTokenWriter {
+        val pool = bufferPool
+        return if (pool != null) CborTokenWriter(pool) else CborTokenWriter()
     }
 
     public companion object {

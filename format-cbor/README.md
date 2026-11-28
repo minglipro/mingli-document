@@ -90,6 +90,8 @@ val more = CborSequenceWriter(preserveTags = true).writeAll(nodes)
 - CBOR 二进制
 - CBOR sequence 多值读写（`parseAll` / `formatAll`，支持 `maxItems` / 深度限制）
 - `BinaryNode` <-> CBOR byte string
+- `BinaryNode.ofShared` / `ofUnsafe` 零拷贝输入
+- 可选输出缓冲池（`ByteArrayPool`），默认不池化
 - Token 直读/直写
 - 文件/流读写
 - 整数最小长度、bignum、tag 4 decimal
@@ -123,6 +125,54 @@ val nodeBytes = node.toCanonicalCborBytes()
 
 对象 key 按 UTF-8 长度升序、同长度按字节序排序，数组保持原顺序。
 
+## 输出缓冲池
+
+默认写出使用普通临时缓冲区；可以传入 `ByteArrayPool` 复用中间缓冲区，减少高频
+写出时的 `byte[]` 分配。未设置（默认 `null`）时行为与未池化完全一致。
+
+```kotlin
+import com.mingliqiye.document.core.ByteArrayPool
+import com.mingliqiye.document.format.cbor.CborConfig
+import com.mingliqiye.document.format.cbor.CborMapper
+import com.mingliqiye.document.format.cbor.toCborBytes
+
+val pool = ByteArrayPool()
+try {
+    // 1) Node -> ByteArray
+    val nodeBytes = node.toCborBytes(bufferPool = pool)
+
+    // 2) Mapper：formatBytes / formatAll / formatCanonicalBytes 的 Node 路径使用池
+    val mapper = CborMapper(CborConfig.builder().bufferPool(pool).build())
+    val beanBytes = mapper.formatBytes(user)
+
+    // 3) CBOR sequence
+    val seqBytes = mapper.formatAll(listOf(userA, userB))
+} finally {
+    pool.close()
+}
+```
+
+- 池只复用中间缓冲区；返回的 `ByteArray` 始终是调用方独占的新数组（最终仍会复制一次）。
+- `CborSequenceWriter(canonical, preserveTags, bufferPool)` 与
+  `Collection<Node>.toCborSequenceBytes(canonical, preserveTags, bufferPool)` 同样支持池。
+- 写出失败（例如非法数字）时缓冲区仍会归还池；池关闭后不可再用。
+- 流式写出（`format(OutputStream)`）与读取路径不使用池。
+
+## 零拷贝 BinaryNode
+
+`BinaryNode.of` 会复制字节数组；`BinaryNode.ofShared` / `ofUnsafe` 不复制，节点直接
+持有传入数组，写出时不会为二进制内容额外分配副本。调用方必须保证节点存活期间
+不修改该数组：
+
+```kotlin
+import com.mingliqiye.document.core.BinaryNode
+
+val payload = byteArrayOf(1, 2, 3)
+val node = BinaryNode.ofShared(payload) // 零拷贝
+val bytes = node.toCborBytes() // 43010203，写出过程不修改 payload
+// 不要修改 payload，否则 node 内容会随之变化；需要复制时使用 BinaryNode.of(payload)
+```
+
 ## 解析深度
 
 ```kotlin
@@ -138,6 +188,8 @@ CborReader(bytes, maxDepth = 64).read()
 - 非字符串 map key 支持有限
 - canonical 只保证 map key 顺序与整数最短编码，不覆盖所有 RFC 8949 确定性要求
 - CBOR sequence 为整段解析：任一项失败不返回部分结果，暂未提供逐项/流式增量 API
+- 输出缓冲池只覆盖内存写出路径（`ByteArray`），不覆盖流式写出与读取
+- `BinaryNode.ofShared` / `ofUnsafe` 的安全由调用方保证（不得修改传入数组）
 
 ## 构建
 

@@ -1,5 +1,6 @@
 package com.mingliqiye.document.format.cbor
 
+import com.mingliqiye.document.core.ByteArrayPool
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 
 /**
@@ -16,6 +17,11 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
  *
  * 默认关闭，保持原有解析/字节输出行为。
  *
+ * [bufferPool] 为可选的输出缓冲区池：设置后 `CborMapper.formatBytes` /
+ * `formatAll` / `formatCanonicalBytes` 以及 `Node.toCborBytes` 等内存写出路径会从池
+ * 借用中间缓冲区并在完成后归还，减少临时 `byte[]` 分配；返回的 `ByteArray` 仍是
+ * 调用方独占的副本。默认 `null`，行为与未池化时完全一致。
+ *
  * 包装协议保留 [TAG_FIELD] 与 [VALUE_FIELD] 两个字段名：普通对象若恰好只含这两个
  * 字段且 tag 为整数，会被当作 tag 包装对象。
  */
@@ -23,6 +29,8 @@ public class CborConfig internal constructor(
     base: DocumentMapperConfig,
     /** 是否保留 CBOR tag（`{"$cborTag": ..., "value": ...}` 包装协议），默认 `false`。 */
     public val preserveTags: Boolean = false,
+    /** 可选的输出缓冲区池，默认 `null`（不池化）。 */
+    public val bufferPool: ByteArrayPool? = null,
 ) : DocumentMapperConfig(base) {
 
     public companion object {

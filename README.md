@@ -441,6 +441,8 @@ gradle :benchmarks:jmh
 | `codegen` | KSP 编译期代码生成（不参与常规依赖） |
 | `openapi` | OpenAPI 3.0 文档生成 |
 | `schema` | 格式无关 Schema |
+| `schema-registry` | Schema Registry 适配 |
+| `validation` | Jakarta Bean Validation 集成 |
 | `format-*` | 各格式 Mapper |
 | `bom` | Maven BOM：`mingli-document-bom` |
 | `benchmarks` | JMH 性能基准（不发布） |
@@ -452,6 +454,8 @@ gradle :benchmarks:jmh
 [exception](exception/README.md) ·
 [core](core/README.md) ·
 [schema](schema/README.md) ·
+[schema-registry](schema-registry/README.md) ·
+[validation](validation/README.md) ·
 [serialization](serialization/README.md) ·
 [serialization-kotlin](serialization-kotlin/README.md) ·
 [codegen](codegen/README.md) ·
