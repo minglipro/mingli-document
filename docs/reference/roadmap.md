@@ -132,16 +132,19 @@
 
 ## 批次计划
 
-| 批次 | 内容 | 状态 |
-|---|---|---|
-| 第一批 | 字段命名策略、XML 混合内容顺序、Avro codec/append | 完成 |
-| 第二批 | JSON Schema、安全边界、文件写入增强 | 待开始 |
-| 第三批 | 多态、构造器/Builder、CBOR tag、Ion 保真 | 待开始 |
-| 第四批 | 原生 Token、JSON byte writer、Ryu | 待开始 |
-| 第五批 | CI/CD、SBOM、发布收口 | 待开始 |
+| 批次 | 版本 | 内容 | 状态 |
+|---|---|---|---|
+| 第一批 | 1.x | Node/Bean 映射、11 种格式、Token、安全边界 | 完成 |
+| 第二批 | 2.0.0 | 代码生成、类型系统、CBOR sequence、Smile 多消息、OpenAPI | 完成 |
+| 第三批 | 2.1.0 | 流式 Bean、对象池、Schema Registry、Bean Validation | 完成 |
+| 第四批 | 2.2.0 | JDBC、TOML 注释、JPMS 自动模块、GraalVM 配置 | 完成 |
+| 第五批 | 2.3.0 | JPA、显式 MR-JAR、Native Image 实测 | 完成 |
+| 第六批 | 2.4.0 | 对象映射 API、反序列化/命名/包含注解、JPMS 全量 | 完成 |
+| 第七批 | 2.5.0 | record-support、jlink、Hibernate 细节、native-image CI | 完成 |
+| 后续 | 2.6.0 | 第三方依赖显式模块化、扩大 jlink 范围 | 规划中 |
 
-> 批次表是早期计划，实际能力已通过后续版本分批发布（见下面的交付状态）。表中「待开始」
-> 表示该批次未按原计划单独收口，不代表对应能力缺失。
+> 原 1.x 的「第二批～第五批」已经通过后续版本完成，不再按原表单独收口；
+> 上表按实际发布版本重新组织。
 
 ## 历史交付状态
 
