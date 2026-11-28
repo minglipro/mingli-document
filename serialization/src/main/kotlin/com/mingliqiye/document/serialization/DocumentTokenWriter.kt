@@ -17,6 +17,14 @@ import com.mingliqiye.document.core.StringNode
  */
 public interface DocumentTokenWriter : DocumentValueWriter {
 
+    /**
+     * 刷新底层输出。
+     *
+     * 默认无操作；流式写出器可覆盖以把缓冲写入目标流。
+     */
+    public fun flush() {
+    }
+
     /** 写出二进制值。 */
     public fun writeBinary(value: ByteArray)
 

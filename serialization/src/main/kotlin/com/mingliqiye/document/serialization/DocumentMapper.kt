@@ -103,6 +103,22 @@ public abstract class DocumentMapper protected constructor(
     protected open val usesTextFormat: Boolean = true
 
     /**
+     * 当前 Mapper 的默认写出是否使用 pretty 格式。
+     */
+    protected open fun prettyOutputEnabled(): Boolean = false
+
+    /**
+     * 创建直接写入输出流的 Token 写出器。
+     *
+     * 返回 `null` 时回退到先构造完整 String/ByteArray 再写出。
+     *
+     * @param output 目标输出流；调用方负责关闭
+     * @param pretty 是否 pretty 输出
+     * @return 流式 Token 写出器或 `null`
+     */
+    protected open fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = null
+
+    /**
      * 创建不带文本编解码能力的映射器基类构造器。
      *
      * @param formatName 格式名称
@@ -352,6 +368,13 @@ public abstract class DocumentMapper protected constructor(
     }
 
     override fun format(value: Any?, output: OutputStream) {
+        val streaming = createStreamingTokenWriter(output, prettyOutputEnabled())
+        if (streaming != null) {
+            writeTo(value, streaming)
+            streaming.flush()
+            output.flush()
+            return
+        }
         output.write(outputBytes(value))
         output.flush()
     }
@@ -373,6 +396,13 @@ public abstract class DocumentMapper protected constructor(
     }
 
     override fun formatPretty(value: Any?, output: OutputStream) {
+        val streaming = createStreamingTokenWriter(output, true)
+        if (streaming != null) {
+            writeTo(value, streaming)
+            streaming.flush()
+            output.flush()
+            return
+        }
         output.write(prettyBytes(value))
         output.flush()
     }

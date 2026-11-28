@@ -6,8 +6,10 @@ import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
+import com.mingliqiye.document.serialization.DocumentTokenWriter
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
+import java.io.OutputStream
 
 /**
  * JSON 文档映射器。
@@ -80,6 +82,10 @@ public open class JsonMapper internal constructor(
     override fun format(value: Any?): String = writeJson(value, pretty = prettyOutput)
 
     override fun formatPretty(value: Any?): String = writeJson(value, pretty = true)
+
+    override fun prettyOutputEnabled(): Boolean = prettyOutput
+
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty) null else JsonUtf8StreamWriter(output)
 
     /**
      * 将任意值序列化为 UTF-8 编码的 JSON 字节数组。
