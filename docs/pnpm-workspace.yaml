@@ -3,6 +3,8 @@ packages:
 
 verifyDepsBeforeRun: false
 
+minimumReleaseAge: 0
+
 overrides:
   '@vuepress/helper': 2.0.0-rc.33
   '@vuepress/plugin-git': 2.0.0-rc.33
