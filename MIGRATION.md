@@ -1,4 +1,24 @@
-# 从 1.x 迁移到 2.4.0
+# 从 1.x 迁移到 2.5.0
+
+## 2.5.0
+
+2.5.0 在 2.4.0 基础上新增：
+
+```text
+record-support 模块（JDK 17+）
+JavaRecordSupport SPI + ServiceLoader
+format-json jlink 镜像
+jlink 依赖 alias-for 1.0.5 / mingli-exception 1.1.2-Final
+Hibernate/JPA 剩余映射细节
+native-image CI
+```
+
+行为变更：
+
+```text
+record 映射需要额外引入 record-support（JDK 17+）
+未引入时按普通 Bean 处理
+```
 
 ## 2.4.0
 

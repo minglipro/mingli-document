@@ -416,7 +416,7 @@ public final class ReadOnlyUser {
 ### 引入模块
 
 ```kotlin
-implementation("com.mingliqiye.document:serialization-kotlin:2.4.0")
+implementation("com.mingliqiye.document:serialization-kotlin:2.5.0")
 ```
 
 ```kotlin
@@ -800,7 +800,7 @@ class Order {
 ```
 
 - `@DocumentConverter` 只接受**双向** `DocumentBaseConverter`；单向实现请用
-  `@DocumentSerializer` / `@DocumentDeserializer`（2.4.0 收紧的行为）；
+  `@DocumentSerializer` / `@DocumentDeserializer`（2.5.0 收紧的行为）；
 - 转换器必须有**无参构造器**，或声明为 Kotlin `object`（通过 `INSTANCE` 取单例）；
 - 转换器实例按类型缓存在 Mapper 内，**必须无状态**，不要在转换器里保存请求级数据；
 - 内置的日期/数字格式转换器内部对 `SimpleDateFormat` / `DecimalFormat` 做了同步，

@@ -106,8 +106,8 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.4.0")
-    implementation("com.mingliqiye.document.format:yaml:2.4.0")
+    implementation("com.mingliqiye.document.format:json:2.5.0")
+    implementation("com.mingliqiye.document.format:yaml:2.5.0")
 }
 ```
 
@@ -117,7 +117,7 @@ Maven：
 <dependency>
     <groupId>com.mingliqiye.document.format</groupId>
     <artifactId>json</artifactId>
-    <version>2.4.0</version>
+    <version>2.5.0</version>
 </dependency>
 ```
 
@@ -343,7 +343,7 @@ com.mingliqiye.document.format:avro
 com.mingliqiye.document.format:protobuf
 ```
 
-当前版本 `2.4.0`。不想给每个模块写版本时用 BOM，详见
+当前版本 `2.5.0`。不想给每个模块写版本时用 BOM，详见
 [安装与依赖](./installation.md)。
 
 ## 项目目录结构
@@ -354,7 +354,7 @@ mingli-document/
 ├── gradle.properties           # projectVersion / projectGroup / formatProjectGroup / jvmVersion
 ├── settings.gradle.kts         # 全部子模块
 ├── README.md                   # 项目总览
-├── MIGRATION.md                # 1.x -> 2.4.0 迁移
+├── MIGRATION.md                # 1.x -> 2.5.0 迁移
 ├── SECURITY.md                 # 安全基线
 ├── benchmarks/                 # JMH 基准（不发布）
 ├── fuzz/                       # Jazzer / JQF / 持续 fuzz（不发布）

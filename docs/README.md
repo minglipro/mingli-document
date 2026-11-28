@@ -38,5 +38,5 @@ docs/
 
 ## 依赖说明
 
-当前固定 VuePress `2.4.0-rc.33` 全家桶。`patches/@vuepress__theme-default@2.4.0-rc.33.patch`
+当前固定 VuePress `2.5.0-rc.33` 全家桶。`patches/@vuepress__theme-default@2.5.0-rc.33.patch`
 修复了 theme 在页面数据缺少 `headers` 时 SSR 失败的问题；升级 VuePress 前需要确认上游已修复并移除补丁。

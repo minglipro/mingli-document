@@ -3,7 +3,7 @@
 ## 坐标
 
 ```kotlin
-implementation("com.mingliqiye.document:jpa-hibernate:2.4.0")
+implementation("com.mingliqiye.document:jpa-hibernate:2.5.0")
 ```
 
 ## 能力

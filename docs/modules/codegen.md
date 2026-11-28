@@ -5,7 +5,7 @@
 转换器的 `DocumentModule`。
 
 - 坐标：`com.mingliqiye.document:codegen`
-- 当前版本：`2.4.0`
+- 当前版本：`2.5.0`
 - 包名：`com.mingliqiye.document.codegen`
 - 目标字节码：JDK 8
 - 实现依赖：`com.google.devtools.ksp:symbol-processing-api:2.0.0-1.0.21`
@@ -91,9 +91,9 @@ dependencies {
 
 ```kotlin
 dependencies {
-    implementation("com.mingliqiye.document:annotation:2.4.0")
-    implementation("com.mingliqiye.document:serialization:2.4.0")
-    ksp("com.mingliqiye.document:codegen:2.4.0")
+    implementation("com.mingliqiye.document:annotation:2.5.0")
+    implementation("com.mingliqiye.document:serialization:2.5.0")
+    ksp("com.mingliqiye.document:codegen:2.5.0")
 }
 ```
 
@@ -363,11 +363,11 @@ gradle :codegen-test:test
 
 ```kotlin
 // 作为 KSP 处理器
-ksp("com.mingliqiye.document:codegen:2.4.0")
+ksp("com.mingliqiye.document:codegen:2.5.0")
 
 // 使用 BOM 统一版本
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.4.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.5.0"))
     ksp("com.mingliqiye.document:codegen")
     api("com.mingliqiye.document:annotation")
     api("com.mingliqiye.document:serialization")

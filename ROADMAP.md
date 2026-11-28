@@ -304,7 +304,7 @@
 - Gitea CI / Maven Central：已放弃
 - 私服 / GitHub Release 已发布
 
-## 2.5.0 交付状态（开发中）
+## 2.5.0 交付状态
 
 - Java record 支持独立为 `record-support` 模块（JDK 17+ 字节码）：`serialization` 改为
   公共 `JavaRecordSupport` SPI + `ServiceLoader` 加载，JDK 8-15 或无 provider 时安全降级；
@@ -312,6 +312,7 @@
 - 删除 `:serialization:recordTest`；record 映射测试迁移到 `:record-support:test`
   （JDK 17 工具链），serialization 测试保持 JDK 8 工具链
 - BOM 纳入 `record-support`；GraalVM 运行期初始化参数改指 `JavaRecordSupportLoader`
+- master / v2.5.0 发布
 - 已验证：`:serialization:ktlintFormat :serialization:test :record-support:ktlintFormat
   :record-support:test` 通过；全量构建 1588 tests 通过
 - JPA 剩余映射细节：`@Convert(attributeName)` 嵌套路径、关系属性 `@Convert`、
