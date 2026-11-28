@@ -171,3 +171,21 @@ gradle :format-protobuf:test
 ```
 
 文档：[根 README](../README.md) · [贡献指南](../CONTRIBUTING.md)
+'
+
+## 复用 Mapper
+
+不同 Java 类只要对应同一个 Protobuf message，就可以共享同一个 Mapper；
+不同 message 类型使用不同 Descriptor，通过 `ProtobufMapperFactory` 缓存：
+
+```kotlin
+val factory = ProtobufMapperFactory(
+    unknownFieldPolicy = ProtobufUnknownFieldPolicy.IGNORE,
+)
+val userMapper = factory.mapper(userDescriptor)
+val orderMapper = factory.mapper(orderDescriptor)
+```
+
+Mapper 是线程安全的读对象，建议按 Descriptor 复用，而不是每次调用都新建。
+Descriptor / FileDescriptor / extension 注册表也应只构建一次。
+'
