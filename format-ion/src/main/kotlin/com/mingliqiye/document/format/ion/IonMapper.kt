@@ -21,9 +21,14 @@ import java.io.OutputStream
  *   同时保留 [IonBinaryWriter] 的 Node 写出路径
  *
  * 通过 [IonConfig.preserveTypes] 开启类型保真后，Node 路径会把 timestamp /
- * symbol / clob / blob 读成包装对象、写出时反向还原（见 [IonTypeFidelity]）。
- * 类型保真模式需要构建完整 Node 树，因此会禁用 Token 直读/直写路径；此外
- * Bean 中对应字段需按包装对象结构映射（例如 timestamp/symbol 不再是普通字符串）。
+ * symbol / clob / blob 读成包装对象、写出时反向还原（见 [IonTypeFidelity]）；
+ * 同时按 [IonReadFeature.USE_NATIVE_TYPE_ID] / [IonWriteFeature.USE_NATIVE_TYPE_ID]
+ * 保留 Ion annotation。类型保真、非默认读取特性需要构建完整 Node 树，因此会禁用
+ * Token 直读/直写路径；此外 Bean 中对应字段需按包装对象结构映射（例如
+ * timestamp/symbol 不再是普通字符串）。
+ *
+ * 读/写特性的默认值对齐 Ion 底层库（见 [IonConfig.DEFAULT_READ_FEATURES] /
+ * [IonConfig.DEFAULT_WRITE_FEATURES]）。
  *
  * 两种形态共用同一套 Node 映射规则；[com.mingliqiye.document.core.BinaryNode]
  * 在文本中输出为 Ion blob、在二进制中输出为原生 blob。
@@ -36,18 +41,24 @@ public open class IonMapper internal constructor(
     config: DocumentMapperConfig,
 ) : DocumentMapper(
     "ion",
-    { source -> IonReader(source, config.maxNodeDepth, config.ionPreserveTypes).read() },
-    { node, pretty -> IonWriter(pretty, config.ionPreserveTypes).write(node) },
+    { source ->
+        IonReader(source, config.maxNodeDepth, config.ionPreserveTypes, config.ionReadFeatures).read()
+    },
+    { node, pretty -> IonWriter(pretty, config.ionPreserveTypes, config.ionWriteFeatures).write(node) },
     serializers,
     deserializers,
     objectInstantiator,
     propertyMetadataResolver,
     config,
-    { source -> IonBinaryReader(source, config.maxNodeDepth, config.ionPreserveTypes).read() },
-    { node, _ -> IonBinaryWriter(config.ionPreserveTypes).write(node) },
+    { source ->
+        IonBinaryReader(source, config.maxNodeDepth, config.ionPreserveTypes, config.ionReadFeatures).read()
+    },
+    { node, _ -> IonBinaryWriter(config.ionPreserveTypes, config.ionWriteFeatures).write(node) },
 ) {
 
     private val preserveTypes: Boolean = config.ionPreserveTypes
+    private val readFeatures: Set<IonReadFeature> = config.ionReadFeatures
+    private val writeFeatures: Set<IonWriteFeature> = config.ionWriteFeatures
     private val mapperConfig: DocumentMapperConfig = config
 
     /**
@@ -79,7 +90,9 @@ public open class IonMapper internal constructor(
      * 使用 Token 直写路径把实体写成二进制 Ion 字节，不构建完整 Node 树。
      *
      * 开启类型保真（[IonConfig.preserveTypes]）后改为 Node 写出路径，以便识别
-     * [IonTypeFidelity] 包装对象；默认行为保持不变。
+     * [IonTypeFidelity] 包装对象；默认行为保持不变。写出特性
+     * （例如 [IonWriteFeature.STRICT_DUPLICATE_DETECTION]、
+     * [IonWriteFeature.USE_NATIVE_TYPE_ID] 的注解包装对象）由 Token 写出器处理。
      *
      * @param value Java 实体、集合、Map、Node 或标量
      * @return 二进制 Ion 内容
@@ -88,7 +101,7 @@ public open class IonMapper internal constructor(
         if (preserveTypes) {
             return super.formatBytes(value)
         }
-        val writer = IonBinaryTokenWriter()
+        val writer = IonBinaryTokenWriter(writeFeatures = writeFeatures)
         writeTo(value, writer)
         return writer.toByteArray()
     }
@@ -96,18 +109,24 @@ public open class IonMapper internal constructor(
     /**
      * 创建 Ion Token 读取器：字节解析 Bean 时优先走 Token 直读，避免先构建 Node 树。
      *
-     * 开启类型保真后返回 `null`，让二进制解析回退到 Node 路径以保留 Ion 类型。
+     * 开启类型保真或使用非默认读取特性（例如
+     * [IonReadFeature.STRICT_DUPLICATE_DETECTION]、关闭
+     * [IonReadFeature.READ_NULL_AS_IONVALUE]）时返回 `null`，让二进制解析回退到
+     * Node 路径以应用这些语义。
      *
      * @param source 二进制（或文本）Ion 内容
-     * @return Ion Token 读取器；类型保真模式下为 `null`
+     * @return Ion Token 读取器；需要 Node 路径语义时为 `null`
      */
-    protected override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTypes) {
+    protected override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (
+        preserveTypes ||
+        readFeatures != IonConfig.DEFAULT_READ_FEATURES
+    ) {
         null
     } else {
         IonTokenReader(source)
     }
 
-    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter = IonTextTokenWriter(output, pretty, mapperConfig.fileCharset)
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter = IonTextTokenWriter(output, pretty, mapperConfig.fileCharset, writeFeatures)
 
     public companion object {
 

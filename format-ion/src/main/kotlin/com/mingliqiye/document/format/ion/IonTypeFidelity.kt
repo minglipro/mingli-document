@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.ion
 
 import com.amazon.ion.Timestamp
+import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BinaryNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.core.ObjectNode
@@ -17,8 +18,12 @@ import com.mingliqiye.document.format.ion.exception.IonException
  * - `{"$ionType":"clob","value":<BinaryNode>}`
  * - `{"$ionType":"blob","value":<BinaryNode>}`
  *
- * 写出时只识别「恰好两个字段、`$ionType` 为已知类型、`value` 类型匹配」的对象；
- * 其余对象（包括 `$ionType` 未知或 `value` 类型不匹配）按普通对象处理。
+ * 另在 [IonReadFeature.USE_NATIVE_TYPE_ID] / [IonWriteFeature.USE_NATIVE_TYPE_ID]
+ * 开启时（保真模式下读取）用注解包装对象表示 Ion annotation：
+ * - `{"$ionAnnotations":["ann1","ann2"],"value":<node>}`
+ *
+ * 写出时只识别「恰好两个字段、标记字段类型/取值匹配」的对象；其余对象按普通
+ * 对象处理。
  */
 internal object IonTypeFidelity {
 
@@ -27,6 +32,9 @@ internal object IonTypeFidelity {
 
     /** 包装对象的值字段名。 */
     const val VALUE_FIELD: String = "value"
+
+    /** 注解包装对象的注解数组字段名。 */
+    const val ANNOTATIONS_FIELD: String = "\$ionAnnotations"
 
     /** timestamp 类型标记。 */
     const val TIMESTAMP: String = "timestamp"
@@ -51,6 +59,38 @@ internal object IonTypeFidelity {
 
     /** 创建 blob 包装对象。 */
     fun blob(value: ByteArray): ObjectNode = wrap(BLOB, BinaryNode.of(value))
+
+    /**
+     * 创建注解包装对象。
+     *
+     * @param annotations Ion annotation 文本列表（保持顺序）
+     * @param value 被注解的值节点
+     */
+    fun annotated(annotations: List<String>, value: Node): ObjectNode = ObjectNode.of(
+        ANNOTATIONS_FIELD to ArrayNode.from(annotations.map { StringNode.of(it) }),
+        VALUE_FIELD to value,
+    )
+
+    /**
+     * 识别注解包装对象。
+     *
+     * 只识别「恰好两个字段、`$ionAnnotations` 为字符串数组、包含 `value` 字段」
+     * 的对象，其余返回 `null`。
+     *
+     * @return 注解文本列表与内部值节点；不是注解包装对象时返回 `null`
+     */
+    fun annotationWrapper(node: Node): Pair<List<String>, Node>? {
+        if (node !is ObjectNode || node.size != 2) {
+            return null
+        }
+        val annotationArray = node[ANNOTATIONS_FIELD] as? ArrayNode ?: return null
+        val value = node[VALUE_FIELD] ?: return null
+        val annotations = ArrayList<String>(annotationArray.size)
+        for (element in annotationArray) {
+            annotations.add(element.asStringOrNull() ?: return null)
+        }
+        return annotations to value
+    }
 
     /**
      * 尝试把类型保真包装对象写成对应的 Ion 类型。

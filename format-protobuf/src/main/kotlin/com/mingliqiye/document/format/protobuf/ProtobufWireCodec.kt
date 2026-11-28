@@ -39,8 +39,9 @@ import java.util.LinkedHashMap
  *
  * 解析时未知字段由 [ProtobufUnknownFieldPolicy] 决定：`FAIL` 抛错，`IGNORE` 丢弃，`PRESERVE`
  * 映射为 [ProtobufUnknownFields.FIELD_NAME] 对象字段并支持再写出。编码时对象节点中出现 Descriptor
- * 与注册表都未声明的字段名一律抛出 [ProtobufException]（[ProtobufUnknownFields.FIELD_NAME] 仅在
- * `PRESERVE` 策略下接受）。
+ * 与注册表都未声明的字段名默认抛出 [ProtobufException]；`ignoreUnknownFields` 为 `true`
+ * （对应 [ProtobufWriteFeature.IGNORE_UNKNOWN]）时改为静默跳过。
+ * [ProtobufUnknownFields.FIELD_NAME] 仅在 `PRESERVE` 策略下接受。
  */
 internal object ProtobufWireCodec {
 
@@ -58,6 +59,8 @@ internal object ProtobufWireCodec {
      * @param node 对象节点
      * @param unknownFieldPolicy 未知字段处理策略，决定是否接受 [ProtobufUnknownFields.FIELD_NAME]
      * @param extensions extension 注册表
+     * @param ignoreUnknownFields 是否忽略未声明的字段名（上游实现
+     *   `JsonGenerator.Feature.IGNORE_UNKNOWN`，见 [ProtobufWriteFeature.IGNORE_UNKNOWN]）
      * @return Protobuf 二进制内容
      * @throws ProtobufException 节点结构与 Descriptor 不匹配时抛出
      */
@@ -66,7 +69,15 @@ internal object ProtobufWireCodec {
         node: Node,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         extensions: ProtobufExtensionRegistry,
-    ): ByteArray = encodeMessage(descriptor, node, descriptor.fullName, unknownFieldPolicy, extensions).toByteArray()
+        ignoreUnknownFields: Boolean = false,
+    ): ByteArray = encodeMessage(
+        descriptor,
+        node,
+        descriptor.fullName,
+        unknownFieldPolicy,
+        extensions,
+        ignoreUnknownFields,
+    ).toByteArray()
 
     /**
      * 将 Protobuf 二进制解析为 [Node]。
@@ -103,6 +114,7 @@ internal object ProtobufWireCodec {
         path: String,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         extensions: ProtobufExtensionRegistry,
+        ignoreUnknownFields: Boolean,
     ): DynamicMessage {
         val objectNode = requireObject(node, path)
         val builder = DynamicMessage.newBuilder(descriptor)
@@ -117,7 +129,14 @@ internal object ProtobufWireCodec {
                 }
                 continue
             }
-            val field = resolveField(descriptor, extensions, name, path)
+            val field = if (ignoreUnknownFields) {
+                resolveFieldOrNull(descriptor, extensions, name)
+            } else {
+                resolveField(descriptor, extensions, name, path)
+            }
+            if (field == null) {
+                continue
+            }
             if (child.isNull) {
                 if (field.isRequired) {
                     throw ProtobufException("$path.$name 是必填字段，不能为 null")
@@ -133,10 +152,10 @@ internal object ProtobufWireCodec {
             }
             val fieldPath = "$path.$name"
             when {
-                field.isMapField -> encodeMapField(builder, field, child, fieldPath, unknownFieldPolicy, extensions)
-                field.isRepeated -> encodeRepeatedField(builder, field, child, fieldPath, unknownFieldPolicy, extensions)
+                field.isMapField -> encodeMapField(builder, field, child, fieldPath, unknownFieldPolicy, extensions, ignoreUnknownFields)
+                field.isRepeated -> encodeRepeatedField(builder, field, child, fieldPath, unknownFieldPolicy, extensions, ignoreUnknownFields)
                 else -> {
-                    val value = encodeSingularValue(field, child, fieldPath, unknownFieldPolicy, extensions)
+                    val value = encodeSingularValue(field, child, fieldPath, unknownFieldPolicy, extensions, ignoreUnknownFields)
                     if (shouldOmitDefaultValue(field, value)) {
                         continue
                     }
@@ -175,13 +194,22 @@ internal object ProtobufWireCodec {
         extensions: ProtobufExtensionRegistry,
         name: String,
         path: String,
-    ): FieldDescriptor {
+    ): FieldDescriptor = resolveFieldOrNull(descriptor, extensions, name)
+        ?: throw ProtobufException("$path 的字段 '$name' 未在消息 ${descriptor.fullName} 中声明")
+
+    /**
+     * 解析字段名；未声明时返回 `null`（由调用方决定报错还是忽略）。
+     */
+    private fun resolveFieldOrNull(
+        descriptor: Descriptor,
+        extensions: ProtobufExtensionRegistry,
+        name: String,
+    ): FieldDescriptor? {
         descriptor.findFieldByName(name)?.let { return it }
-        val extension = extensions.extension(descriptor, name)
-            ?: throw ProtobufException("$path 的字段 '$name' 未在消息 ${descriptor.fullName} 中声明")
+        val extension = extensions.extension(descriptor, name) ?: return null
         if (extension.containingType !== descriptor) {
             throw ProtobufException(
-                "$path 的 extension '$name' 属于另一个 Descriptor 实例（${extension.containingType.fullName}）；" +
+                "$name 的 extension 属于另一个 Descriptor 实例（${extension.containingType.fullName}）；" +
                     "extension 注册表必须与 mapper 使用同一个 Descriptor",
             )
         }
@@ -195,6 +223,7 @@ internal object ProtobufWireCodec {
         path: String,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         extensions: ProtobufExtensionRegistry,
+        ignoreUnknownFields: Boolean,
     ) {
         val arrayNode = requireArray(node, path)
         for (index in 0 until arrayNode.size) {
@@ -203,7 +232,10 @@ internal object ProtobufWireCodec {
             if (element.isNull) {
                 throw ProtobufException("$elementPath 为 repeated 元素，不能为 null")
             }
-            builder.addRepeatedField(field, encodeSingularValue(field, element, elementPath, unknownFieldPolicy, extensions))
+            builder.addRepeatedField(
+                field,
+                encodeSingularValue(field, element, elementPath, unknownFieldPolicy, extensions, ignoreUnknownFields),
+            )
         }
     }
 
@@ -214,6 +246,7 @@ internal object ProtobufWireCodec {
         path: String,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         extensions: ProtobufExtensionRegistry,
+        ignoreUnknownFields: Boolean,
     ) {
         val objectNode = requireObject(node, path)
         val entryDescriptor = field.messageType
@@ -231,7 +264,7 @@ internal object ProtobufWireCodec {
             if (keyField.hasPresence() || !isDefaultValue(keyField, keyValue)) {
                 entryBuilder.setField(keyField, keyValue)
             }
-            val value = encodeSingularValue(valueField, valueNode, entryPath, unknownFieldPolicy, extensions)
+            val value = encodeSingularValue(valueField, valueNode, entryPath, unknownFieldPolicy, extensions, ignoreUnknownFields)
             if (valueField.hasPresence() || !isDefaultValue(valueField, value)) {
                 entryBuilder.setField(valueField, value)
             }
@@ -245,6 +278,7 @@ internal object ProtobufWireCodec {
         path: String,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
         extensions: ProtobufExtensionRegistry,
+        ignoreUnknownFields: Boolean,
     ): Any = when (field.type) {
         FieldDescriptor.Type.DOUBLE -> doubleValue(node, path)
         FieldDescriptor.Type.FLOAT -> floatValue(node, path)
@@ -270,8 +304,8 @@ internal object ProtobufWireCodec {
         FieldDescriptor.Type.STRING -> requireString(node, path)
         FieldDescriptor.Type.BYTES -> byteStringValue(node, path)
         FieldDescriptor.Type.ENUM -> enumValue(field, node, path)
-        FieldDescriptor.Type.MESSAGE -> encodeMessage(field.messageType, node, path, unknownFieldPolicy, extensions)
-        FieldDescriptor.Type.GROUP -> encodeMessage(field.messageType, node, path, unknownFieldPolicy, extensions)
+        FieldDescriptor.Type.MESSAGE -> encodeMessage(field.messageType, node, path, unknownFieldPolicy, extensions, ignoreUnknownFields)
+        FieldDescriptor.Type.GROUP -> encodeMessage(field.messageType, node, path, unknownFieldPolicy, extensions, ignoreUnknownFields)
         else -> throw ProtobufException("$path 的类型 ${field.type} 不受支持")
     }
 

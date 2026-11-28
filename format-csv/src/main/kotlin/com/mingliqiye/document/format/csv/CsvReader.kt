@@ -3,7 +3,6 @@ package com.mingliqiye.document.format.csv
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.format.csv.exception.CsvParseException
-import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVParser
 
 /**
@@ -17,6 +16,10 @@ import org.apache.commons.csv.CSVParser
  * - [CsvNestedMode.COLUMNS]：表头中的点分列名（`address.city`）组装为嵌套对象；
  * - `null`（默认）保持原来的平坦解析行为。
  *
+ * [readFeatures] 对齐 上游实现 `CsvParser.Feature` / `CsvReadFeature`，默认值见
+ * [CsvConfig.DEFAULT_READ_FEATURES]；无 Schema 路径仅使用配置级选项（分隔符、表头、
+ * 引号/转义使用默认值）。
+ *
  * 整段解析适合中小输入；大文件请使用 [CsvMapper.parseStream] 逐行解析。
  *
  * 解析深度：根数组深度为 `1`、行对象为 `2`、单元格标量为 `3`；点分列名（
@@ -29,6 +32,7 @@ import org.apache.commons.csv.CSVParser
  * @param nestedMode 嵌套值读写方式
  * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]；
  *   `0` 或负数表示不限制（显式关闭保护）
+ * @param readFeatures 读取特性集合，默认 [CsvConfig.DEFAULT_READ_FEATURES]
  */
 public class CsvReader(
     private val source: String,
@@ -36,7 +40,10 @@ public class CsvReader(
     private val header: Boolean = DEFAULT_CSV_HEADER,
     private val nestedMode: CsvNestedMode? = null,
     private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+    private val readFeatures: Set<CsvReadFeature> = CsvConfig.DEFAULT_READ_FEATURES,
 ) {
+
+    private val support = CsvReadSupport(readFeatures, null, delimiter)
 
     /**
      * 解析并返回文档树。
@@ -46,29 +53,37 @@ public class CsvReader(
      * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突或嵌套 JSON 非法时抛出
      */
     public fun read(): Node = try {
-        CSVParser.parse(source, format()).use { parser -> readRows(parser) }
+        CSVParser.parse(source, support.format()).use { parser -> readRows(parser) }
     } catch (e: CsvParseException) {
         throw e
     } catch (e: Exception) {
         throw CsvParseException("Invalid CSV: ${e.message}", e)
     }
 
-    private fun format(): CSVFormat = CSVFormat.DEFAULT.builder()
-        .setDelimiter(delimiter)
-        .build()
-
     private fun readRows(parser: CSVParser): Node {
         val records = parser.iterator()
-        if (!records.hasNext()) {
-            return ArrayNode.EMPTY
-        }
-        val decoder = CsvRowDecoder(nestedMode, maxDepth)
+        val decoder = CsvRowDecoder(nestedMode, maxDepth, support)
+        var headerRecord: org.apache.commons.csv.CSVRecord? = null
         if (header) {
-            decoder.readHeader(records.next())
+            while (records.hasNext()) {
+                val candidate = records.next()
+                if (!support.shouldSkip(candidate)) {
+                    headerRecord = candidate
+                    break
+                }
+            }
+            if (headerRecord == null) {
+                return ArrayNode.EMPTY
+            }
+            decoder.readHeader(headerRecord)
         }
         val rows = ArrayList<Node>()
         while (records.hasNext()) {
-            rows.add(decoder.readRow(records.next()))
+            val record = records.next()
+            if (support.shouldSkip(record)) {
+                continue
+            }
+            rows.add(decoder.readRow(record))
         }
         return ArrayNode.from(rows)
     }
@@ -83,6 +98,7 @@ public class CsvReader(
          * @param header 是否使用首行作为表头
          * @param nestedMode 嵌套值读写方式
          * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]
+         * @param readFeatures 读取特性集合，默认 [CsvConfig.DEFAULT_READ_FEATURES]
          * @return 文档树
          * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突、嵌套 JSON 非法或
          *   嵌套深度超限时抛出
@@ -95,7 +111,8 @@ public class CsvReader(
             header: Boolean = DEFAULT_CSV_HEADER,
             nestedMode: CsvNestedMode? = null,
             maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
-        ): Node = CsvReader(source, delimiter, header, nestedMode, maxDepth).read()
+            readFeatures: Set<CsvReadFeature> = CsvConfig.DEFAULT_READ_FEATURES,
+        ): Node = CsvReader(source, delimiter, header, nestedMode, maxDepth, readFeatures).read()
     }
 }
 
@@ -106,6 +123,7 @@ public class CsvReader(
  * @param header 是否使用首行作为表头
  * @param nestedMode 嵌套值读写方式
  * @param maxDepth 解析最大嵌套深度，默认 [CsvConfig.DEFAULT_MAX_DEPTH]
+ * @param readFeatures 读取特性集合，默认 [CsvConfig.DEFAULT_READ_FEATURES]
  * @return 文档树
  * @throws CsvParseException CSV 格式非法、表头重复、嵌套列冲突、嵌套 JSON 非法或
  *   嵌套深度超限时抛出
@@ -115,4 +133,5 @@ public fun String.toCsvNode(
     header: Boolean = DEFAULT_CSV_HEADER,
     nestedMode: CsvNestedMode? = null,
     maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
-): Node = CsvReader(this, delimiter, header, nestedMode, maxDepth).read()
+    readFeatures: Set<CsvReadFeature> = CsvConfig.DEFAULT_READ_FEATURES,
+): Node = CsvReader(this, delimiter, header, nestedMode, maxDepth, readFeatures).read()

@@ -251,7 +251,7 @@ BOM 是纯版本约束，没有 SPI。需要扩展时：
 ## 限制
 
 - BOM 只管理版本，不引入依赖；
-- 不管理第三方依赖（如 Jackson、SnakeYAML、ion-java、protobuf-java 等），需要时请自行
+- 不管理第三方依赖（如 参考实现、SnakeYAML、ion-java、protobuf-java 等），需要时请自行
   统一版本或用 `gradle/libs.versions.toml`；
 - 不管理 `benchmarks` / `fuzz` / `codegen-test`；
 - 使用 `platform(...)` 时 BOM 自身版本仍需显式指定（`2.5.1`）；

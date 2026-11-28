@@ -124,7 +124,8 @@ public class AvroSchema(
      * 转换为 Apache Avro [Schema]。
      *
      * 记录名、命名空间、字段顺序与字段描述原样保留；可空或非必填字段写成
-     * `["null", "<type>"]` 并带 `null` 默认值，与 Avro 推荐写法一致。
+     * `["null", "<type>"]`，默认带 `null` 默认值（见
+     * [addNullAsDefaultValueInSchema]），与 Avro 推荐写法一致。
      *
      * 通用 [SchemaType] 不携带嵌套结构信息，复合字段按以下约定映射：
      * - [SchemaType.ARRAY] 映射为 `array<string>`
@@ -139,26 +140,35 @@ public class AvroSchema(
      * 需要完整嵌套类型（自定义子 record、enum、fixed、非 string 元素）时，
      * 应直接使用 Apache Avro Schema 构造 [AvroMapper]。
      *
+     * [addNullAsDefaultValueInSchema] 对齐 上游实现 3.x 的
+     * [AvroWriteFeature.ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA]：为 `true`（本模块默认，
+     * 保持历史行为）时可空/非必填字段带 `"default": null`；为 `false` 时不补充默认值。
+     *
+     * @param addNullAsDefaultValueInSchema 是否给可空/非必填 union 字段补 `null` 默认值
      * @return Apache Avro Schema
      */
-    public fun toAvroSchema(): Schema {
+    public fun toAvroSchema(addNullAsDefaultValueInSchema: Boolean = true): Schema {
         val record = Schema.createRecord(name, null, namespace, false)
         val avroFields = ArrayList<Schema.Field>(fields.size)
         for (field in fields) {
-            avroFields.add(toAvroField(field))
+            avroFields.add(toAvroField(field, addNullAsDefaultValueInSchema))
         }
         record.setFields(avroFields)
         return record
     }
 
-    private fun toAvroField(field: SchemaField): Schema.Field {
+    private fun toAvroField(field: SchemaField, addNullAsDefaultValueInSchema: Boolean): Schema.Field {
         val fieldSchema = toAvroFieldSchema(field)
         if (fieldSchema.type == Schema.Type.NULL) {
             return Schema.Field(field.name, fieldSchema, field.description, Schema.Field.NULL_DEFAULT_VALUE)
         }
         return if (field.nullable || !field.required) {
             val union = Schema.createUnion(Schema.create(Schema.Type.NULL), fieldSchema)
-            Schema.Field(field.name, union, field.description, Schema.Field.NULL_DEFAULT_VALUE)
+            if (addNullAsDefaultValueInSchema) {
+                Schema.Field(field.name, union, field.description, Schema.Field.NULL_DEFAULT_VALUE)
+            } else {
+                Schema.Field(field.name, union, field.description)
+            }
         } else {
             Schema.Field(field.name, fieldSchema, field.description)
         }

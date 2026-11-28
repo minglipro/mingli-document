@@ -14,28 +14,41 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
+import java.time.temporal.Temporal
 
 /**
  * TOML 读取入口。
  *
  * 使用 tomlj 解析 TOML 文本，并把 `TomlTable` / `TomlArray` 还原为通用文档树。
- * TOML 的日期时间类型（offset date-time、local date-time、local date、local time）
- * 在文档树中没有对应类型，统一写成 ISO-8601 字符串。
+ *
+ * 日期时间（offset date-time、local date-time、local date、local time）在 Node 模型中
+ * 没有对应类型，读取为字符串。默认（[TomlReadFeature.PARSE_JAVA_TIME] 关闭）返回
+ * TOML 源码原文，仅把日期时间分隔符 `T`/空格与 `z`/`Z` 归一化，与 上游实现 TOML 的
+ * 默认字符串行为一致；开启 [TomlReadFeature.PARSE_JAVA_TIME] 后返回经 `java.time`
+ * 规范化的 ISO-8601 字符串（上游实现 以 embedded object 返回，Node 模型无法表达，
+ * 详见 format-toml README）。
  *
  * TOML 文档根必须是表；合法文档解析后根节点总是 [ObjectNode]。
  *
- * 解析深度：默认安全上限 [maxDepth] 为 [TomlMapper.DEFAULT_MAX_DEPTH]（512，根表深度
+ * 解析深度：默认安全上限 [maxDepth] 为 [TomlConfig.DEFAULT_MAX_DEPTH]（512，根表深度
  * 为 `1`）。解析前先做词法预扫描拒绝超深数组/内联 table，解析后再对结果树做迭代
  * 深度校验，超限统一抛 [TomlParseException]，不会 StackOverflow。
  *
  * @param source TOML 文本
- * @param maxDepth 最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]；
+ * @param maxDepth 最大嵌套深度，默认 [TomlConfig.DEFAULT_MAX_DEPTH]；
  *   `0` 或负数表示不限制（显式关闭保护）
+ * @param readFeatures TOML 读取特性集合，默认 [TomlConfig.DEFAULT_READ_FEATURES]
  */
-public class TomlReader(
+public class TomlReader @JvmOverloads constructor(
     private val source: String,
-    private val maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH,
+    private val maxDepth: Int = TomlConfig.DEFAULT_MAX_DEPTH,
+    private val readFeatures: Set<TomlReadFeature> = TomlConfig.DEFAULT_READ_FEATURES,
 ) {
+
+    private val parseJavaTime: Boolean = TomlReadFeature.PARSE_JAVA_TIME in readFeatures
+    private val validateDateTime: Boolean = TomlReadFeature.VALIDATE_DATE_TIME in readFeatures
+    private val temporalText: TomlTemporalText by lazy(LazyThreadSafetyMode.NONE) { TomlTemporalText.scan(source) }
 
     /**
      * 解析并返回文档树。
@@ -85,10 +98,10 @@ public class TomlReader(
         is Boolean -> BooleanNode.of(value)
         is Long -> NumberNode.of(value)
         is Double -> toDoubleNode(value)
-        is OffsetDateTime -> StringNode.of(value.toString())
-        is LocalDateTime -> StringNode.of(value.toString())
-        is LocalDate -> StringNode.of(value.toString())
-        is LocalTime -> StringNode.of(value.toString())
+        is OffsetDateTime -> toTemporalNode(value)
+        is LocalDateTime -> toTemporalNode(value)
+        is LocalDate -> toTemporalNode(value)
+        is LocalTime -> toTemporalNode(value)
         else -> throw TomlParseException("Unsupported TOML value type: ${value?.javaClass?.name ?: "null"}")
     }
 
@@ -99,27 +112,64 @@ public class TomlReader(
         return NumberNode.of(value)
     }
 
+    /**
+     * 日期时间 -> StringNode。
+     *
+     * - `PARSE_JAVA_TIME` 关闭（默认）：返回源码原文（已归一化分隔符/时区大小写）；
+     * - `PARSE_JAVA_TIME` 开启：返回 `java.time` 规范化 ISO-8601 字符串；
+     * - `VALIDATE_DATE_TIME` 开启：额外用 `java.time` 复核一遍，失败抛 [TomlParseException]。
+     */
+    private fun toTemporalNode(value: Temporal): Node {
+        val text = if (parseJavaTime) value.toString() else temporalText.rawFor(value) ?: value.toString()
+        if (parseJavaTime || validateDateTime) {
+            validateTemporal(text, value)
+        }
+        return StringNode.of(text)
+    }
+
+    private fun validateTemporal(text: String, value: Temporal) {
+        try {
+            when (value) {
+                is OffsetDateTime -> OffsetDateTime.parse(text)
+                is LocalDateTime -> LocalDateTime.parse(text)
+                is LocalDate -> LocalDate.parse(text)
+                else -> LocalTime.parse(text)
+            }
+        } catch (e: DateTimeParseException) {
+            throw TomlParseException("Invalid TOML date/time value '$text': ${e.message}", e)
+        }
+    }
+
     public companion object {
 
         /**
          * 解析 TOML 字符串。
          *
          * @param source TOML 文本
-         * @param maxDepth 最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]
+         * @param maxDepth 最大嵌套深度，默认 [TomlConfig.DEFAULT_MAX_DEPTH]
+         * @param readFeatures TOML 读取特性集合，默认 [TomlConfig.DEFAULT_READ_FEATURES]
          * @return 文档树
          * @throws TomlParseException TOML 文本非法或嵌套深度超限时抛出
          */
         @JvmStatic
         @JvmOverloads
-        public fun parse(source: String, maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH): Node = TomlReader(source, maxDepth).read()
+        public fun parse(
+            source: String,
+            maxDepth: Int = TomlConfig.DEFAULT_MAX_DEPTH,
+            readFeatures: Set<TomlReadFeature> = TomlConfig.DEFAULT_READ_FEATURES,
+        ): Node = TomlReader(source, maxDepth, readFeatures).read()
     }
 }
 
 /**
  * 将 TOML 字符串解析为文档树。
  *
- * @param maxDepth 最大嵌套深度，默认 [TomlMapper.DEFAULT_MAX_DEPTH]
+ * @param maxDepth 最大嵌套深度，默认 [TomlConfig.DEFAULT_MAX_DEPTH]
+ * @param readFeatures TOML 读取特性集合，默认 [TomlConfig.DEFAULT_READ_FEATURES]
  * @return 文档树
  * @throws TomlParseException TOML 文本非法或嵌套深度超限时抛出
  */
-public fun String.toTomlNode(maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH): Node = TomlReader(this, maxDepth).read()
+public fun String.toTomlNode(
+    maxDepth: Int = TomlConfig.DEFAULT_MAX_DEPTH,
+    readFeatures: Set<TomlReadFeature> = TomlConfig.DEFAULT_READ_FEATURES,
+): Node = TomlReader(this, maxDepth, readFeatures).read()

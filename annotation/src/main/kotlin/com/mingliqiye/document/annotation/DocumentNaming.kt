@@ -35,7 +35,7 @@ public enum class DocumentNamingStrategy {
 }
 
 /**
- * 类级/字段级字段命名策略覆盖，对应 Jackson 的
+ * 类级/字段级字段命名策略覆盖，对应 上游实现 的
  * `@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)`。
  *
  * 同时支持类级与字段级：

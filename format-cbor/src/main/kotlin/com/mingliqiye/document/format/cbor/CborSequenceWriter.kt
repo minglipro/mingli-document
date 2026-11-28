@@ -13,11 +13,13 @@ import com.mingliqiye.document.core.Node
  * @param canonical 是否按 canonical map key 顺序写出
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
+ * @param writeFeatures CBOR 写出特性集合，默认 [CborConfig.DEFAULT_WRITE_FEATURES]
  */
 public class CborSequenceWriter @JvmOverloads constructor(
     private val canonical: Boolean = false,
     private val preserveTags: Boolean = false,
     private val bufferPool: ByteArrayPool? = null,
+    private val writeFeatures: Set<CborWriteFeature> = CborConfig.DEFAULT_WRITE_FEATURES,
 ) {
 
     /**
@@ -28,7 +30,12 @@ public class CborSequenceWriter @JvmOverloads constructor(
      * @throws com.mingliqiye.document.format.cbor.exception.CborException
      *   生成 CBOR 失败，或节点包含非法数字时抛出
      */
-    public fun writeAll(nodes: Iterable<Node>): ByteArray = CborWriter(canonical = canonical, preserveTags = preserveTags, bufferPool = bufferPool).writeAll(nodes)
+    public fun writeAll(nodes: Iterable<Node>): ByteArray = CborWriter(
+        canonical = canonical,
+        preserveTags = preserveTags,
+        bufferPool = bufferPool,
+        writeFeatures = writeFeatures,
+    ).writeAll(nodes)
 
     public companion object {
 
@@ -39,6 +46,7 @@ public class CborSequenceWriter @JvmOverloads constructor(
          * @param canonical 是否按 canonical map key 顺序写出，默认 `false`
          * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
          * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
+         * @param writeFeatures CBOR 写出特性集合，默认 [CborConfig.DEFAULT_WRITE_FEATURES]
          * @return CBOR sequence 二进制内容
          * @throws com.mingliqiye.document.format.cbor.exception.CborException
          *   生成 CBOR 失败，或节点包含非法数字时抛出
@@ -50,7 +58,8 @@ public class CborSequenceWriter @JvmOverloads constructor(
             canonical: Boolean = false,
             preserveTags: Boolean = false,
             bufferPool: ByteArrayPool? = null,
-        ): ByteArray = CborSequenceWriter(canonical, preserveTags, bufferPool).writeAll(nodes)
+            writeFeatures: Set<CborWriteFeature> = CborConfig.DEFAULT_WRITE_FEATURES,
+        ): ByteArray = CborSequenceWriter(canonical, preserveTags, bufferPool, writeFeatures).writeAll(nodes)
     }
 }
 
@@ -65,10 +74,12 @@ public class CborSequenceWriter @JvmOverloads constructor(
  * @param canonical 是否按 canonical map key 顺序写出，默认 `false`
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
+ * @param writeFeatures CBOR 写出特性集合，默认 [CborConfig.DEFAULT_WRITE_FEATURES]
  * @return CBOR sequence 二进制内容
  */
 public fun Collection<Node>.toCborSequenceBytes(
     canonical: Boolean = false,
     preserveTags: Boolean = false,
     bufferPool: ByteArrayPool? = null,
-): ByteArray = CborSequenceWriter(canonical, preserveTags, bufferPool).writeAll(this)
+    writeFeatures: Set<CborWriteFeature> = CborConfig.DEFAULT_WRITE_FEATURES,
+): ByteArray = CborSequenceWriter(canonical, preserveTags, bufferPool, writeFeatures).writeAll(this)

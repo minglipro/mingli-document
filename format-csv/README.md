@@ -18,10 +18,55 @@ CsvConfig
 CsvSchema
 CsvSchemaBuilder
 CsvNestedMode
+CsvReadFeature
+CsvWriteFeature
 CsvSchemaReader
 CsvSchemaWriter
 CsvMapper.parseStream
 ```
+
+## 参考实现 配置对齐
+
+读取/写出特性与 参考实现 `CsvParser.Feature` / `CsvGenerator.Feature`（参考实现 3.x 更名为
+`CsvReadFeature` / `CsvWriteFeature`）同名同默认值，覆盖 参考实现 2.15～3.3 官方枚举并集。
+`CsvConfigBuilder` 提供 `enable` / `disable` / `configure`：
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvConfig
+import com.mingliqiye.document.format.csv.CsvMapper
+import com.mingliqiye.document.format.csv.CsvReadFeature
+import com.mingliqiye.document.format.csv.CsvWriteFeature
+
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .enable(CsvReadFeature.SKIP_EMPTY_LINES)
+        .enable(CsvReadFeature.TRIM_SPACES)
+        .disable(CsvReadFeature.ALLOW_TRAILING_COMMA)
+        .enable(CsvWriteFeature.ALWAYS_QUOTE_STRINGS)
+        .configure(CsvWriteFeature.WRITE_LINEFEED_AFTER_LAST_ROW, false)
+        .build(),
+)
+```
+
+读取特性：`TRIM_SPACES`、`WRAP_AS_ARRAY`、`IGNORE_TRAILING_UNMAPPABLE`、`SKIP_EMPTY_LINES`、
+`ALLOW_TRAILING_COMMA`（默认开启）、`ALLOW_COMMENTS`、`FAIL_ON_MISSING_COLUMNS`、
+`FAIL_ON_MISSING_HEADER_COLUMNS`（默认开启）、`INSERT_NULLS_FOR_MISSING_COLUMNS`、
+`EMPTY_STRING_AS_NULL`、`TRIM_HEADER_SPACES`（默认开启）、
+`EMPTY_UNQUOTED_STRING_AS_NULL`、`ONLY_UNQUOTED_NULL_VALUES_AS_NULL`、
+`EMPTY_UNQUOTED_STRING_AS_MISSING`、`SKIP_EMPTY_ROWS`、
+`FAIL_ON_DUPLICATE_HEADER_COLUMNS`（默认开启）、`CASE_INSENSITIVE_HEADERS`。
+
+写出特性：`STRICT_CHECK_FOR_QUOTING`、`OMIT_MISSING_TAIL_COLUMNS`、`ALWAYS_QUOTE_STRINGS`、
+`ALWAYS_QUOTE_EMPTY_STRINGS`、`ESCAPE_QUOTE_CHAR_WITH_ESCAPE_CHAR`、
+`ESCAPE_CONTROL_CHARS_WITH_ESCAPE_CHAR`、`ALWAYS_QUOTE_NUMBERS`、
+`WRITE_LINEFEED_AFTER_LAST_ROW`（默认开启）、
+`QUOTE_STRINGS_WITH_LEADING_TRAILING_WHITESPACE`。
+
+默认引号行为对齐 参考实现（宽松检查）：部分无需引号的值（如含空格、`#`、反斜杠）也会加引号；
+需要最小必要引号时开启 `STRICT_CHECK_FOR_QUOTING`。
+
+`CsvSchema` 的 参考实现 格式选项同样可用（列分隔符/引号/转义/行分隔符/数组元素分隔符/
+null 文本/跳过首行/注释/列重排），见下节与 `docs/formats/csv.md` 的配置矩阵。
 
 ## 示例
 
@@ -101,6 +146,29 @@ val schema = CsvSchema.builder("user")
 
 val mapper = CsvMapper(schema)
 ```
+
+Schema 格式选项对齐 参考实现 `CsvSchema`：
+
+```kotlin
+val schema = CsvSchema.builder("user")
+    .string("name")
+    .string("note", required = false, nullable = true)
+    .columnSeparator(';')
+    .quoteChar('\'')
+    .escapeChar('\\')
+    .lineSeparator("\r\n")
+    .nullValue("NULL")
+    .skipFirstDataRow(false)
+    .allowComments(true)
+    .orderColumns("name", "note")
+    .build()
+```
+
+- `columnSeparator` / `quoteChar`（null 关闭引号）/ `escapeChar`（null 关闭转义）/
+  `lineSeparator` / `nullValue` / `skipFirstDataRow` / `allowComments` / `header`；
+- 数组字段可用 `arrayElementSeparator(";")` 切换为 参考实现 风格分隔文本数组
+  （默认 `null` 表示本库的 JSON 文本数组）；
+- `orderColumns(...)` / `CsvSchema.sortedBy(...)` 重排顶层列顺序。
 
 ## 嵌套单元格
 
@@ -237,13 +305,14 @@ val node = com.mingliqiye.document.format.csv.CsvReader(csv, maxDepth = 64).read
 - 平坦表格
 - 表头 / 无表头
 - 类型推断
-- CSV Schema
+- CSV Schema（列分隔符/引号/转义/行分隔符/数组元素分隔符/null 文本/跳过首行/注释/列重排）
+- 参考实现 读写特性对齐（`CsvReadFeature` / `CsvWriteFeature`，`enable` / `disable` / `configure`）
 - 嵌套对象 / 数组（JSON 文本单元格、点分列名）
 - 多级 Schema（嵌套子 Schema、数组元素 Schema）
 - 文件/流读写
 - 大文件流式逐行解析（`CsvMapper.parseStream`，支持 `maxRows` 与 Schema/嵌套复用）
 - Token 直读 Bean
-- 原生 CSV Token Reader
+- 原生 CSV Token Reader（应用读取特性）
 - 解析深度限制（默认 512，可配置，覆盖嵌套 Schema 与 JSON 单元格）
 
 ## 限制
@@ -253,7 +322,14 @@ val node = com.mingliqiye.document.format.csv.CsvReader(csv, maxDepth = 64).read
 - 多级 Schema 的嵌套对象固定按点分列名展开，子 Schema 的 `header` /
   `failOnUnknownColumns` 不参与列展开，仅 `failOnUnknownColumns` 参与数组元素 Schema 校验；
 - 子 Schema 内的列名不能与其它展开列冲突（如既有 `address.city` 字段又展开 `address`）；
-- 根节点固定为数组（写出时单对象按单行处理）。
+- 根节点固定为数组（写出时单对象按单行处理）；参考实现 `WRAP_AS_ARRAY` 因此等价恒开启；
+- 无法区分带引号与不带引号的空单元格：`EMPTY_UNQUOTED_STRING_AS_NULL`、
+  `ONLY_UNQUOTED_NULL_VALUES_AS_NULL`、`EMPTY_UNQUOTED_STRING_AS_MISSING` 按“全部视为
+  无引号”近似；
+- 自定义 `lineSeparator` 仅写出生效，读取按标准换行解析；
+- `arrayElementSeparator` 默认 `null` 表示 JSON 文本数组（本库扩展），显式设置后数组元素
+  必须是单标量字段且元素内不能包含分隔符；
+- 未提供 参考实现 的 `columnReordering` / `strictHeaders`：本库始终按列名映射，列顺序任意。
 
 ## 构建
 

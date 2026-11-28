@@ -11,6 +11,21 @@ public class TomlCommentConfigBuilder {
     private var trailingNewline: Boolean = true
 
     /**
+     * 用现有注释配置作为基线（可继续逐项覆盖）。
+     *
+     * 便于把 [TomlConfig.commentConfig] 与独立使用的构建器合并。
+     *
+     * @param config 注释写出配置
+     * @return 当前构建器
+     */
+    public fun base(config: TomlCommentConfig): TomlCommentConfigBuilder {
+        this.orphanCommentPolicy = config.orphanCommentPolicy
+        this.preserveBlankLines = config.preserveBlankLines
+        this.trailingNewline = config.trailingNewline
+        return this
+    }
+
+    /**
      * 设置游离注释与“关联键/表已不存在”的注释的保留策略。
      *
      * @param policy 保留策略

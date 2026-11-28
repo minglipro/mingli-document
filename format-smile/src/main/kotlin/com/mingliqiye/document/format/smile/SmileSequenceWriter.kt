@@ -8,8 +8,12 @@ import com.mingliqiye.document.core.Node
  * 把多个文档树按给定顺序写成连续的 Smile 根值（多消息流）：Smile 头部只在流
  * 开头写一次，各根值直接首尾相接，不需要长度前缀或分隔符。空集合写出空字节数组，
  * 读回为空列表。单值写出入口 [SmileWriter] 的语义保持不变。
+ *
+ * @param config Smile 配置；`null` 表示使用 上游实现 默认写出特性
  */
-public class SmileSequenceWriter {
+public class SmileSequenceWriter @JvmOverloads constructor(
+    private val config: SmileConfig? = null,
+) {
 
     /**
      * 按顺序写出全部节点并返回 Smile 多消息流字节。
@@ -19,7 +23,7 @@ public class SmileSequenceWriter {
      * @throws com.mingliqiye.document.format.smile.exception.SmileException
      *   节点包含无法编码的内容时抛出
      */
-    public fun writeAll(nodes: Iterable<Node>): ByteArray = SmileWriter().writeAll(nodes)
+    public fun writeAll(nodes: Iterable<Node>): ByteArray = SmileWriter(config).writeAll(nodes)
 
     public companion object {
 

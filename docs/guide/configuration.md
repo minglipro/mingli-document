@@ -570,7 +570,7 @@ val config = DocumentMapperConfig.builder()
 
 ## 反序列化特性（DeserializationFeature）
 
-Jackson 风格的特性开关，默认全部关闭（与 Jackson 默认一致）：
+参考实现 风格的特性开关，默认全部关闭（与 参考实现 默认一致）：
 
 | 特性 | 默认 | 行为 |
 |---|---|---|

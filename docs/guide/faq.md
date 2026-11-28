@@ -51,9 +51,9 @@ class DocumentConfig {
 }
 ```
 
-### Q4：和 Jackson / Gson 有什么本质区别？
+### Q4：和 参考实现 / Gson 有什么本质区别？
 
-- Jackson 的树是 JSON 专用；本库的 `Node` 树是**格式无关**的中间层；
+- 参考实现 的树是 JSON 专用；本库的 `Node` 树是**格式无关**的中间层；
 - 本库没有「一个 ObjectMapper 读所有格式」，而是每种格式一个 Mapper；
 - 多态需要显式注册，不扫描 classpath；
 - 提供 Token 流、统一 IO、跨格式转换、格式专属安全限制。

@@ -5,14 +5,12 @@ import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.format.properties.exception.PropertiesParseException
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
- * Properties 读写测试。
+ * Properties 读写测试（默认配置，对齐 上游实现 `JavaPropsSchema` 默认行为）。
  */
 class PropertiesCodecTest {
 
@@ -30,7 +28,9 @@ class PropertiesCodecTest {
 
         val text = node.toPropertiesString()
         assertTrue(text.contains("name=小于"))
-        assertTrue(text.contains("tags[0]=a"))
+        // 默认对齐 上游实现：简单下标、起始编号 1。
+        assertTrue(text.contains("tags.1=a"))
+        assertTrue(text.contains("tags.2=b"))
         assertTrue(text.contains("address.city=杭州"))
 
         val restored = PropertiesReader(text).read()
@@ -43,17 +43,23 @@ class PropertiesCodecTest {
     @Test
     fun dotInFieldNameIsEscaped() {
         val node = ObjectNode.from(mapOf("user.name" to StringNode.of("小于")))
-        val text = node.toPropertiesString()
-        val restored = PropertiesReader(text).read()
 
+        val text = node.toPropertiesString()
+
+        // 本模块扩展：字段名中的 `.` 默认百分号编码，保证可往返（上游实现 无此扩展）。
+        assertTrue(text.contains("user%2Ename=小于"))
+        val restored = PropertiesReader(text).read()
         assertEquals("小于", restored.asObject()["user.name"]?.asString())
     }
 
     @Test
     fun rootArrayRoundTrip() {
         val node = ArrayNode.from(listOf(StringNode.of("a"), StringNode.of("b")))
-        val restored = PropertiesReader(node.toPropertiesString()).read()
 
+        val text = node.toPropertiesString()
+
+        assertEquals("1=a\n2=b\n", text)
+        val restored = PropertiesReader(text).read()
         assertEquals("a", restored.asArray().get(0).asString())
         assertEquals("b", restored.asArray().get(1).asString())
     }
@@ -63,13 +69,17 @@ class PropertiesCodecTest {
         val restored = PropertiesReader("").read()
 
         assertEquals(0, restored.asObject().size)
+        assertEquals("", ObjectNode.EMPTY.toPropertiesString())
     }
 
     @Test
-    fun conflictingPathsThrow() {
-        assertFailsWith<PropertiesParseException> {
-            PropertiesReader("a=1\na.b=2").read()
-        }
+    fun valueAndChildrenUseJacksonCoercion() {
+        // 上游实现 语义：同一路径既有值又有子节点时，值写成空字符串键字段。
+        val restored = PropertiesReader("a=1\na.b=2").read()
+
+        val a = restored.asObject()["a"]?.asObject()
+        assertEquals(1, a?.get("")?.asNumber()?.toInt())
+        assertEquals(2, a?.get("b")?.asNumber()?.toInt())
     }
 
     @Test

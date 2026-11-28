@@ -23,7 +23,7 @@ private const val LINE_SEPARATOR: Int = '\n'.code
 /**
  * JSON 文档映射器。
  *
- * 与 Jackson 的 `JsonMapper` 类似：继承通用 [DocumentMapper]，内置 JSON 编解码能力。
+ * 与 上游实现 的 `JsonMapper` 类似：继承通用 [DocumentMapper]，内置 JSON 编解码能力。
  * 外部只使用这个 Mapper，不需要接触内部 Codec SPI。
  *
  * - `parse(String)` 走 [JsonTokenReader] Token 直读路径；
@@ -54,6 +54,8 @@ public open class JsonMapper internal constructor(
     private val duplicateKeyPolicy: DuplicateKeyPolicy = jsonConfig?.duplicateKeyPolicy ?: DuplicateKeyPolicy.LAST_WINS
     private val maxDepth: Int = jsonConfig?.maxDepth ?: JsonConfig.DEFAULT_MAX_DEPTH
     private val prettyOutput: Boolean = jsonConfig?.pretty ?: false
+    private val readFeatures: Set<JsonReadFeature> = jsonConfig?.readFeatures ?: JsonConfig.DEFAULT_READ_FEATURES
+    private val writeOptions: JsonWriteOptions = JsonWriteOptions(jsonConfig?.writeFeatures ?: JsonConfig.DEFAULT_WRITE_FEATURES)
     private val fileCharset: Charset = config.fileCharset
 
     /**
@@ -97,7 +99,7 @@ public open class JsonMapper internal constructor(
 
     override fun prettyOutputEnabled(): Boolean = prettyOutput
 
-    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter = JsonUtf8StreamWriter(output, pretty)
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter = JsonUtf8StreamWriter(output, pretty, writeOptions)
 
     /**
      * 将任意值序列化为 UTF-8 编码的 JSON 字节数组。
@@ -108,7 +110,7 @@ public open class JsonMapper internal constructor(
         if (prettyOutput) {
             return writeJson(value, pretty = true).toByteArray(Charsets.UTF_8)
         }
-        val writer = JsonUtf8StreamWriter()
+        val writer = JsonUtf8StreamWriter(options = writeOptions)
         writeTo(value, writer)
         return writer.toByteArray()
     }
@@ -211,7 +213,7 @@ public open class JsonMapper internal constructor(
      * @throws DocumentSerializationException 序列化失败时抛出（此时输出可能只写入了一部分）
      */
     public fun formatLines(values: Iterable<Any?>, output: OutputStream) {
-        val writer = JsonUtf8StreamWriter(output, pretty = false)
+        val writer = JsonUtf8StreamWriter(output, pretty = false, options = writeOptions)
         for (value in values) {
             writeTo(value, writer)
             output.write(LINE_SEPARATOR)
@@ -306,7 +308,7 @@ public open class JsonMapper internal constructor(
         targetType: DocumentTypeReference<T>,
         consumer: (T?) -> Unit,
     ) {
-        val parser = JsonArrayStreamParser(reader, allowComments, duplicateKeyPolicy, maxDepth)
+        val parser = JsonArrayStreamParser(reader, allowComments, duplicateKeyPolicy, maxDepth, readFeatures)
         parser.forEachValue(
             sizeProbe = consumedSize,
             checkSize = { size -> checkInputSize(size) },
@@ -326,7 +328,7 @@ public open class JsonMapper internal constructor(
      */
     public fun formatArray(values: Iterable<Any?>, output: OutputStream) {
         output.write('['.code)
-        val writer = JsonUtf8StreamWriter(output, pretty = false)
+        val writer = JsonUtf8StreamWriter(output, pretty = false, options = writeOptions)
         var first = true
         for (value in values) {
             if (!first) {
@@ -365,12 +367,12 @@ public open class JsonMapper internal constructor(
 
     private fun <T> parseDirect(source: String, targetType: DocumentTypeReference<T>): T = fromTokens(createJsonTokenReader(source), targetType)
 
-    private fun createJsonTokenReader(source: String): JsonTokenReader = JsonTokenReader(source, allowComments, duplicateKeyPolicy, maxDepth)
+    private fun createJsonTokenReader(source: String): JsonTokenReader = JsonTokenReader(source, allowComments, duplicateKeyPolicy, maxDepth, readFeatures)
 
-    private fun createJsonTokenReader(source: ByteArray): JsonTokenReader = JsonTokenReader(decodeUtf8(source), allowComments, duplicateKeyPolicy, maxDepth)
+    private fun createJsonTokenReader(source: ByteArray): JsonTokenReader = JsonTokenReader(decodeUtf8(source), allowComments, duplicateKeyPolicy, maxDepth, readFeatures)
 
     private fun writeJson(value: Any?, pretty: Boolean): String {
-        val writer = JsonStreamWriter(pretty)
+        val writer = JsonStreamWriter(pretty, writeOptions)
         writeTo(value, writer)
         return writer.toString()
     }

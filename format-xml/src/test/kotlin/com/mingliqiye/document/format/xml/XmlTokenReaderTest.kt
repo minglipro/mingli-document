@@ -404,6 +404,10 @@ class XmlTokenReaderTest {
             "<root> 5 </root>",
             "<p>\n Hello <b>x</b>!\n</p>",
             "<list>x<item>1</item></list>",
+            """<root xmlns:xsi="${XmlConfig.XSI_NAMESPACE}" xmlns:xs="${XmlConfig.XSD_NAMESPACE}">""" +
+                """<text xsi:type="xs:string">42</text><count xsi:type="xs:int">42</count>""" +
+                """<ratio xsi:type="xs:double">INF</ratio>""" +
+                """<bytes xsi:type="xs:base64Binary">AQID</bytes></root>""",
         )
     }
 }

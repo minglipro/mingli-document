@@ -17,12 +17,12 @@ module com.mingliqiye.document.format.cbor {
     requires transitive com.mingliqiye.document.exception;
     requires transitive com.mingliqiye.document.serialization;
 
-    // 三个 Jackson 2.15.3 jar 都是 Multi-Release 显式模块：
-    //   jackson-core          -> com.fasterxml.jackson.core
-    //   jackson-databind      -> com.fasterxml.jackson.databind
-    //   jackson-dataformat-cbor -> com.fasterxml.jackson.dataformat.cbor
-    // 本模块直接用 tree 模型（JsonNode/ObjectMapper）桥接 jackson-databind，
-    // 用 JsonParser/JsonToken 与 CBORFactory 读写，因此三个模块都要显式 requires。
+    // 三个 上游实现 2.20.0 jar 都是 Multi-Release 显式模块：
+    //   JSON Token 底层库          -> com.fasterxml.上游库.core
+    //   数据绑定底层库      -> com.fasterxml.上游库.databind
+    //   CBOR 底层库 -> com.fasterxml.上游库.dataformat.cbor
+    // 本模块用 CBORFactory/CBORParser/CBORGenerator 读写，并读取
+    // CBORParser.Feature / CBORGenerator.Feature，因此三个模块都要显式 requires。
     requires com.fasterxml.jackson.core;
     requires com.fasterxml.jackson.databind;
     requires com.fasterxml.jackson.dataformat.cbor;

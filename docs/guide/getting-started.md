@@ -26,7 +26,7 @@ title: 快速开始
 
 ## 项目定位
 
-绝大多数 JSON 库把「文本格式」和「数据结构」焊死在一起：Jackson 的 `JsonNode`
+绝大多数 JSON 库把「文本格式」和「数据结构」焊死在一起：参考实现 的 `JsonNode`
 只能表示 JSON，XML 有自己的一套 DOM，YAML 又是另一套对象。一旦你的系统需要在
 多种格式之间转换、或者让同一个实体既能读 JSON 又能读 YAML，就会出现大量重复的
 映射代码。
@@ -412,7 +412,7 @@ com.mingliqiye.document.openapi           OpenAPI 生成
 | 让 Kotlin data class 直接反序列化 | [Bean 序列化](./serialization.md) |
 | 处理文件、目录、字符集、原子写 | [文件与流](./io.md) |
 | 限制不可信输入的大小与深度 | [Fuzz 与安全](./fuzz-security.md) |
-| 从 Jackson / 1.x 迁过来 | [迁移指南](./migration.md) |
+| 从 参考实现 / 1.x 迁过来 | [迁移指南](./migration.md) |
 | 查常见坑 | [常见问题](./faq.md) |
 
 ::: tip 一句话记住

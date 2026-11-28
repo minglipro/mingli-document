@@ -1,18 +1,24 @@
 package com.mingliqiye.document.format.xml
 
+import com.mingliqiye.document.serialization.DeserializationFeature
 import com.mingliqiye.document.serialization.DocumentBaseConverter
+import com.mingliqiye.document.serialization.DocumentBeanValidator
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.MissingFieldPolicy
+import com.mingliqiye.document.serialization.PropertyNamingStrategy
+import com.mingliqiye.document.serialization.RemoteReferenceResolver
+import java.nio.charset.Charset
 
 /**
  * [XmlConfig] 构建器。
  *
  * 属性映射、Clark 名称模式与命名空间感知默认关闭；混合内容默认保留。
+ * 读/写特性默认对齐 上游实现 XML 3.x，可用 [上游库2Defaults] 切到 上游实现 2.x 默认。
  */
 public class XmlConfigBuilder {
 
     private val base = DocumentMapperConfig.builder()
-    private var rootName = "root"
+    private var rootName = XmlConfig.DEFAULT_ROOT_NAME
     private var attributePrefix: String? = null
     private var attributeModeConfigured = false
     private var namespaceAware = false
@@ -25,6 +31,8 @@ public class XmlConfigBuilder {
     private var typeAttributes = false
     private val readFeatures = XmlConfig.DEFAULT_READ_FEATURES.toMutableSet()
     private val writeFeatures = XmlConfig.DEFAULT_WRITE_FEATURES.toMutableSet()
+    private var defaultUseWrapper = true
+    private var nameProcessor: XmlNameProcessor = XmlNameProcessors.passthrough()
 
     /**
      * 为指定字段绑定转换器。
@@ -66,6 +74,155 @@ public class XmlConfigBuilder {
         base.writeNulls(write)
         return this
     }
+
+    /**
+     * 设置未标注 `@DocumentName` 的字段使用的文档字段命名策略。
+     *
+     * @param strategy 命名策略
+     * @return 当前构建器
+     */
+    public fun namingStrategy(strategy: PropertyNamingStrategy): XmlConfigBuilder {
+        base.namingStrategy(strategy)
+        return this
+    }
+
+    /**
+     * 设置文本文件/流读写使用的字符集；XML 声明中的 `encoding` 也取自该值。
+     *
+     * @param charset 字符集
+     * @return 当前构建器
+     */
+    public fun fileCharset(charset: Charset): XmlConfigBuilder {
+        base.fileCharset(charset)
+        return this
+    }
+
+    /**
+     * 设置写文件时是否使用临时文件 + 原子替换。
+     *
+     * @param atomic 是否原子写入
+     * @return 当前构建器
+     */
+    public fun atomicFileWrite(atomic: Boolean): XmlConfigBuilder {
+        base.atomicFileWrite(atomic)
+        return this
+    }
+
+    /**
+     * 设置写文件时是否自动创建父目录。
+     *
+     * @param create 是否创建父目录
+     * @return 当前构建器
+     */
+    public fun createParentDirectories(create: Boolean): XmlConfigBuilder {
+        base.createParentDirectories(create)
+        return this
+    }
+
+    /**
+     * 设置单次输入最大字节数，0 表示不限制。
+     *
+     * @param max 最大字节数
+     * @return 当前构建器
+     */
+    public fun maxInputSize(max: Long): XmlConfigBuilder {
+        base.maxInputSize(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树中单个字符串最大长度，0 表示不限制。
+     *
+     * @param max 最大长度
+     * @return 当前构建器
+     */
+    public fun maxStringLength(max: Int): XmlConfigBuilder {
+        base.maxStringLength(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大深度，0 表示不限制；XML 解析深度取它与 [maxDepth] 的较小值。
+     *
+     * @param max 最大深度
+     * @return 当前构建器
+     */
+    public fun maxNodeDepth(max: Int): XmlConfigBuilder {
+        base.maxNodeDepth(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大节点数，0 表示不限制。
+     *
+     * @param max 最大节点数
+     * @return 当前构建器
+     */
+    public fun maxNodeCount(max: Long): XmlConfigBuilder {
+        base.maxNodeCount(max)
+        return this
+    }
+
+    /**
+     * 设置远程 `$ref` 解析器。
+     *
+     * @param resolver 远程引用解析器；`null` 表示禁用远程引用
+     * @return 当前构建器
+     */
+    public fun remoteReferenceResolver(resolver: RemoteReferenceResolver?): XmlConfigBuilder {
+        base.remoteReferenceResolver(resolver)
+        return this
+    }
+
+    /**
+     * 设置根对象 Bean 校验器。
+     *
+     * @param validator 校验器；`null` 表示不校验
+     * @return 当前构建器
+     */
+    public fun beanValidator(validator: DocumentBeanValidator?): XmlConfigBuilder {
+        base.beanValidator(validator)
+        return this
+    }
+
+    /**
+     * 开启反序列化特性。
+     *
+     * @param feature 反序列化特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: DeserializationFeature): XmlConfigBuilder {
+        base.enable(feature)
+        return this
+    }
+
+    /**
+     * 关闭反序列化特性。
+     *
+     * @param feature 反序列化特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: DeserializationFeature): XmlConfigBuilder {
+        base.disable(feature)
+        return this
+    }
+
+    /**
+     * 设置反序列化特性开关。
+     *
+     * @param feature 反序列化特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: DeserializationFeature, enabled: Boolean): XmlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 控制反序列化时 `null` 是否可用于 Java 基本类型字段。
+     *
+     * @param fail 为 `true` 时遇到 null 抛异常
+     * @return 当前构建器
+     */
+    public fun failOnNullForPrimitives(fail: Boolean): XmlConfigBuilder = configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, fail)
 
     /**
      * 设置根元素名。
@@ -151,6 +308,18 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 设置“文本元素”字段名，对齐 上游实现 XML 的 `XmlMapper.Builder.nameForTextElement`。
+     *
+     * 本库等价于 [textKey]：元素/对象文本内容在 Node 中使用的字段名。默认沿用 `#text`
+     * （上游实现 默认是空伪属性名，本库 Node 模型需要具体键名，故默认值不同，见文档）。
+     *
+     * @param name 文本字段名；不能为空
+     * @return 当前构建器
+     * @throws IllegalArgumentException 字段名为空时抛出
+     */
+    public fun nameForTextElement(name: String): XmlConfigBuilder = textKey(name)
+
+    /**
      * 设置带属性数组元素的数组字段名，默认 `#items`。
      *
      * @param itemsKey 数组字段名；不能为空
@@ -222,6 +391,28 @@ public class XmlConfigBuilder {
     }
 
     /**
+     * 设置集合/数组字段写出时是否默认使用同名包装元素，默认 `true`（上游实现 默认）。
+     *
+     * @param useWrapper 是否使用包装元素，对齐 上游实现 `defaultUseWrapper`
+     * @return 当前构建器
+     */
+    public fun defaultUseWrapper(useWrapper: Boolean): XmlConfigBuilder {
+        this.defaultUseWrapper = useWrapper
+        return this
+    }
+
+    /**
+     * 设置 XML 名称处理器，对齐 上游实现 `XmlNameProcessor`。
+     *
+     * @param processor 名称处理器
+     * @return 当前构建器
+     */
+    public fun nameProcessor(processor: XmlNameProcessor): XmlConfigBuilder {
+        this.nameProcessor = processor
+        return this
+    }
+
+    /**
      * 开启 XML 读取特性。
      *
      * @param feature 读取特性
@@ -282,6 +473,36 @@ public class XmlConfigBuilder {
      * @return 当前构建器
      */
     public fun configure(feature: XmlWriteFeature, enabled: Boolean): XmlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 切换为 上游实现 XML 2.x 默认值，对齐 上游实现 3.x 的 `configureFor上游实现2()`。
+     *
+     * 关闭 3.x 相比 2.x 默认开启的 5 个特性：
+     * `WRITE_NULLS_AS_XSI_NIL`、`UNWRAP_ROOT_OBJECT_NODE`、
+     * 写侧 `AUTO_DETECT_XSI_TYPE`、`WRITE_XML_SCHEMA_CONFORMING_FLOATS`、
+     * 读侧 `AUTO_DETECT_XSI_TYPE`。其余配置不变。
+     *
+     * @return 当前构建器
+     */
+    public fun legacy2Defaults(): XmlConfigBuilder {
+        writeFeatures.remove(XmlWriteFeature.WRITE_NULLS_AS_XSI_NIL)
+        writeFeatures.remove(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE)
+        writeFeatures.remove(XmlWriteFeature.AUTO_DETECT_XSI_TYPE)
+        writeFeatures.remove(XmlWriteFeature.WRITE_XML_SCHEMA_CONFORMING_FLOATS)
+        readFeatures.remove(XmlReadFeature.AUTO_DETECT_XSI_TYPE)
+        return this
+    }
+
+    /**
+     * 恢复为 上游实现 XML 3.x 默认值。
+     *
+     * @return 当前构建器
+     */
+    public fun modernDefaults(): XmlConfigBuilder {
+        writeFeatures.addAll(XmlConfig.DEFAULT_WRITE_FEATURES)
+        readFeatures.addAll(XmlConfig.DEFAULT_READ_FEATURES)
+        return this
+    }
 
     /**
      * 注册多态子类型。
@@ -379,6 +600,8 @@ public class XmlConfigBuilder {
             typeAttributes,
             readFeatures.toSet(),
             writeFeatures.toSet(),
+            defaultUseWrapper,
+            nameProcessor,
         )
     }
 }

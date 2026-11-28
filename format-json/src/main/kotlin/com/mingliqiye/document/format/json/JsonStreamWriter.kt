@@ -11,15 +11,18 @@ import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.util.Base64
 
-private const val HEX_DIGITS = "0123456789abcdef"
-
 /**
  * 直接输出 JSON 的流式写出器。
  *
  * 与 [JsonWriter] 输出格式一致，但由 Mapper 直接驱动，不构建完整 Node 树。
+ * 输出行为由 [JsonWriteOptions] 控制。
+ *
+ * @param pretty 是否使用两空格缩进
+ * @param options 写出特性
  */
 internal class JsonStreamWriter(
     private val pretty: Boolean,
+    private val options: JsonWriteOptions = JsonWriteOptions.DEFAULT,
 ) : DocumentTokenWriter {
 
     private val builder = StringBuilder(32 * 1024)
@@ -44,23 +47,22 @@ internal class JsonStreamWriter(
 
     override fun writeNumber(raw: String) {
         beforeValue()
-        builder.append(raw)
+        appendNumber(raw)
     }
 
     override fun writeInt(value: Int) {
         beforeValue()
-        builder.append(value)
+        appendNumber(value.toString())
     }
 
     override fun writeLong(value: Long) {
         beforeValue()
-        builder.append(value)
+        appendNumber(value.toString())
     }
 
     override fun writeDouble(value: Double) {
-        require(value.isFinite()) { "NaN and Infinity cannot be serialized" }
         beforeValue()
-        builder.append(JsonDoubleFormatter.format(value))
+        appendNumber(if (value.isFinite()) JsonDoubleFormatter.format(value) else nonFiniteDoubleText(value))
     }
 
     override fun writeBoolean(value: Boolean) {
@@ -107,7 +109,7 @@ internal class JsonStreamWriter(
         if (pretty) {
             appendNewline(depth)
         }
-        appendQuotedName(name)
+        appendFieldName(name)
         builder.append(if (pretty) ": " else ":")
         expectingValue = true
     }
@@ -168,56 +170,37 @@ internal class JsonStreamWriter(
 
     private fun pop(): Boolean = firstElements[--depth]
 
-    private fun appendQuotedName(name: String) {
+    private fun appendFieldName(name: String) {
         val cached = quotedNames[name]
         if (cached != null) {
             builder.append(cached)
             return
         }
         val start = builder.length
-        appendString(name)
+        if (options.quoteFieldNames) {
+            appendString(name)
+        } else {
+            builder.append(name)
+        }
         quotedNames[name] = builder.substring(start)
     }
 
     private fun appendString(value: String) {
-        var needsEscape = false
-        for (ch in value) {
-            if (ch == '"' || ch == '\\' || ch < ' ') {
-                needsEscape = true
-                break
-            }
-        }
-        if (!needsEscape) {
-            builder.append('"').append(value).append('"')
-            return
-        }
         builder.append('"')
-        for (ch in value) {
-            when (ch) {
-                '"' -> builder.append("\\\"")
-                '\\' -> builder.append("\\\\")
-                '\b' -> builder.append("\\b")
-                '\u000C' -> builder.append("\\f")
-                '\n' -> builder.append("\\n")
-                '\r' -> builder.append("\\r")
-                '\t' -> builder.append("\\t")
-                else -> {
-                    if (ch < ' ') {
-                        appendUnicodeEscape(ch)
-                    } else {
-                        builder.append(ch)
-                    }
-                }
-            }
+        if (options.needsEscape(value)) {
+            builder.append(options.escape(value))
+        } else {
+            builder.append(value)
         }
         builder.append('"')
     }
 
-    private fun appendUnicodeEscape(ch: Char) {
-        builder.append("\\u")
-        val code = ch.code
-        for (shift in 12 downTo 0 step 4) {
-            builder.append(HEX_DIGITS[(code shr shift) and 0xF])
+    private fun appendNumber(raw: String) {
+        val text = options.numberLiteral(raw)
+        if (options.shouldQuoteNumber(text)) {
+            appendString(text)
+        } else {
+            builder.append(text)
         }
     }
 

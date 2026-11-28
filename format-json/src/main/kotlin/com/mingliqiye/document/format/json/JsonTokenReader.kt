@@ -21,12 +21,14 @@ private const val ARRAY_AFTER_VALUE = 2
  * @param allowComments 是否允许 JSONC 注释
  * @param duplicateKeyPolicy 对象内重复 key 策略；`FIRST_WINS` 时重复字段不会产出 Token
  * @param maxDepth 对象/数组最大嵌套深度
+ * @param readFeatures 显式开启的 JSON 读取特性
  */
 internal class JsonTokenReader(
     private val source: String,
     private val allowComments: Boolean = true,
     private val duplicateKeyPolicy: DuplicateKeyPolicy = DuplicateKeyPolicy.LAST_WINS,
     private val maxDepth: Int = JsonConfig.DEFAULT_MAX_DEPTH,
+    private val readFeatures: Set<JsonReadFeature> = JsonConfig.DEFAULT_READ_FEATURES,
 ) : DocumentTokenReader {
 
     /**
@@ -35,17 +37,21 @@ internal class JsonTokenReader(
     internal constructor(source: String, allowComments: Boolean) :
         this(source, allowComments, DuplicateKeyPolicy.LAST_WINS, JsonConfig.DEFAULT_MAX_DEPTH)
 
+    private val features = JsonReadOptions(readFeatures)
+    private val commentsEnabled = allowComments || features.allowJavaComments
+    private val keyPolicy = if (features.strictDuplicateDetection) DuplicateKeyPolicy.FAIL else duplicateKeyPolicy
     private var position = 0
     private var rootStarted = false
     private var rootFinished = false
     private var depth = 0
-    private val trackDuplicateKeys = duplicateKeyPolicy != DuplicateKeyPolicy.LAST_WINS
+    private val trackDuplicateKeys = keyPolicy != DuplicateKeyPolicy.LAST_WINS
     private var containerArrays = BooleanArray(8)
     private var containerPhases = IntArray(8)
     private var containerKeySets: Array<MutableSet<String>?> = arrayOfNulls(8)
     private var currentType: DocumentTokenType? = null
     private var currentText: String? = null
     private var currentBoolean: Boolean? = null
+    private var rawNumberText: String? = null
     private var numberStart = -1
     private var numberEnd = -1
 
@@ -53,7 +59,7 @@ internal class JsonTokenReader(
         get() = currentType
 
     override val textValue: String?
-        get() = currentText ?: if (numberStart >= 0 && numberEnd > numberStart) {
+        get() = currentText ?: rawNumberText ?: if (numberStart >= 0 && numberEnd > numberStart) {
             source.substring(numberStart, numberEnd)
         } else {
             null
@@ -104,6 +110,10 @@ internal class JsonTokenReader(
                 when (containerPhases[depth - 1]) {
                     ARRAY_FIRST_VALUE -> {
                         skipWhitespace()
+                        if (features.allowMissingValues && peek() == ',') {
+                            containerPhases[depth - 1] = ARRAY_AFTER_VALUE
+                            return emit(DocumentTokenType.NULL)
+                        }
                         if (consume(']')) {
                             depth--
                             return emit(DocumentTokenType.END_ARRAY)
@@ -121,6 +131,15 @@ internal class JsonTokenReader(
                         expect(',')
                         skipWhitespace()
                         if (peek() == ']') {
+                            if (features.allowTrailingComma) {
+                                position++
+                                depth--
+                                return emit(DocumentTokenType.END_ARRAY)
+                            }
+                            if (features.allowMissingValues) {
+                                containerPhases[depth - 1] = ARRAY_AFTER_VALUE
+                                return emit(DocumentTokenType.NULL)
+                            }
                             throw error("Trailing comma in array")
                         }
                         containerPhases[depth - 1] = ARRAY_FIRST_VALUE
@@ -158,6 +177,12 @@ internal class JsonTokenReader(
                         expect(',')
                         skipWhitespace()
                         if (peek() == '}') {
+                            if (features.allowTrailingComma) {
+                                position++
+                                depth--
+                                containerKeySets[depth] = null
+                                return emit(DocumentTokenType.END_OBJECT)
+                            }
                             throw error("Trailing comma in object")
                         }
                         containerPhases[depth - 1] = OBJECT_FIRST_FIELD
@@ -171,6 +196,12 @@ internal class JsonTokenReader(
         skipWhitespace()
         if (!hasNext()) {
             throw error("Unexpected end of input")
+        }
+        if (features.allowNonNumericNumbers) {
+            JsonReadOptions.matchNonNumeric(source, position)?.let { (literal, length) ->
+                position += length
+                return emitNonNumeric(literal)
+            }
         }
         return when (val ch = source[position]) {
             '{' -> {
@@ -187,6 +218,12 @@ internal class JsonTokenReader(
 
             '"' -> emit(DocumentTokenType.STRING, text = parseString())
 
+            '\'' -> if (features.allowSingleQuotes) {
+                emit(DocumentTokenType.STRING, text = parseString())
+            } else {
+                throw error("Unexpected character '$ch'")
+            }
+
             't' -> {
                 expectLiteral("true")
                 emit(DocumentTokenType.BOOLEAN, booleanValue = true)
@@ -200,6 +237,20 @@ internal class JsonTokenReader(
             'n' -> {
                 expectLiteral("null")
                 emit(DocumentTokenType.NULL)
+            }
+
+            '+' -> if (features.allowLeadingPlusSignForNumbers) {
+                scanNumber()
+                emitNumber()
+            } else {
+                throw error("Unexpected character '$ch'")
+            }
+
+            '.' -> if (features.allowLeadingDecimalPointForNumbers) {
+                scanNumber()
+                emitNumber()
+            } else {
+                throw error("Unexpected character '$ch'")
             }
 
             '-', in '0'..'9' -> {
@@ -233,15 +284,20 @@ internal class JsonTokenReader(
      * @return FIELD_NAME Token；`FIRST_WINS` 策略下跳过重复字段时返回 `null`
      */
     private fun parseFieldName(): DocumentTokenType? {
-        if (!hasNext() || source[position] != '"') {
+        if (!hasNext()) {
             throw error("Expected object key")
         }
-        val key = parseString()
+        val key = when {
+            source[position] == '"' -> parseString()
+            source[position] == '\'' && features.allowSingleQuotes -> parseString()
+            features.allowUnquotedFieldNames -> parseUnquotedFieldName()
+            else -> throw error("Expected object key")
+        }
         skipWhitespace()
         expect(':')
         val keys = containerKeySets[depth - 1]
         if (keys != null && !keys.add(key)) {
-            when (duplicateKeyPolicy) {
+            when (keyPolicy) {
                 DuplicateKeyPolicy.FAIL -> throw error("Duplicate field \"$key\"")
                 DuplicateKeyPolicy.FIRST_WINS -> {
                     skipDuplicateValue()
@@ -254,6 +310,28 @@ internal class JsonTokenReader(
         return emit(DocumentTokenType.FIELD_NAME, text = key)
     }
 
+    private fun parseUnquotedFieldName(): String {
+        val start = position
+        while (hasNext()) {
+            val ch = source[position]
+            if (ch.isWhitespace() ||
+                ch == ':' ||
+                ch == ',' ||
+                ch == '}' ||
+                ch == ']' ||
+                (commentsEnabled && ch == '/') ||
+                (features.allowYamlComments && ch == '#')
+            ) {
+                break
+            }
+            position++
+        }
+        if (position == start) {
+            throw error("Expected object key")
+        }
+        return source.substring(start, position)
+    }
+
     /**
      * 跳过 `FIRST_WINS` 策略下重复字段的值。
      *
@@ -261,24 +339,28 @@ internal class JsonTokenReader(
      */
     private fun skipDuplicateValue() {
         skipWhitespace()
-        val parser = JsonParser(source, allowComments, duplicateKeyPolicy, maxDepth, depth)
+        val parser = JsonParser(source, commentsEnabled, keyPolicy, maxDepth, depth, readFeatures)
         position = parser.skipValueAt(position)
     }
 
     private fun parseString(): String {
-        expect('"')
+        val quote = source[position]
+        if (quote != '"' && !(quote == '\'' && features.allowSingleQuotes)) {
+            throw error("Expected string")
+        }
+        position++
         val start = position
         var index = position
         while (index < source.length) {
             val ch = source[index]
             when {
-                ch == '"' -> {
+                ch == quote -> {
                     position = index + 1
                     return source.substring(start, index)
                 }
 
                 ch == '\\' -> break
-                ch < ' ' -> throw error("Unescaped control character in string")
+                ch < ' ' && !features.allowUnescapedControlChars -> throw error("Unescaped control character in string")
                 else -> index++
             }
         }
@@ -291,10 +373,10 @@ internal class JsonTokenReader(
                 throw error("Unterminated string")
             }
             when (val ch = source[position++]) {
-                '"' -> return builder.toString()
+                quote -> return builder.toString()
                 '\\' -> builder.append(parseEscape())
                 else -> {
-                    if (ch < ' ') {
+                    if (ch < ' ' && !features.allowUnescapedControlChars) {
                         throw error("Unescaped control character in string")
                     }
                     builder.append(ch)
@@ -307,7 +389,8 @@ internal class JsonTokenReader(
         if (!hasNext()) {
             throw error("Unterminated escape sequence")
         }
-        return when (val escaped = source[position++]) {
+        val escaped = source[position++]
+        return when (escaped) {
             '"' -> '"'
             '\\' -> '\\'
             '/' -> '/'
@@ -317,7 +400,17 @@ internal class JsonTokenReader(
             'r' -> '\r'
             't' -> '\t'
             'u' -> parseUnicodeEscape()
-            else -> throw error("Invalid escape sequence: \\$escaped")
+            '\'' -> if (features.allowSingleQuotes || features.allowBackslashEscapingAnyCharacter) {
+                '\''
+            } else {
+                throw error("Invalid escape sequence: \\$escaped")
+            }
+
+            else -> if (features.allowBackslashEscapingAnyCharacter) {
+                escaped
+            } else {
+                throw error("Invalid escape sequence: \\$escaped")
+            }
         }
     }
 
@@ -338,27 +431,54 @@ internal class JsonTokenReader(
 
     private fun scanNumber() {
         val start = position
-        consume('-')
+        if (hasNext() && source[position] == '+') {
+            if (!features.allowLeadingPlusSignForNumbers) {
+                throw error("Leading plus sign is not allowed")
+            }
+            position++
+            if (hasNext() && source[position] == '-') {
+                throw error("Invalid number: unexpected '-'")
+            }
+        } else {
+            consume('-')
+        }
         if (!hasNext()) {
             throw error("Unexpected end of number")
         }
+        var digits = 0
         when (val first = source[position]) {
             '0' -> {
                 position++
+                digits++
                 if (hasNext() && source[position].isDigit()) {
-                    throw error("Leading zero is not allowed")
+                    if (!features.allowLeadingZerosForNumbers) {
+                        throw error("Leading zero is not allowed")
+                    }
+                    consumeDigits()
                 }
             }
 
-            in '1'..'9' -> consumeDigits()
+            in '1'..'9' -> {
+                consumeDigits()
+                digits++
+            }
+
+            '.' -> if (!features.allowLeadingDecimalPointForNumbers) {
+                throw error("Invalid number: unexpected '$first'")
+            }
 
             else -> throw error("Invalid number: unexpected '$first'")
         }
         if (consume('.')) {
-            if (!hasNext() || !source[position].isDigit()) {
+            if (hasNext() && source[position].isDigit()) {
+                consumeDigits()
+                digits++
+            } else if (!features.allowTrailingDecimalPointForNumbers) {
                 throw error("Expected digit after decimal point")
             }
-            consumeDigits()
+        }
+        if (digits == 0) {
+            throw error("Invalid number")
         }
         if (consume('e') || consume('E')) {
             if (hasNext() && (source[position] == '+' || source[position] == '-')) {
@@ -374,6 +494,12 @@ internal class JsonTokenReader(
     }
 
     private fun isIntegerNumber(): Boolean {
+        if (rawNumberText != null) {
+            return false
+        }
+        if (numberStart < 0 || numberEnd <= numberStart) {
+            return false
+        }
         for (index in numberStart until numberEnd) {
             when (source[index]) {
                 '.', 'e', 'E' -> return false
@@ -423,12 +549,13 @@ internal class JsonTokenReader(
             val ch = source[position]
             when {
                 ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> position++
-                allowComments && ch == '/' -> {
+                commentsEnabled && ch == '/' -> {
                     if (!skipComment()) {
                         return
                     }
                 }
 
+                features.allowYamlComments && ch == '#' -> skipYamlComment()
                 isWhitespace(ch) -> position++
                 else -> return
             }
@@ -464,6 +591,15 @@ internal class JsonTokenReader(
             }
 
             else -> false
+        }
+    }
+
+    /**
+     * 跳过 YAML 风格 `#` 行注释（到行尾）。
+     */
+    private fun skipYamlComment() {
+        while (hasNext() && source[position] != '\n' && source[position] != '\r') {
+            position++
         }
     }
 
@@ -518,6 +654,7 @@ internal class JsonTokenReader(
         currentType = type
         currentText = text
         currentBoolean = booleanValue
+        rawNumberText = null
         numberStart = -1
         numberEnd = -1
         return type
@@ -527,6 +664,17 @@ internal class JsonTokenReader(
         currentType = DocumentTokenType.NUMBER
         currentText = null
         currentBoolean = null
+        rawNumberText = null
+        return DocumentTokenType.NUMBER
+    }
+
+    private fun emitNonNumeric(raw: String): DocumentTokenType {
+        currentType = DocumentTokenType.NUMBER
+        currentText = null
+        currentBoolean = null
+        rawNumberText = raw
+        numberStart = -1
+        numberEnd = -1
         return DocumentTokenType.NUMBER
     }
 

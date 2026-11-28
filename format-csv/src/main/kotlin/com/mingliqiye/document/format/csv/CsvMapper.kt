@@ -12,7 +12,6 @@ import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
-import org.apache.commons.csv.CSVFormat
 import org.apache.commons.csv.CSVParser
 import java.io.InputStream
 import java.io.Reader
@@ -120,6 +119,7 @@ public open class CsvMapper internal constructor(
             csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER,
             csvConfig?.header ?: DEFAULT_CSV_HEADER,
             maxDepth,
+            csvConfig?.readFeatures ?: CsvConfig.DEFAULT_READ_FEATURES,
         )
     }
 
@@ -218,9 +218,13 @@ public open class CsvMapper internal constructor(
         val csvConfig = mapperConfig as? CsvConfig
         val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
         val schema = csvConfig?.schema
-        val format = CSVFormat.DEFAULT.builder().setDelimiter(delimiter).build()
+        val support = CsvReadSupport(
+            csvConfig?.readFeatures ?: CsvConfig.DEFAULT_READ_FEATURES,
+            schema,
+            delimiter,
+        )
         val parser = try {
-            CSVParser.parse(reader, format)
+            CSVParser.parse(reader, support.format())
         } catch (e: CsvException) {
             throw e
         } catch (e: Exception) {
@@ -232,6 +236,7 @@ public open class CsvMapper internal constructor(
             nestedMode = csvConfig?.nestedMode,
             schema = schema,
             maxDepth = maxDepth,
+            support = support,
         )
         var delivered = 0L
         while (maxRows < 0 || delivered < maxRows) {
@@ -258,10 +263,11 @@ private fun parseCsv(source: String, config: DocumentMapperConfig, maxDepth: Int
     val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
     val nestedMode = csvConfig?.nestedMode
     val schema = csvConfig?.schema
+    val readFeatures = csvConfig?.readFeatures ?: CsvConfig.DEFAULT_READ_FEATURES
     return if (schema != null) {
-        CsvSchemaReader(source, schema, delimiter, nestedMode, maxDepth).read()
+        CsvSchemaReader(source, schema, delimiter, nestedMode, maxDepth, readFeatures).read()
     } else {
-        CsvReader(source, delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode, maxDepth).read()
+        CsvReader(source, delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode, maxDepth, readFeatures).read()
     }
 }
 
@@ -270,10 +276,11 @@ private fun writeCsv(node: Node, config: DocumentMapperConfig, maxDepth: Int): S
     val delimiter = csvConfig?.delimiter ?: DEFAULT_CSV_DELIMITER
     val nestedMode = csvConfig?.nestedMode
     val schema = csvConfig?.schema
+    val writeFeatures = csvConfig?.writeFeatures ?: CsvConfig.DEFAULT_WRITE_FEATURES
     return if (schema != null) {
-        CsvSchemaWriter(schema, delimiter, nestedMode, maxDepth).write(node)
+        CsvSchemaWriter(schema, delimiter, nestedMode, maxDepth, writeFeatures).write(node)
     } else {
-        CsvWriter(delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode, maxDepth).write(node)
+        CsvWriter(delimiter, csvConfig?.header ?: DEFAULT_CSV_HEADER, nestedMode, maxDepth, writeFeatures).write(node)
     }
 }
 

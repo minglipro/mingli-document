@@ -1,6 +1,6 @@
 ---
 title: Ion
-description: format-ion 模块：IonMapper、文本/二进制 Ion、BLOB/CLOB、类型保真与深度限制
+description: format-ion 模块：IonMapper、文本/二进制 Ion、BLOB/CLOB、类型保真、参考实现 读/写特性与深度限制
 ---
 
 # Ion
@@ -33,26 +33,56 @@ implementation("com.mingliqiye.document.format:ion:2.5.1")
 - **Token 直读/直写**：默认路径直接解码 Bean / 直接写 Token 流，不构建完整 Node 树；
 - **`BinaryNode` ↔ Ion blob**：二进制值无损往返；
 - **深度限制**：`IonReader` / `IonBinaryReader` 的 `maxDepth`，以及 Mapper 的 `maxNodeDepth`；
-- **可选的 Ion 类型保真**：`IonConfig.preserveTypes` 保留 timestamp / symbol / clob / blob 类型；
+- **可选的 Ion 类型保真**：`IonConfig.preserveTypes` 保留 timestamp / symbol / clob / blob 类型，
+  并按 `IonReadFeature.USE_NATIVE_TYPE_ID` / `IonWriteFeature.USE_NATIVE_TYPE_ID` 保留 annotation；
+- **参考实现 读/写特性对齐**：`IonReadFeature` / `IonWriteFeature` 覆盖 Ion 底层库
+  2.15 / 2.23 / 3.3 的全部格式级 Parser/Generator Feature，并补充通用
+  `STRICT_DUPLICATE_DETECTION`；
 - **文件/流读写**：Mapper 文件/流入口使用文本 Ion（详见“读取/写出 API”）；
-- **注解忽略**：Ion annotation 不保留。
+- **注解默认忽略**：未开启 `preserveTypes` 时 Ion annotation 不保留。
 
 ## 配置：`IonConfig`
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `preserveTypes` | `Boolean` | `false` | 是否保留 Ion 专属类型（timestamp / symbol / clob / blob） |
+| `preserveTypes` | `Boolean` | `false` | 是否保留 Ion 专属类型（timestamp / symbol / clob / blob）与 annotation |
+| `readFeatures` | `Set<IonReadFeature>` | `DEFAULT_READ_FEATURES` | Ion 读取特性，默认对齐 参考实现 |
+| `writeFeatures` | `Set<IonWriteFeature>` | `DEFAULT_WRITE_FEATURES` | Ion 写出特性，默认对齐 参考实现 |
+
+### 参考实现 读/写特性（feature 清单）
+
+官方枚举核查：Ion 底层库 2.15 / 2.23 / 3.3 的格式级 Parser/Generator Feature
+只有 `USE_NATIVE_TYPE_ID`（2.12+）与 `READ_NULL_AS_IONVALUE`（2.19+/3.x）。不存在
+`LENIENT_*` / `ALLOW_*` / `WRITE_*` 等常量（那些属于其他格式）；本模块已覆盖全部官方项，
+并额外实现通用 `STRICT_DUPLICATE_DETECTION`。
+
+读取特性 `IonReadFeature`：
+
+| 特性 | 参考实现 对应 | 默认 | 行为 |
+|---|---|---|---|
+| `USE_NATIVE_TYPE_ID` | `IonParser.Feature.USE_NATIVE_TYPE_ID`（2.x）/`IonReadFeature.USE_NATIVE_TYPE_ID`（3.x） | **开启** | 保真模式（`preserveTypes=true`）下 Ion annotation 读成 `{"$ionAnnotations":[...],"value":<node>}`；关闭或非保真模式注解丢弃 |
+| `READ_NULL_AS_IONVALUE` | `IonReadFeature.READ_NULL_AS_IONVALUE`（2.19+/3.x） | **开启** | 所有 null 读成 `NullNode`；关闭时 `null.list`/`null.sexp` → 空 `ArrayNode`、`null.struct` → 空 `ObjectNode`，其余 null 仍为 `NullNode` |
+| `STRICT_DUPLICATE_DETECTION` | `JsonParser.Feature`/`StreamReadFeature`（参考实现 Ion parser 未接入 DupDetector，本项目实现） | 关闭 | struct 重复字段名抛 `IonParseException`；关闭时后者覆盖前者 |
+
+写出特性 `IonWriteFeature`：
+
+| 特性 | 参考实现 对应 | 默认 | 行为 |
+|---|---|---|---|
+| `USE_NATIVE_TYPE_ID` | `IonGenerator.Feature.USE_NATIVE_TYPE_ID`（2.x）/`IonWriteFeature.USE_NATIVE_TYPE_ID`（3.x） | **开启** | 识别 `{"$ionAnnotations":[...],"value":<node>}` 并写为原生 Ion annotation；关闭时按普通 struct 写出 |
+| `STRICT_DUPLICATE_DETECTION` | `StreamWriteFeature.STRICT_DUPLICATE_DETECTION`（参考实现 3.x IonGenerator 已接入） | 关闭 | Token 写出器重复字段名抛 `IonException`；Bean/Map/Node 写出不会产生重复字段名 |
 
 `preserveTypes = false`（默认）时：
 
 - timestamp / symbol → `StringNode`；
 - blob / clob → `BinaryNode`；
 - 写出时 `StringNode` 一律写为 Ion string、`BinaryNode` 一律写为 Ion blob；
-- 读取/写出可以走 Token 快路径。
+- 读取/写出可以走 Token 快路径；
+- annotation 丢弃。
 
 `preserveTypes = true` 时：
 
 - Node 路径用包装对象表示类型（见下文“类型保真”）；
+- `USE_NATIVE_TYPE_ID` 开启（默认）时 annotation 读成 `$ionAnnotations` 包装对象、写出时还原；
 - Token 直读/直写被禁用，统一走 Node 树以保证保真语义一致；
 - Bean 映射看到的是包装对象结构（timestamp / symbol 不再是普通字符串）。
 
@@ -61,31 +91,43 @@ implementation("com.mingliqiye.document.format:ion:2.5.1")
 | 方法 | 说明 |
 |---|---|
 | `preserveTypes(Boolean)` | 开启/关闭类型保真 |
+| `enable/disable/configure(IonReadFeature)` | Ion 读取特性 |
+| `enable/disable/configure(IonWriteFeature)` | Ion 写出特性 |
 | `field(Class, String, DocumentBaseConverter)` | 字段转换器 |
 | `missingFieldPolicy` / `failOnUnknownFields` / `writeNulls` | 通用 Bean 映射选项 |
 | `namingStrategy(PropertyNamingStrategy)` | 字段命名策略 |
 | `fileCharset(Charset)` | 文本文件/流字符集 |
 | `atomicFileWrite` / `createParentDirectories` | 文件写入选项 |
-| `maxInputSize(Long)` | 输入字节上限 |
+| `maxInputSize(Long)` / `maxStringLength(Int)` | 输入大小 / 字符串长度上限 |
 | `maxNodeDepth(Int)` / `maxNodeCount(Long)` | Node 树限制 |
 | `resolveReferences` / `writeReferences` | 本地 `$ref` |
 | `remoteReferenceResolver(RemoteReferenceResolver?)` | 远程 `$ref` 解析器 |
+| `beanValidator(DocumentBeanValidator?)` | 根对象 Bean 校验器 |
+| `enable/disable/configure(DeserializationFeature)` / `failOnNullForPrimitives` | 通用反序列化特性 |
 | `subtype(...)` / `typeProperty(...)` | 多态子类型 |
 | `build()` | 构建 `IonConfig` |
 
 ```kotlin
 import com.mingliqiye.document.format.ion.IonConfig
 import com.mingliqiye.document.format.ion.IonMapper
+import com.mingliqiye.document.format.ion.IonReadFeature
+import com.mingliqiye.document.format.ion.IonWriteFeature
 
 val mapper = IonMapper(
     IonConfig.builder()
         .preserveTypes(true)
         .maxNodeDepth(64)
+        .disable(IonReadFeature.USE_NATIVE_TYPE_ID)
+        .enable(IonReadFeature.STRICT_DUPLICATE_DETECTION)
+        .disable(IonWriteFeature.STRICT_DUPLICATE_DETECTION)
         .build(),
 )
-```
 
-> `IonConfigBuilder` 没有暴露 `maxStringLength`；需要该限制时直接使用 `DocumentMapperConfig`（此时 `preserveTypes` 回退为 `false`）。
+// 查询特性
+check(mapper.toNode(mapOf("a" to 1)).isObject)
+val config = IonConfig.builder().build()
+check(config.isEnabled(IonReadFeature.READ_NULL_AS_IONVALUE))
+```
 
 ## Mapper 构造与 Builder
 
@@ -123,10 +165,10 @@ Ion 同时有文本与二进制两种形态，入口区分如下：
 
 | 类/函数 | 说明 |
 |---|---|
-| `IonReader(source, maxDepth = 0, preserveTypes = false)` | 文本 Ion 读取器，`read(): Node` |
+| `IonReader(source, maxDepth = 0, preserveTypes = false, readFeatures = DEFAULT_READ_FEATURES)` | 文本 Ion 读取器，`read(): Node` |
 | `IonReader.parse(source)` | 静态文本解析 |
 | `String.toIonNode()` | 文本 Ion 字符串 → Node |
-| `IonBinaryReader(source, maxDepth = 0, preserveTypes = false)` | 二进制（也支持文本）Ion 读取器，`read(): Node` |
+| `IonBinaryReader(source, maxDepth = 0, preserveTypes = false, readFeatures = DEFAULT_READ_FEATURES)` | 二进制（也支持文本）Ion 读取器，`read(): Node` |
 | `IonBinaryReader.parse(source: ByteArray)` | 静态二进制解析 |
 | `ByteArray.toIonNode()` | 二进制 Ion 字节 → Node |
 
@@ -148,7 +190,10 @@ check(error is com.mingliqiye.document.format.ion.exception.IonParseException)
 - 解析完成会关闭底层 ion-java reader；
 - 深度检查作用于容器节点（list/sexp/struct），`maxDepth > 0` 时超限抛 `IonParseException`；
 - 文本 `IonReader` 与二进制 `IonBinaryReader` 共用同一套值映射与 `readIonNode` 实现；
-- 二进制读取通过 `IonSystem.newReader(InputStream)` 自动识别文本/二进制，并支持 GZIP 解压。
+- 二进制读取通过 `IonSystem.newReader(InputStream)` 自动识别文本/二进制，并支持 GZIP 解压；
+- `READ_NULL_AS_IONVALUE` 关闭时容器类型 null 读取为空容器（见“参考实现 读/写特性”）；
+- `STRICT_DUPLICATE_DETECTION` 开启时 struct 重复字段名抛 `IonParseException`；
+- 仅当 `preserveTypes=true` 且 `USE_NATIVE_TYPE_ID` 开启时保留 annotation（`$ionAnnotations` 包装对象）。
 
 ### Token 路径
 
@@ -157,6 +202,7 @@ check(error is com.mingliqiye.document.format.ion.exception.IonParseException)
 - `parse(ByteArray)` 优先用内部 `IonTokenReader` 直读 Bean，不构建 Node 树；Token 快路径不执行通用 Node 树限制（`maxNodeDepth` 等）；
 - `parse(String)`（文本）走 `IonReader(source, maxNodeDepth, ...)` Node 路径，`maxNodeDepth` 生效；
 - `preserveTypes=true` 时 `createTokenReader` 返回 `null`，字节解析回退 Node 路径（`IonBinaryReader`，携带 `maxNodeDepth`）；
+- **读取特性非默认**（例如关闭 `READ_NULL_AS_IONVALUE`、开启 `STRICT_DUPLICATE_DETECTION`）时同样回退 Node 路径，以应用特性语义；
 - 需要强制深度限制的二进制读取，可直接使用 `IonBinaryReader(bytes, maxDepth = ...)`。
 
 ## 写出 API
@@ -190,7 +236,8 @@ check(error is com.mingliqiye.document.format.ion.exception.IonParseException)
 - 数字按 `NumberNode.raw` 区分：不含小数点/指数的写为 Ion int，其余写为 Ion decimal；
 - `BinaryNode` 写为 Ion blob；
 - `StringNode` 一律写为 Ion string（默认模式下 timestamp/symbol 信息不可恢复）；
-- Ion 注解不写出。
+- `IonWriteFeature.USE_NATIVE_TYPE_ID` 开启（默认）时识别 `$ionAnnotations` 包装对象并写为原生 Ion annotation；
+- `IonWriteFeature.STRICT_DUPLICATE_DETECTION` 开启时 Token 写出器遇到重复字段名抛 `IonException`。
 
 ## 类型映射
 
@@ -198,7 +245,7 @@ check(error is com.mingliqiye.document.format.ion.exception.IonParseException)
 
 | Ion 类型 | Node |
 |---|---|
-| `null`（含 `null.int` 等类型化 null） | `NullNode` |
+| `null`（含 `null.int` 等类型化 null） | `NullNode`（`READ_NULL_AS_IONVALUE` 关闭时容器类型 null 见上文近似映射） |
 | `bool` | `BooleanNode` |
 | `int` | `NumberNode`（`raw` 为十进制文本） |
 | `float` | `NumberNode`（NaN / Infinity 拒绝） |
@@ -234,11 +281,14 @@ NaN / Infinity：Ion float 可以是 `nan` / `+inf`，但 `NumberNode` 只保存
 {"$ionType":"symbol","value":"name"}
 {"$ionType":"clob","value":<BinaryNode>}
 {"$ionType":"blob","value":<BinaryNode>}
+{"$ionAnnotations":["ann1","ann2"],"value":<node>}
 ```
 
 - 普通 `string` 仍是 `StringNode`，不会被包装；
-- 写出时只识别“恰好两个字段、`$ionType` 为已知类型、`value` 类型匹配”的对象，其余按普通对象处理；
+- 写出时只识别“恰好两个字段、标记字段类型/取值匹配”的对象，其余按普通对象处理；
 - `timestamp` 包装的 `value` 必须是合法 Ion 时间戳文本，否则写抛 `IonException`；
+- `$ionAnnotations` 包装对象在 `IonWriteFeature.USE_NATIVE_TYPE_ID` 开启（默认）时写为原生 annotation，
+  关闭时按普通 struct 写出；
 - 开启后 Token 快路径被禁用（构建完整 Node 树），Bean 映射按包装对象结构进行。
 
 ```kotlin
@@ -460,12 +510,18 @@ public class IonDemo {
 }
 ```
 
-### 15. 注解被忽略
+### 15. 注解默认忽略，保真模式可保留
 
 ```kotlin
+// 默认模式：annotation 丢弃
 val node = mapper.parse("""'my.annotation'::{name: "小于"}""", Node::class.java)
-// Ion annotation 不保留，解析结果只包含 struct 字段
 println(node.asObject()["name"]?.asString())   // 小于
+
+// preserveTypes=true + USE_NATIVE_TYPE_ID（默认开启）：annotation 保留为包装对象
+val preserving = IonMapper(IonConfig.builder().preserveTypes(true).build())
+val annotated = preserving.parse("""'my.annotation'::{name: "小于"}""", Node::class.java)
+println(annotated.asObject()["\$ionAnnotations"]?.asArray()?.get(0)?.asString())   // my.annotation
+println(preserving.format(annotated))   // 'my.annotation'::{name: "小于"}
 ```
 
 ## 边界、限制与常见错误
@@ -474,7 +530,9 @@ println(node.asObject()["name"]?.asString())   // 小于
 |---|---|
 | 无顶层值 | `IonParseException("Ion document has no top-level value")` |
 | 多个顶层值 | `IonParseException("Ion document must contain exactly one top-level value")` |
-| Ion 注解 | 忽略，不保留 |
+| Ion 注解 | 默认忽略；`preserveTypes=true` 且 `USE_NATIVE_TYPE_ID` 开启时保留为 `{"$ionAnnotations":[...],"value":<node>}` |
+| struct 重复字段名 | 默认后者覆盖前者；`STRICT_DUPLICATE_DETECTION` 开启时抛 `IonParseException`；Token 写出器在写出特性开启时抛 `IonException` |
+| `READ_NULL_AS_IONVALUE` 关闭 | `null.list`/`null.sexp` → 空 `ArrayNode`，`null.struct` → 空 `ObjectNode`，其余 null 仍为 `NullNode` |
 | timestamp / symbol（默认模式） | 读成字符串；写回为 string，类型信息丢失 |
 | CLOB（默认模式） | 读成 `BinaryNode`，写回为 blob，clob 类型信息丢失 |
 | NaN / Infinity float | `IonParseException` |
@@ -482,7 +540,7 @@ println(node.asObject()["name"]?.asString())   // 小于
 | `preserveTypes` 下的 malformed 包装对象 | 按普通对象处理（timestamp 包装且文本非法时写出抛 `IonException`） |
 | 二进制 Ion 用 `parse(file)` / `parse(InputStream)` | 会按文本解码，可能失败；请用 `parse(ByteArray)` |
 | 文本 Ion 的 `$ion_1_0` 标记 | 文本写出不输出；解析器可接受显式版本标记 |
-| `preserveTypes=true` | Token 快路径禁用，Bean 映射看到包装对象结构 |
+| `preserveTypes=true` 或非默认读取特性 | Token 快路径禁用，Bean 映射看到包装对象结构 / Node 路径语义 |
 
 ## 与通用 `DocumentMapper` 的差异
 
@@ -491,7 +549,21 @@ println(node.asObject()["name"]?.asString())   // 小于
 - `formatBytes`：默认通过内部 `IonBinaryTokenWriter` 直写二进制 Ion（含版本标记）；
 - `format(value, OutputStream)`：覆写为文本 Ion 流式写出；
 - Mapper 的文件/流入口按文本 Ion 语义（`usesTextFormat = true`），二进制文件需自行处理字节；
-- Ion 专属：`IonReader`、`IonBinaryReader`、`IonConfig.preserveTypes`、`String.toIonNode()` / `ByteArray.toIonNode()` / `Node.toIonString()` / `Node.toIonBytes()`。
+- Ion 专属：`IonReader`、`IonBinaryReader`、`IonConfig.preserveTypes`、
+  `IonReadFeature` / `IonWriteFeature`、`String.toIonNode()` / `ByteArray.toIonNode()` /
+  `Node.toIonString()` / `Node.toIonBytes()`。
+
+## 未支持 / 不适用项
+
+| 项 | 说明 |
+|---|---|
+| 参考实现 通用 `JsonParser.Feature` / `JsonGenerator.Feature` | 语法级项（`ALLOW_*`、`QUOTE_*`、`ESCAPE_*` 等）属于 JSON 文本语法，对 Ion 语法无意义；Ion 官方枚举中也不存在这些常量 |
+| `StreamReadFeature` / `StreamWriteFeature` 通用项 | `AUTO_CLOSE_SOURCE`、`FLUSH_PASSED_TO_STREAM`、`INCLUDE_SOURCE_IN_LOCATION`、`USE_FAST_*_PARSER` 等由通用 Mapper/IO 层处理或对内存 String/ByteArray API 不适用，未映射为 Ion 特性 |
+| `IonFactory.createBinaryWriters` 等工厂开关 | 本模块以 `format(...)`（文本）与 `formatBytes(...)`（二进制）区分输出形态，不提供工厂级切换 |
+| 自定义 `IonSystem` / `IonFactory` | 固定使用 ion-java 标准 `IonSystem`，未暴露自定义实例配置 |
+| Token 路径的 annotation / 类型保真 | Token 直读/直写不携带 annotation；保真模式与非默认读取特性会禁用 Token 快路径 |
+| 多态 type id 与 databind 集成 | `USE_NATIVE_TYPE_ID` 在 Node 层保留 annotation，未与通用多态子类型注册表自动联动 |
+| `READ_NULL_AS_IONVALUE=false` 的 Java null 语义 | Node 模型无 Java null 引用，容器类型 null 以空容器近似（见上表） |
 
 ## 相关链接
 

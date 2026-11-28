@@ -142,7 +142,7 @@ class CsvCodecTest {
         val lines = node.toCsvString().trim().lines()
         assertEquals("a,b,c", lines[0])
         assertEquals("1,2,", lines[1])
-        assertEquals("\"\",3,4", lines[2])
+        assertEquals(",3,4", lines[2])
     }
 
     @Test

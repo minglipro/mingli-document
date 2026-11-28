@@ -252,10 +252,10 @@ com.mingliqiye.document.format:{json,yaml,xml,properties,toml,csv,ion,cbor,smile
 |---|---|
 | serialization | `com.mingliqiye.utils.aliasfor:alias-for:1.0.3` |
 | serialization-kotlin | `org.jetbrains.kotlin:kotlin-reflect` |
-| json | `com.fasterxml.jackson.core:jackson-core:2.15.3` |
+| json | `第三方底层库坐标.core:JSON Token 底层库:2.15.3` |
 | yaml | `org.yaml:snakeyaml:2.6` |
-| cbor | `com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.15.3` |
-| smile | `com.fasterxml.jackson.dataformat:jackson-dataformat-smile:2.15.3` |
+| cbor | `第三方底层库坐标.dataformat:CBOR 底层库:2.15.3` |
+| smile | `第三方底层库坐标.dataformat:Smile 底层库:2.15.3` |
 | ion | `com.amazon.ion:ion-java:1.11.9` |
 | avro | `org.apache.avro:avro:1.11.3`（`api`，含 `schema` 模块）、`org.xerial.snappy:snappy-java:1.1.10.5` |
 | protobuf | `com.google.protobuf:protobuf-java:3.25.5`（`api`，含 `schema` 模块） |

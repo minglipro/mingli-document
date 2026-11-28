@@ -62,13 +62,23 @@ class TomlMapperTest {
     }
 
     @Test
-    fun nullBeanFieldsAreOmitted() {
+    fun nullBeanFieldsAreWrittenAsEmptyString() {
         val mapper = TomlMapper()
+        val person = Person().apply { name = "小于" }
+
+        // 对齐 上游实现 TOML 默认行为：null 写成空字符串，而不是省略字段。
+        val toml = mapper.format(person)
+        assertTrue(toml.contains("address = \"\""))
+        assertTrue(toml.contains("tags = []"))
+    }
+
+    @Test
+    fun nullBeanFieldsAreOmittedWhenWriteNullsDisabled() {
+        val mapper = TomlMapper(DocumentMapperConfig.builder().writeNulls(false).build())
         val person = Person().apply { name = "小于" }
 
         val toml = mapper.format(person)
         assertFalse(toml.contains("address"))
-        assertTrue(toml.contains("tags = []"))
 
         val restored = mapper.parse(toml, Person::class.java)
         assertEquals("小于", restored.name)

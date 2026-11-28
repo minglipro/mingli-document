@@ -1,11 +1,11 @@
 ---
 title: Avro
-description: format-avro 模块：AvroMapper、Schema、wire 编解码、OCF 容器、codec、schema evolution 与 append
+description: format-avro 模块：AvroMapper、AvroConfig（参考实现 Avro 配置对齐）、Schema、wire 编解码、OCF 容器、codec、schema evolution 与 append
 ---
 
 # Avro
 
-`format-avro` 提供 Apache Avro 的 Schema、wire 编解码与 Object Container File（OCF）支持，核心类型是 `AvroMapper`。
+`format-avro` 提供 Apache Avro 的 Schema、wire 编解码与 Object Container File（OCF）支持，核心类型是 `AvroMapper`；配置项对齐 `Avro 底层库`（`AvroParser.Feature` / `AvroGenerator.Feature`，3.x 为 `AvroReadFeature` / `AvroWriteFeature`），由 `AvroConfig` 统一配置。
 
 Avro 是 Schema 驱动的二进制格式：裸二进制数据不自带 Schema，读取必须提供 writer Schema；容器文件（OCF）在头部内嵌 Schema。
 
@@ -35,7 +35,135 @@ implementation("com.mingliqiye.document.format:avro:2.5.1")
 - **追加**：`appendContainer` / `appendContainerBytes` 向已有容器追加记录，保留已有记录与 sync 标记；
 - **Schema 演进**：writer / reader 双 Schema，支持新增带默认值字段、删除字段与类型提升；
 - **解析深度限制**：`maxNodeDepth`；
-- **文件/流读写**：二进制语义，`format(value, File/Path/OutputStream)` 走裸 wire。
+- **文件/流读写**：二进制语义，`format(value, File/Path/OutputStream)` 走裸 wire；
+- **参考实现 Avro 配置对齐**：`AvroConfig` / `AvroReadFeature` / `AvroWriteFeature`，覆盖官方全部格式特性
+  `AVRO_BUFFERING`、`AVRO_FILE_OUTPUT`、`ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA`，见下文「参考实现 Avro 配置对齐」；
+- **配置化 Schema**：`AvroConfig` 可携带 writer / reader Schema 与 OCF 默认 codec，直接 `AvroMapper(config)`。
+
+## 配置：`AvroConfig`
+
+`AvroConfig` 继承 `DocumentMapperConfig`，在通用配置上增加 Avro 专属选项；可以直接用它创建
+Mapper：`AvroMapper(config)`（Schema 来自配置）或 `AvroMapper(schema, config)`。
+
+### 专属字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `schema` | `Schema?` | `null` | writer Schema；`AvroMapper(config)` 必需 |
+| `readerSchema` | `Schema?` | `null` | reader Schema（Schema 演进）；`null` 表示与 writer 相同 |
+| `codec` | `AvroCodec` | `NULL` | OCF 容器默认 codec；`formatContainerBytes(values)` 与新建容器的 `appendContainer` 使用 |
+| `readFeatures` | `Set<AvroReadFeature>` | `{AVRO_BUFFERING}` | 显式开启的 Avro 读取特性 |
+| `writeFeatures` | `Set<AvroWriteFeature>` | `{AVRO_BUFFERING, ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA}` | 显式开启的 Avro 写出特性 |
+
+查询：`config.isEnabled(feature)`；便捷属性：`avroBufferingOnRead`、`avroBufferingOnWrite`、
+`avroFileOutput`、`addNullAsDefaultValueInSchema`、`codec`。已构造 Mapper 的生效配置用
+`mapper.avroConfig` 查询（以普通 `DocumentMapperConfig` 构造时返回带默认 Avro 选项的视图）。
+
+### Builder 方法
+
+`AvroConfig.builder()` 返回 `AvroConfigBuilder`：
+
+| 方法 | 说明 |
+|---|---|
+| `schema(Schema)` / `schema(AvroSchema)` | writer Schema（`AvroSchema` 视图在 build 时按 `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA` 转换） |
+| `readerSchema(Schema)` / `readerSchema(AvroSchema)` | reader Schema |
+| `codec(AvroCodec)` | OCF 默认 codec |
+| `readFeatures(Set<AvroReadFeature>)` / `writeFeatures(Set<AvroWriteFeature>)` | 整体设置特性集合 |
+| `enable/disable/configure(AvroReadFeature[, Boolean])` | 读取特性开关 |
+| `enable/disable/configure(AvroWriteFeature[, Boolean])` | 写出特性开关 |
+| `field(Class, String, DocumentBaseConverter)` | 为指定字段绑定转换器 |
+| `missingFieldPolicy(MissingFieldPolicy)` | 缺字段策略 |
+| `failOnUnknownFields(Boolean)` | 未知字段是否报错 |
+| `writeNulls(Boolean)` | null 字段是否写出 |
+| `namingStrategy(PropertyNamingStrategy)` | 字段命名策略 |
+| `fileCharset(Charset)` / `atomicFileWrite(Boolean)` / `createParentDirectories(Boolean)` | 文件写出选项 |
+| `maxInputSize(Long)` / `maxStringLength(Int)` / `maxNodeDepth(Int)` / `maxNodeCount(Long)` | 输入与 Node 树限制（0 表示不限制） |
+| `resolveReferences(Boolean)` / `writeReferences(Boolean)` / `remoteReferenceResolver(RemoteReferenceResolver?)` | 本地 `$ref` 解析/写出与远程引用 |
+| `subtype(...)` / `typeProperty(...)` | 多态子类型注册 |
+| `beanValidator(DocumentBeanValidator?)` | 根对象校验器 |
+| `enable/disable/configure(DeserializationFeature[, Boolean])` / `failOnNullForPrimitives(Boolean)` | 通用反序列化特性 |
+| `build()` | 构建 `AvroConfig` |
+
+> `AvroConfigBuilder` 转发全部通用 `DocumentMapperConfig` 选项，始终使用它也不会丢失
+> `namingStrategy`、`fileCharset`、`maxInputSize` 等配置；也可以直接把
+> `DocumentMapperConfig` 传给 `AvroMapper`，此时 Avro 专属选项回退默认值。
+
+```kotlin
+import com.mingliqiye.document.format.avro.AvroCodec
+import com.mingliqiye.document.format.avro.AvroConfig
+import com.mingliqiye.document.format.avro.AvroMapper
+import com.mingliqiye.document.format.avro.AvroReadFeature
+import com.mingliqiye.document.format.avro.AvroWriteFeature
+
+val mapper = AvroMapper(
+    AvroConfig.builder()
+        .schema(writerSchema)
+        .readerSchema(readerSchema)     // 可选：Schema 演进
+        .codec(AvroCodec.DEFLATE)       // 可选：OCF 默认 codec
+        .disable(AvroReadFeature.AVRO_BUFFERING)
+        .enable(AvroWriteFeature.AVRO_FILE_OUTPUT)
+        .disable(AvroWriteFeature.ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA)
+        .maxNodeDepth(128)
+        .build(),
+)
+
+println(mapper.avroConfig.avroFileOutput)       // true
+println(mapper.avroConfig.codec)                // DEFLATE
+```
+
+## 参考实现 Avro 配置对齐（配置矩阵）
+
+盘点依据：`Avro 底层库` 2.15.3 与 3.0.1 的官方格式特性枚举（2.x 为
+`AvroParser.Feature` / `AvroGenerator.Feature`，3.x 更名为 `AvroReadFeature` /
+`AvroWriteFeature`）。官方枚举共 4 个常量：读取 1 个、写出 3 个
+（`ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA` 为 3.0 新增）。
+
+### 读取特性（`AvroReadFeature`）
+
+| 本项目特性 | 参考实现 对应 | 2.x 默认 | 3.x 默认 | 本项目默认 | 行为 |
+|---|---|---|---|---|---|
+| `AVRO_BUFFERING` | `AvroParser.Feature.AVRO_BUFFERING`（2.x）/ `AvroReadFeature.AVRO_BUFFERING`（3.x） | 开启 | 开启 | 开启 | 开启用 `DecoderFactory.binaryDecoder`（缓冲）；关闭用 `directBinaryDecoder`（尽量只读取最少字节）。解析结果与尾随字节/截断校验一致 |
+
+### 写出特性（`AvroWriteFeature`）
+
+| 本项目特性 | 参考实现 对应 | 2.x 默认 | 3.x 默认 | 本项目默认 | 行为 |
+|---|---|---|---|---|---|
+| `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA` | `AvroWriteFeature.ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA`（3.x 新增，2.x 无） | — | 关闭 | **开启**（历史兼容，见下方差异） | 由 `AvroSchema` 生成 Schema 时，给「无真实默认值且 union 含 `null`」的字段补 `"default": null`；关闭后不补默认值 |
+| `AVRO_BUFFERING` | `AvroGenerator.Feature.AVRO_BUFFERING`（2.x）/ `AvroWriteFeature.AVRO_BUFFERING`（3.x） | 开启 | 开启 | 开启 | 开启用 `binaryEncoder`；关闭用 `directBinaryEncoder`。输出字节完全一致 |
+| `AVRO_FILE_OUTPUT` | `AvroGenerator.Feature.AVRO_FILE_OUTPUT`（2.x）/ `AvroWriteFeature.AVRO_FILE_OUTPUT`（3.x） | 关闭 | 关闭 | 关闭 | 开启后 `formatBytes`（以及由它驱动的 `format(value, OutputStream/File/Path)`）把单个根值写成内嵌 Schema 的 OCF 容器（单条记录，codec 取 `AvroConfig.codec`，默认 `NULL`） |
+
+默认值差异说明：
+
+- `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA`：参考实现 3.x 默认关闭（该特性服务于其从 POJO
+  生成 Schema 的场景）；本模块历史上 `AvroSchema.toAvroSchema()` 一直为可空/非必填字段写
+  `"default": null`，为保持既有 Schema 输出与 Schema 演进行为，默认保持**开启**。需要
+  参考实现 3.x 默认行为时显式 `disable(...)`，或调用
+  `AvroSchema.toAvroSchema(addNullAsDefaultValueInSchema = false)`。
+- 其余特性默认值与 参考实现 2.x / 3.x 一致。
+
+### `AvroFactory` / `AvroFactoryBuilder` 配置映射
+
+| 参考实现 配置 | 本项目对应 | 状态 |
+|---|---|---|
+| writer Schema（`AvroMapper.writer(schema)` / `AvroSchema`） | `AvroConfig.schema`、`AvroMapper(schema)` / `AvroMapper(config)`、`AvroMapperBuilder.schema(...)` | 已实现 |
+| reader Schema（`AvroMapper.readerFor(...).with(schema)`） | `AvroConfig.readerSchema`、`AvroMapper(writerSchema, readerSchema)` / `AvroMapper(schema, config)` | 已实现（构造 Mapper 时固定） |
+| `AvroFactoryBuilder.formatParserFeaturesMask()` | `AvroConfig.readFeatures` / `AvroConfigBuilder.enable(AvroReadFeature)` | 已实现 |
+| `AvroFactoryBuilder.formatGeneratorFeaturesMask()` | `AvroConfig.writeFeatures` / `AvroConfigBuilder.enable(AvroWriteFeature)` | 已实现 |
+| `builderWithApacheDecoder()` / `builderWithNativeDecoder()`（`useApacheLibDecoder`） | 无开关；本模块固定使用 Apache Avro 解码器 | 不适用：两种解码器语义等价，仅内部实现不同 |
+| `JsonGenerator.Feature.AUTO_CLOSE_JSON_CONTENT`（Avro 生成器默认关闭） | 无对应开关 | 不适用：每次写出都是完整值，不存在遗留未闭合容器 |
+| `SchemaResolver` / 按类型解析 Schema（`AvroSchema` 包装器） | 无 | 不支持：Schema 必须由调用方显式提供 |
+| `AvroMapper.schemaFor(Class/Type)`（由 POJO 生成 Schema） | 无 | 不支持：本模块不反射生成 Avro Schema |
+| Avro 注解（`@AvroNamespace`、`@AvroFixedSize`、`@AvroDecimal`、`@JsonProperty` 等） | 无 | 不支持：字段名/命名空间/类型由调用方 Schema 决定 |
+| `ObjectReader.with(schema)` / `ObjectWriter.with(schema)` 的按调用 Schema 覆盖 | `AvroMapper` 构造时固定 writer / reader Schema | 部分等价：需要按调用切换时创建新的 `AvroMapper` |
+
+### 与 参考实现 的读取端差异
+
+`AVRO_FILE_OUTPUT` 与 参考实现 一致只作用于生成端；参考实现 文档也说明 OCF 头部不能 100%
+可靠地自动识别，读取端必须明确知道数据格式。本模块：
+
+- `parse(ByteArray/File/InputStream, ...)` 只接受裸 datum；
+- OCF 数据用 `parseContainerToNodes` / `parseContainer` 读取（本模块额外提供完整 OCF 读写，
+  参考实现 的该特性本身不提供读取端）。
 
 ## Schema：`AvroSchema`
 
@@ -51,7 +179,7 @@ implementation("com.mingliqiye.document.format:avro:2.5.1")
 | `avroType(field)` / `avroType(name)` | 字段对应的 `AvroType` |
 | `avroTypeName(name)` | 字段对应的 Avro 类型名（如 `string`） |
 | `toJson()` | 生成轻量 Avro Schema JSON 文本 |
-| `toAvroSchema()` | 转换为 `org.apache.avro.Schema` |
+| `toAvroSchema(addNullAsDefaultValueInSchema = true)` | 转换为 `org.apache.avro.Schema`；参数对齐 `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA`（`false` 时不补 `null` 默认值） |
 | `AvroSchema.builder(name)` | 构建器 |
 | `AvroSchema.of(name, vararg fields)` / `of(name, namespace, vararg fields)` | 直接创建 |
 | `AvroSchema.fromAvroSchema(schema)` | 从 Apache Avro Schema 还原视图 |
@@ -88,7 +216,8 @@ implementation("com.mingliqiye.document.format:avro:2.5.1")
 - `MAP` → `map<string>`；
 - `OBJECT` → 以 `<记录名>_<字段名>` 命名的空嵌套 record；
 - `DECIMAL` → 不含 precision/scale 的 `bytes`；
-- 可空或非必填字段写成 `["null", "<type>"]` 并带 `"default": null`；
+- 可空或非必填字段写成 `["null", "<type>"]`，默认带 `"default": null`（可用
+  `toAvroSchema(false)` 或关闭 `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA` 去掉默认值）；
 - 需要完整嵌套类型（自定义子 record、enum、fixed、非 string 元素）时，直接使用 Apache Avro Schema 构造 `AvroMapper`。
 
 `AvroSchema.fromAvroSchema` 会把无法表达的类型归一化：
@@ -121,25 +250,47 @@ val schema: Schema = view.toAvroSchema()
 | 构造器 | 说明 |
 |---|---|
 | `AvroMapper(schema: Schema)` | writer = reader = 给定 record Schema |
-| `AvroMapper(schema: Schema, config: DocumentMapperConfig)` | 同上，带通用配置 |
-| `AvroMapper(schema: AvroSchema)` / `AvroMapper(schema: AvroSchema, config)` | 内部转为 Apache Avro Schema |
+| `AvroMapper(schema: Schema, config: DocumentMapperConfig)` | 同上；`config` 为 `AvroConfig` 时 reader 取 `config.readerSchema`，特性生效 |
+| `AvroMapper(schema: Schema, config: AvroConfig)` | 显式 writer Schema + Avro 配置（reader 取 `config.readerSchema ?: schema`） |
+| `AvroMapper(schema: AvroSchema)` / `AvroMapper(schema: AvroSchema, config)` | 内部转为 Apache Avro Schema；按 `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA` 决定是否补 `null` 默认值 |
 | `AvroMapper(writerSchema: Schema, readerSchema: Schema)` / `+ config` | Schema 演进：写出用 writer，读取用 writer/reader 双 Schema |
-| `AvroMapper(writerSchema: AvroSchema, readerSchema: AvroSchema)` | `AvroSchema` 版本 |
+| `AvroMapper(writerSchema: Schema, readerSchema: Schema, config: AvroConfig)` | 双 Schema + Avro 配置 |
+| `AvroMapper(writerSchema: AvroSchema, readerSchema: AvroSchema)` / `+ config: AvroConfig` | `AvroSchema` 版本 |
+| `AvroMapper(config: AvroConfig)` | Schema 来自 `config.schema` / `config.readerSchema`；缺 writer Schema 抛 `IllegalArgumentException` |
 
 - 两个 Schema 都必须是 `RECORD`，否则构造抛 `IllegalArgumentException`；
-- 属性：`writerSchema`、`readerSchema`、`schema`（等同 `writerSchema` 的别名）；
+- 属性：`writerSchema`、`readerSchema`、`schema`（等同 `writerSchema` 的别名）、`avroConfig`（生效的 Avro 配置）；
 - 常量：`AvroMapper.FORMAT_NAME = "avro"`。
 
 Builder：
 
 ```kotlin
+import com.mingliqiye.document.format.avro.AvroConfig
 import com.mingliqiye.document.format.avro.AvroMapper
 
 val mapper = AvroMapper.builder(schema).build()                                  // writer = reader
 val evolving = AvroMapper.builder(writerSchema, readerSchema).build()            // 双 Schema
+
+// 无 Schema 构建器：之后用 schema(...) / readerSchema(...) / config(...) 提供
+val configured = AvroMapper.builder()
+    .schema(writerSchema)
+    .readerSchema(readerSchema)
+    .config(avroConfig)
+    .build()
+
+// 配置自带 Schema
+val fromConfig = AvroMapper.builder(avroConfig).build()
 ```
 
-`AvroMapperBuilder` 继承 `DocumentMapperBuilder<AvroMapper>`，支持 `addSerializer` / `addDeserializer` / `addConverter` / `addModule` / `addModules` / `config` / `objectInstantiator` / `build`。
+`AvroMapperBuilder` 继承 `DocumentMapperBuilder<AvroMapper>`，支持 `addSerializer` / `addDeserializer` / `addConverter` / `addModule` / `addModules` / `config` / `objectInstantiator` / `build`，并额外提供：
+
+| 方法 | 说明 |
+|---|---|
+| `schema(Schema)` / `schema(AvroSchema)` | 设置 writer Schema |
+| `readerSchema(Schema)` / `readerSchema(AvroSchema)` | 设置 reader Schema |
+| `config(AvroConfig)` | 设置 Avro 配置（含 Schema、codec、参考实现 Avro 特性），返回 `AvroMapperBuilder` |
+
+Schema 来源优先级：`schema(...)` / `readerSchema(...)` 显式设置 > `config(AvroConfig)` 内的 Schema >（reader 缺省时）writer Schema。`build()` 时仍缺 writer Schema 抛 `IllegalArgumentException`。
 
 ## 读取 API
 
@@ -162,18 +313,22 @@ val evolving = AvroMapper.builder(writerSchema, readerSchema).build()           
 - 数据损坏、字节截断、Schema 不匹配或无法演进统一抛 `AvroParseException`；
 - Avro `float` / `double` 的 NaN、Infinity 无法由 `NumberNode` 表达，抛 `AvroParseException`；
 - `maxNodeDepth` 在 datum → Node 转换时检查嵌套深度（record / map / array）；
-- OCF 读取时 writer Schema 取自容器头部，reader Schema 使用 Mapper 的 `readerSchema`。
+- OCF 读取时 writer Schema 取自容器头部，reader Schema 使用 Mapper 的 `readerSchema`；
+- `AVRO_BUFFERING` 关闭时改用 direct 解码器（只读取最少字节），解析结果与错误行为不变；
+  该特性只作用于裸 wire，OCF 缓冲由 `DataFileReader` 自行管理；
+- 若数据由 `AVRO_FILE_OUTPUT` 以 OCF 写出，必须用 `parseContainerToNodes` / `parseContainer`
+  读取，`parse(ByteArray/File/InputStream)` 只接受裸 datum（与 参考实现 的读取端约定一致）。
 
 ## 写出 API
 
 | 方法 | 说明 |
 |---|---|
-| `formatBytes(value)` | 裸单根 Avro binary datum（writer Schema） |
-| `format(value, file: File / path: Path)` | 写裸 datum 到文件 |
-| `format(value, output: OutputStream)` | 写裸 datum 到流 |
-| `formatContainerBytes(values: Iterable<Any?>)` | 写 OCF（codec = `NULL`） |
-| `formatContainerBytes(values, codec: AvroCodec)` | 写 OCF，指定 codec |
-| `appendContainer(file: File, values, codec: AvroCodec? = null)` | 向 OCF 文件追加记录；文件不存在/为空时新建 |
+| `formatBytes(value)` | 默认写裸单根 Avro binary datum；开启 `AVRO_FILE_OUTPUT` 时写单记录 OCF 容器 |
+| `format(value, file: File / path: Path)` | 写裸 datum 到文件（`AVRO_FILE_OUTPUT` 开启时写 OCF；`atomicFileWrite` 等通用选项生效） |
+| `format(value, output: OutputStream)` | 写裸 datum 到流（`AVRO_FILE_OUTPUT` 开启时写 OCF） |
+| `formatContainerBytes(values: Iterable<Any?>)` | 写 OCF，codec 取 `AvroConfig.codec`（默认 `NULL`） |
+| `formatContainerBytes(values, codec: AvroCodec)` | 写 OCF，显式指定 codec |
+| `appendContainer(file: File, values, codec: AvroCodec? = null)` | 向 OCF 文件追加记录；文件不存在/为空时新建（新建 codec 取 `AvroConfig.codec`） |
 | `appendContainer(path: Path, values, codec: AvroCodec? = null)` | 同上 |
 | `appendContainerBytes(existing: ByteArray, values, codec: AvroCodec? = null)` | 向已有 OCF 字节追加，返回完整字节 |
 
@@ -186,7 +341,11 @@ val evolving = AvroMapper.builder(writerSchema, readerSchema).build()           
 - 记录中出现 Schema 未声明的字段抛 `AvroException`；
 - `record` 的 `int` / `long` 数字超出范围抛 `AvroException`；
 - `fixed` 字节长度必须等于 `fixedSize`，否则抛 `AvroException`；
-- OCF 写出时只有 record 可以作为记录值，非 record datum 抛 `AvroException`。
+- OCF 写出时只有 record 可以作为记录值，非 record datum 抛 `AvroException`；
+- `AVRO_BUFFERING` 关闭时改用 direct 编码器（直接写出），输出字节与缓冲模式完全一致；
+  该特性只作用于裸 wire，OCF 缓冲由 `DataFileWriter` 自行管理；
+- `AVRO_FILE_OUTPUT` 开启时，`formatBytes`（及由其驱动的文件/流写出）输出单记录 OCF，
+  容器头部内嵌 writer Schema、codec 取 `AvroConfig.codec`；已有容器 API 不受该特性影响。
 
 流式支持：
 
@@ -612,10 +771,13 @@ check(trailingError is AvroParseException)
 
 ## 边界、限制与常见错误
 
-| 场景 | 行为 |
+| 失败场景 | 行为 |
 |---|---|
 | writer / reader Schema 不是 record | 构造 `AvroMapper` 抛 `IllegalArgumentException` |
+| `AvroMapper(config)` 的 `AvroConfig` 未提供 `schema` | `IllegalArgumentException` |
+| `AvroMapper.builder().build()` 未提供 writer Schema | `IllegalArgumentException` |
 | 裸二进制读取 | 必须由调用方提供 Schema；二进制本身不携带 |
+| `AVRO_FILE_OUTPUT` 写出的 OCF 用 `parse` 读取 | `AvroParseException`；OCF 需用 `parseContainer*` 读取 |
 | 文本 API（`parse(String)` / `format`） | `DocumentSerializationException`（只支持二进制） |
 | 尾随字节 | `AvroParseException("Unexpected trailing bytes after Avro root datum")` |
 | Schema 无法演进 | `AvroParseException` |
@@ -627,15 +789,16 @@ check(trailingError is AvroParseException)
 | `fixed` 字节长度不符 | `AvroException` |
 | 未能表示为 Node 的 Avro 类型（如自定义逻辑类型） | 按 Schema 归一化规则处理，无法表示的抛异常 |
 | 裸 wire 写出 | 只能写单条记录；多条记录请用 OCF |
-| `maxNodeDepth` | 在 datum → Node 转换时生效 |
+| `maxNodeDepth` | 在 datum → Node 转换时生效（`NodeLimits` 另从根节点计 1 校验） |
+| `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA` 关闭后 reader 新增可空字段无默认值 | 读取缺少该字段的旧数据抛 `AvroParseException` |
 
 ## 与通用 `DocumentMapper` 的差异
 
 - 继承 `BinaryDocumentMapper`：仅二进制 API，文本/字符流 API 抛 `DocumentSerializationException`；
-- Schema 驱动：构造必须提供 record Schema（或 writer/reader 双 Schema）；
-- 额外能力：OCF 容器读写、append、codec、Schema 演进；
-- 公开的 Node 级工具：`AvroSchema` / `AvroSchemaBuilder` / `AvroType` / `AvroCodec`；`AvroContainerReader` / `AvroContainerWriter` / `AvroWireReader` / `AvroWireWriter` / `AvroDatumConverter` 为内部实现，通过 `AvroMapper` 使用；
-- 没有格式专属 Config 类，使用 `DocumentMapperConfig`。
+- Schema 驱动：构造必须提供 record Schema（或 writer/reader 双 Schema / `AvroConfig.schema`）；
+- 额外能力：OCF 容器读写、append、codec、Schema 演进、参考实现 Avro 格式特性；
+- 公开的 Node 级工具：`AvroSchema` / `AvroSchemaBuilder` / `AvroType` / `AvroCodec` / `AvroConfig` / `AvroConfigBuilder` / `AvroReadFeature` / `AvroWriteFeature`；`AvroContainerReader` / `AvroContainerWriter` / `AvroWireReader` / `AvroWireWriter` / `AvroDatumConverter` 为内部实现，通过 `AvroMapper` 使用；
+- 格式专属配置：`AvroConfig` / `AvroConfigBuilder`（Schema、codec、参考实现 Avro 读写出特性）；也兼容直接传 `DocumentMapperConfig`，此时 Avro 专属选项回退默认值。
 
 ## 相关链接
 
@@ -645,4 +808,5 @@ check(trailingError is AvroParseException)
 - [文件与流 IO](../guide/io.md)
 - [API 参考](../reference/api.md)
 - [异常参考](../reference/exceptions.md)
+- [参考实现 Avro（FasterXML dataformats-binary）]()
 - [format-avro 模块 README](https://github.com/minglipro/mingli-document/blob/dev/format-avro/README.md)

@@ -166,7 +166,7 @@ class XmlMixedOrderTest {
         val mapper = XmlMapper(
             XmlConfig.builder().typeAttributes(true)
                 .attributePrefix("@")
-                .mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED)
+                .mixedContentPolicy(XmlMixedContentPolicy.PRESERVE_ORDERED).disable(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE)
                 .build(),
         )
         val xml = """<root><list id="1">pre<item>a</item>post</list></root>"""

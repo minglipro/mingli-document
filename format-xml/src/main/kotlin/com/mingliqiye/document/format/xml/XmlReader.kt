@@ -37,6 +37,10 @@ import java.util.Base64
  *   单字段对象 `{元素名: 节点}`；相邻文本节点合并、纯空白文本忽略）；
  * - [XmlMixedContentPolicy.REJECT]：抛 [XmlParseException]。
  *
+ * 开启 [autoDetectXsiType]（默认开启）时识别 `xsi:type`，把 XSD 内建标量类型
+ * （`xs:string`/`xs:boolean`/`xs:int`/`xs:double`/`xs:base64Binary` 等）映射为
+ * 对应 Node 类型；未知类型回退结构推断。元素/属性名经 [nameProcessor] 解码。
+ *
  * @param source XML 文本
  * @param attributePrefix 属性字段前缀；`null` 表示读取时忽略 XML attribute
  * @param namespaceAware 是否启用命名空间感知
@@ -47,6 +51,10 @@ import java.util.Base64
  * @param contentKey 有序混合内容的数组字段名，默认 `#content`
  * @param maxDepth 最大 XML 元素嵌套深度（根元素深度为 `1`），默认
  *   [XmlConfig.DEFAULT_MAX_DEPTH]；`0` 或负数表示不限制（显式关闭保护）
+ * @param emptyElementAsNull 空元素是否读取为 null
+ * @param processXsiNil 是否处理 `xsi:nil`
+ * @param autoDetectXsiType 是否按 `xsi:type` 自动识别类型
+ * @param nameProcessor XML 名称处理器
  */
 public class XmlReader(
     private val source: String,
@@ -60,6 +68,8 @@ public class XmlReader(
     private val maxDepth: Int = XmlConfig.DEFAULT_MAX_DEPTH,
     private val emptyElementAsNull: Boolean = false,
     private val processXsiNil: Boolean = true,
+    private val autoDetectXsiType: Boolean = true,
+    private val nameProcessor: XmlNameProcessor = XmlNameProcessors.passthrough(),
 ) {
 
     init {
@@ -97,8 +107,14 @@ public class XmlReader(
 
     private fun toNode(element: Element): Node {
         val attributes = attributeFields(element)
-        if (processXsiNil && isNilElement(element)) {
+        if (processXsiNil && XmlXsi.isNil(element)) {
             return wrapScalar(element, attributes, NullNode.INSTANCE)
+        }
+        if (autoDetectXsiType) {
+            val xsiType = XmlXsi.typeName(element)
+            if (xsiType != null) {
+                return toXsiTypedNode(element, xsiType, attributes)
+            }
         }
         return when (element.getAttribute(PROTOCOL_TYPE)) {
             "object" -> toObjectNode(element, attributes)
@@ -108,6 +124,28 @@ public class XmlReader(
             "boolean" -> wrapScalar(element, attributes, toBooleanNode(element.textContent))
             "binary" -> wrapScalar(element, attributes, BinaryNode.of(Base64.getDecoder().decode(element.textContent.trim())))
             else -> inferNode(element, attributes)
+        }
+    }
+
+    /**
+     * 按 `xsi:type` 的 XSD 内建标量类型转换；未知类型回退到结构推断。
+     *
+     * @throws XmlParseException 已知类型但文本不合法时抛出
+     */
+    private fun toXsiTypedNode(
+        element: Element,
+        typeName: String,
+        attributes: List<Pair<String, Node>>,
+    ): Node {
+        val text = element.textContent
+        return when (XmlXsi.scalarType(typeName)) {
+            XsdScalarType.STRING -> wrapScalar(element, attributes, StringNode.of(text))
+            XsdScalarType.BOOLEAN -> wrapScalar(element, attributes, toBooleanNode(text))
+            XsdScalarType.NUMBER -> wrapScalar(element, attributes, NumberNode.ofRaw(XmlXsi.numberRaw(text)))
+            XsdScalarType.INTEGER -> wrapScalar(element, attributes, NumberNode.ofRaw(XmlXsi.integerRaw(text)))
+            XsdScalarType.BINARY -> wrapScalar(element, attributes, BinaryNode.of(XmlXsi.base64Binary(text)))
+            XsdScalarType.HEX_BINARY -> wrapScalar(element, attributes, BinaryNode.of(XmlXsi.hexBinary(text)))
+            XsdScalarType.ANY, null -> inferNode(element, attributes)
         }
     }
 
@@ -265,28 +303,10 @@ public class XmlReader(
     /**
      * 收集对象元素上的 XML attribute 字段。
      *
-     * `type` / `nil` 是类型协议属性，不映射为普通字段；Clark 模式下跳过 `xmlns` 声明，
-     * 其余属性按 `attributePrefix + 名称` 映射。
+     * `type` / `nil` / `xsi:nil` 是类型协议属性，不映射为普通字段；开启
+     * `xsi:type` 自动识别时 `xsi:type` 同样跳过。Clark 模式下跳过 `xmlns` 声明，
+     * 其余属性按 `attributePrefix + 名称` 映射，名称经 [nameProcessor] 解码。
      */
-    private fun isNilElement(element: Element): Boolean {
-        val attributes = element.attributes
-        for (index in 0 until attributes.length) {
-            val attribute = attributes.item(index) as? Attr ?: continue
-            if (isNilAttribute(attribute) && attribute.value == "true") {
-                return true
-            }
-        }
-        return false
-    }
-
-    private fun isNilAttribute(attribute: Attr): Boolean {
-        val name = attribute.name
-        val localName = attribute.localName
-        return name == PROTOCOL_NIL ||
-            name == "$XSI_PREFIX:$PROTOCOL_NIL" ||
-            (attribute.namespaceURI == XmlConfig.XSI_NAMESPACE && localName == PROTOCOL_NIL)
-    }
-
     private fun attributeFields(element: Element): List<Pair<String, Node>> {
         val prefix = attributePrefix ?: return emptyList()
         val attributes = element.attributes
@@ -294,16 +314,22 @@ public class XmlReader(
         for (index in 0 until attributes.length) {
             val attribute = attributes.item(index) as? Attr ?: continue
             val name = attribute.name
-            if (name == PROTOCOL_TYPE || name == PROTOCOL_NIL || isNilAttribute(attribute)) {
+            if (name == PROTOCOL_TYPE || name == PROTOCOL_NIL || XmlXsi.isNilAttribute(element, attribute)) {
+                continue
+            }
+            if (autoDetectXsiType && XmlXsi.isTypeAttribute(element, attribute)) {
                 continue
             }
             val keyName = if (namespaceMode == XmlNamespaceMode.CLARK) {
                 if (attribute.namespaceURI == XMLNS_NAMESPACE) {
                     continue
                 }
-                XmlNames.clark(attribute.namespaceURI, XmlNames.decode(attribute.localName ?: name))
+                XmlNames.clark(
+                    attribute.namespaceURI,
+                    decodeProcessedName(XmlNames.decode(attribute.localName ?: name)),
+                )
             } else {
-                XmlNames.decode(name)
+                decodeQualifiedName(name)
             }
             result.add(prefix + keyName to inferScalar(attribute.value))
         }
@@ -316,11 +342,28 @@ public class XmlReader(
     private fun elementName(element: Element): String = if (namespaceMode == XmlNamespaceMode.CLARK) {
         XmlNames.clark(
             element.namespaceURI,
-            XmlNames.decode(element.localName ?: element.nodeName),
+            decodeProcessedName(XmlNames.decode(element.localName ?: element.nodeName)),
         )
     } else {
-        XmlNames.decode(element.nodeName)
+        decodeQualifiedName(element.nodeName)
     }
+
+    /**
+     * 解码 XML 名称并应用 [nameProcessor]；前缀限定名只处理本地名部分。
+     */
+    private fun decodeQualifiedName(name: String): String {
+        val decoded = XmlNames.decode(name)
+        if (!namespaceAware) {
+            return decodeProcessedName(decoded)
+        }
+        val colon = decoded.indexOf(':')
+        if (colon <= 0 || colon == decoded.length - 1) {
+            return decodeProcessedName(decoded)
+        }
+        return decoded.substring(0, colon + 1) + decodeProcessedName(decoded.substring(colon + 1))
+    }
+
+    private fun decodeProcessedName(name: String): String = nameProcessor.decode(name)
 
     private fun displayName(element: Element): String = elementName(element)
 
@@ -391,7 +434,6 @@ public class XmlReader(
 
         private const val PROTOCOL_TYPE = "type"
         private const val PROTOCOL_NIL = "nil"
-        private const val XSI_PREFIX = "xsi"
         private const val ARRAY_ITEM_NAME = "item"
         private const val XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/"
 
@@ -451,6 +493,8 @@ public class XmlReader(
             maxDepth,
             xmlConfig?.emptyElementAsNull ?: false,
             xmlConfig?.processXsiNil ?: true,
+            xmlConfig?.autoDetectXsiType ?: true,
+            xmlConfig?.nameProcessor ?: XmlNameProcessors.passthrough(),
         )
     }
 }

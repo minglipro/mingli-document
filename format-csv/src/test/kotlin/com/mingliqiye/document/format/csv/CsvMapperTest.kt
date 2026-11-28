@@ -117,7 +117,12 @@ class CsvMapperTest {
             .config(CsvConfig.builder().delimiter('|').build())
             .build()
 
-        assertTrue(mapper.format(mapOf("a" to 1, "b" to 2)).startsWith("a|b"))
+        val csv = mapper.format(mapOf("a" to 1, "b" to 2))
+        val lines = csv.trim().lines()
+        assertEquals(2, lines.size)
+        // 宽松引号检查（上游实现 默认）下，列名中的字母小于 minSafeChar 会被加引号。
+        assertEquals("a|b", lines[0].replace("\"", ""))
+        assertEquals("1|2", lines[1])
     }
 
     private class Person {

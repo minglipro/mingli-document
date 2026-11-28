@@ -281,7 +281,7 @@ val mapper = JsonMapper(
 
 ## DeserializationFeature
 
-Jackson 风格的反序列化特性开关，默认**全部关闭**（与 Jackson 默认配置一致，升级不改变
+参考实现 风格的反序列化特性开关，默认**全部关闭**（与 参考实现 默认配置一致，升级不改变
 既有行为）。通过 `DocumentMapperConfigBuilder` 配置：
 
 ```kotlin
@@ -416,7 +416,7 @@ class Order {
 
 ## DocumentModule 模块注册
 
-`DocumentModule` 等价于 Jackson 的 `Module`，把一组转换器/策略打包注册：
+`DocumentModule` 等价于 参考实现 的 `Module`，把一组转换器/策略打包注册：
 
 ```kotlin
 import com.mingliqiye.document.serialization.DocumentModule

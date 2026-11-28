@@ -21,7 +21,7 @@ public enum class DocumentIncludePolicy {
 }
 
 /**
- * 类级/字段级属性写出策略覆盖，对应 Jackson 的
+ * 类级/字段级属性写出策略覆盖，对应 上游实现 的
  * `@JsonInclude(JsonInclude.Include.NON_NULL)`。
  *
  * 同时支持类级与字段级：

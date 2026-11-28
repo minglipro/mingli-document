@@ -4,7 +4,6 @@ import com.google.protobuf.Descriptors.Descriptor
 import com.mingliqiye.document.core.DocumentTypeReference
 import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.BinaryDocumentMapper
-import com.mingliqiye.document.serialization.DocumentMapperConfig
 
 /**
  * Protobuf 二进制文档映射器。
@@ -19,14 +18,37 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
  * [com.mingliqiye.document.serialization.exception.DocumentSerializationException]。
  *
  * 映射规则见 [ProtobufWireCodec]：标量、string/bytes、bool、enum、repeated、map、嵌套 message、
- * proto2 group 以及 extension 均有对应处理；解析未知字段的策略由 [unknownFieldPolicy] 决定。
+ * proto2 group 以及 extension 均有对应处理；解析未知字段的策略由 [protobufConfig] 决定。
+ *
+ * ## 配置
+ *
+ * 默认构造器参数（[unknownFieldPolicy]、[maxDepth]、[extensions]）会组合为默认 [ProtobufConfig]；
+ * 需要完整配置（上游实现 对齐的读取/写出特性、通用命名策略/Node 限制/转换器等）时传入
+ * [ProtobufConfig]：
+ *
+ * ```kotlin
+ * val mapper = ProtobufMapper(
+ *     descriptor,
+ *     ProtobufConfig.builder()
+ *         .unknownFieldPolicy(ProtobufUnknownFieldPolicy.IGNORE)
+ *         .enable(ProtobufReadFeature.IGNORE_UNDEFINED)
+ *         .enable(ProtobufWriteFeature.IGNORE_UNKNOWN)
+ *         .maxDepth(64)
+ *         .build(),
+ * )
+ * ```
+ *
+ * [ProtobufReadFeature.IGNORE_UNDEFINED] 开启时读取按
+ * [ProtobufConfig.effectiveUnknownFieldPolicy] 生效（`PRESERVE` 优先）；
+ * [ProtobufWriteFeature.IGNORE_UNKNOWN] 开启时写出会跳过未声明的字段名。
  *
  * ## extension
  *
- * 通过 [extensions] 传入 [ProtobufExtensionRegistry] 后，注册的 extension 会以对象字段形式
- * 读写；默认字段名是 extension 全名（见 [ProtobufExtensionNaming]）。未注册的 extension 编号
- * 仍按未知字段策略处理。注册表必须与 [descriptor] 来自同一个 Descriptor/FileDescriptor 树
- * （Protobuf 按 Descriptor 实例匹配 extension），否则编号会被当作未知字段。示例：
+ * 通过 [extensions]（或 [ProtobufConfig.extensions]）传入 [ProtobufExtensionRegistry] 后，
+ * 注册的 extension 会以对象字段形式读写；默认字段名是 extension 全名（见
+ * [ProtobufExtensionNaming]）。未注册的 extension 编号仍按未知字段策略处理。注册表必须与
+ * [descriptor] 来自同一个 Descriptor/FileDescriptor 树（Protobuf 按 Descriptor 实例匹配
+ * extension），否则编号会被当作未知字段。示例：
  *
  * ```kotlin
  * val registry = ProtobufExtensionRegistry.of(fileDescriptor)
@@ -44,22 +66,69 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
  * @param unknownFieldPolicy 解析与写出未知字段的策略，默认 [ProtobufUnknownFieldPolicy.FAIL]
  * @param maxDepth 解析最大嵌套深度，`0` 表示不限制
  * @param extensions extension 注册表，默认 [ProtobufExtensionRegistry.EMPTY]
+ * @param protobufConfig 完整 Protobuf 配置；默认由 [unknownFieldPolicy]、[maxDepth]、
+ *   [extensions] 组合而成
  */
 public class ProtobufMapper @JvmOverloads constructor(
     public val descriptor: Descriptor,
-    public val unknownFieldPolicy: ProtobufUnknownFieldPolicy = ProtobufUnknownFieldPolicy.FAIL,
-    public val maxDepth: Int = 0,
-    public val extensions: ProtobufExtensionRegistry = ProtobufExtensionRegistry.EMPTY,
+    unknownFieldPolicy: ProtobufUnknownFieldPolicy = ProtobufUnknownFieldPolicy.FAIL,
+    maxDepth: Int = 0,
+    extensions: ProtobufExtensionRegistry = ProtobufExtensionRegistry.EMPTY,
+    public val protobufConfig: ProtobufConfig = ProtobufConfig.of(unknownFieldPolicy, maxDepth, extensions),
 ) : BinaryDocumentMapper(
     FORMAT_NAME,
-    { source -> ProtobufWireCodec.decode(descriptor, source, unknownFieldPolicy, maxDepth, extensions) },
-    { node, _ -> ProtobufWireCodec.encode(descriptor, node, unknownFieldPolicy, extensions) },
+    { source ->
+        ProtobufWireCodec.decode(
+            descriptor,
+            source,
+            protobufConfig.effectiveUnknownFieldPolicy,
+            protobufConfig.maxDepth,
+            protobufConfig.extensions,
+        )
+    },
+    { node, _ ->
+        ProtobufWireCodec.encode(
+            descriptor,
+            node,
+            protobufConfig.effectiveUnknownFieldPolicy,
+            protobufConfig.extensions,
+            protobufConfig.ignoreUnknownFields,
+        )
+    },
     emptyMap(),
     emptyMap(),
     null,
     null,
-    DocumentMapperConfig.empty(),
+    protobufConfig,
 ) {
+
+    /** 配置的未知字段策略（未应用 [ProtobufReadFeature.IGNORE_UNDEFINED] 升级的原始值）。 */
+    public val unknownFieldPolicy: ProtobufUnknownFieldPolicy
+        get() = protobufConfig.unknownFieldPolicy
+
+    /** 解析最大嵌套深度，`0` 表示不限制。 */
+    public val maxDepth: Int
+        get() = protobufConfig.maxDepth
+
+    /** extension 注册表。 */
+    public val extensions: ProtobufExtensionRegistry
+        get() = protobufConfig.extensions
+
+    /**
+     * 指定读取特性是否开启。
+     *
+     * @param feature 读取特性
+     * @return 开启时返回 `true`
+     */
+    public fun isEnabled(feature: ProtobufReadFeature): Boolean = protobufConfig.isEnabled(feature)
+
+    /**
+     * 指定写出特性是否开启。
+     *
+     * @param feature 写出特性
+     * @return 开启时返回 `true`
+     */
+    public fun isEnabled(feature: ProtobufWriteFeature): Boolean = protobufConfig.isEnabled(feature)
 
     /**
      * 使用 [ProtobufSchema] 创建映射器。
@@ -82,6 +151,34 @@ public class ProtobufMapper @JvmOverloads constructor(
         schema: ProtobufSchema,
         unknownFieldPolicy: ProtobufUnknownFieldPolicy,
     ) : this(schema.toDescriptor(), unknownFieldPolicy)
+
+    /**
+     * 使用 [Descriptor] 与完整 [ProtobufConfig] 创建映射器。
+     *
+     * @param descriptor 目标 message 的 Protobuf Descriptor
+     * @param config Protobuf 配置
+     */
+    public constructor(
+        descriptor: Descriptor,
+        config: ProtobufConfig,
+    ) : this(
+        descriptor,
+        config.unknownFieldPolicy,
+        config.maxDepth,
+        config.extensions,
+        config,
+    )
+
+    /**
+     * 使用 [ProtobufSchema] 与完整 [ProtobufConfig] 创建映射器。
+     *
+     * @param schema Protobuf Schema
+     * @param config Protobuf 配置
+     */
+    public constructor(
+        schema: ProtobufSchema,
+        config: ProtobufConfig,
+    ) : this(schema.toDescriptor(), config)
 
     /**
      * 使用 [Descriptor] 与 extension 注册表创建映射器。
@@ -118,7 +215,13 @@ public class ProtobufMapper @JvmOverloads constructor(
      */
     public fun parseToNode(source: ByteArray, descriptor: Descriptor): Node {
         checkInputSize(source.size.toLong())
-        return ProtobufWireCodec.decode(descriptor, source, unknownFieldPolicy, maxDepth, extensions)
+        return ProtobufWireCodec.decode(
+            descriptor,
+            source,
+            protobufConfig.effectiveUnknownFieldPolicy,
+            protobufConfig.maxDepth,
+            protobufConfig.extensions,
+        )
     }
 
     /**
@@ -142,7 +245,13 @@ public class ProtobufMapper @JvmOverloads constructor(
      * @param descriptor 本次写出使用的 message Descriptor
      * @return Protobuf 二进制
      */
-    public fun formatBytes(value: Any?, descriptor: Descriptor): ByteArray = ProtobufWireCodec.encode(descriptor, toNode(value), unknownFieldPolicy, extensions)
+    public fun formatBytes(value: Any?, descriptor: Descriptor): ByteArray = ProtobufWireCodec.encode(
+        descriptor,
+        toNode(value),
+        protobufConfig.effectiveUnknownFieldPolicy,
+        protobufConfig.extensions,
+        protobufConfig.ignoreUnknownFields,
+    )
 
     public companion object {
 

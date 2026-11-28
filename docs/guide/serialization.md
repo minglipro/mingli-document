@@ -808,7 +808,7 @@ class Order {
 
 ## DocumentModule 模块
 
-`DocumentModule` 用于把一组转换器/策略打包注册（类似 Jackson 的 `Module`）：
+`DocumentModule` 用于把一组转换器/策略打包注册（类似 参考实现 的 `Module`）：
 
 ```kotlin
 import com.mingliqiye.document.serialization.DocumentModule

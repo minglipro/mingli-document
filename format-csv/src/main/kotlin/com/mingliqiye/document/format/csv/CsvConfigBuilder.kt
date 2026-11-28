@@ -1,11 +1,20 @@
 package com.mingliqiye.document.format.csv
 
+import com.mingliqiye.document.serialization.DeserializationFeature
 import com.mingliqiye.document.serialization.DocumentBaseConverter
+import com.mingliqiye.document.serialization.DocumentBeanValidator
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.MissingFieldPolicy
+import com.mingliqiye.document.serialization.PropertyNamingStrategy
+import com.mingliqiye.document.serialization.RemoteReferenceResolver
+import java.nio.charset.Charset
 
 /**
  * [CsvConfig] 构建器。
+ *
+ * 除 CSV 专属选项外，转发全部 [DocumentMapperConfig] 便捷选项（命名策略、字符集、文件
+ * 读写、Node 限制、引用解析、Bean 校验、反序列化特性），并支持 上游实现 风格的
+ * [CsvReadFeature] / [CsvWriteFeature] `enable` / `disable` / `configure`。
  */
 public class CsvConfigBuilder {
 
@@ -15,6 +24,8 @@ public class CsvConfigBuilder {
     private var schema: CsvSchema? = null
     private var nestedMode: CsvNestedMode? = null
     private var maxDepth = CsvConfig.DEFAULT_MAX_DEPTH
+    private val readFeatures = LinkedHashSet(CsvConfig.DEFAULT_READ_FEATURES)
+    private val writeFeatures = LinkedHashSet(CsvConfig.DEFAULT_WRITE_FEATURES)
 
     /**
      * 为指定字段绑定转换器。
@@ -58,7 +69,115 @@ public class CsvConfigBuilder {
     }
 
     /**
+     * 设置未标注 `@DocumentName` 的字段命名策略。
+     */
+    public fun namingStrategy(strategy: PropertyNamingStrategy): CsvConfigBuilder {
+        base.namingStrategy(strategy)
+        return this
+    }
+
+    /**
+     * 设置文本文件/流读写字符集，默认 UTF-8。
+     */
+    public fun fileCharset(charset: Charset): CsvConfigBuilder {
+        base.fileCharset(charset)
+        return this
+    }
+
+    /**
+     * 设置写文件时是否临时文件 + 原子替换。
+     */
+    public fun atomicFileWrite(atomic: Boolean): CsvConfigBuilder {
+        base.atomicFileWrite(atomic)
+        return this
+    }
+
+    /**
+     * 设置写文件时是否自动创建父目录。
+     */
+    public fun createParentDirectories(create: Boolean): CsvConfigBuilder {
+        base.createParentDirectories(create)
+        return this
+    }
+
+    /**
+     * 设置单次输入最大字节数；0 表示不限制。
+     */
+    public fun maxInputSize(max: Long): CsvConfigBuilder {
+        base.maxInputSize(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树单个字符串最大长度；0 表示不限制。
+     */
+    public fun maxStringLength(max: Int): CsvConfigBuilder {
+        base.maxStringLength(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大深度；0 表示不限制。
+     */
+    public fun maxNodeDepth(max: Int): CsvConfigBuilder {
+        base.maxNodeDepth(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大节点数；0 表示不限制。
+     */
+    public fun maxNodeCount(max: Long): CsvConfigBuilder {
+        base.maxNodeCount(max)
+        return this
+    }
+
+    /**
+     * 设置远程 `$ref` 解析器；`null` 表示禁用远程引用。
+     */
+    public fun remoteReferenceResolver(resolver: RemoteReferenceResolver?): CsvConfigBuilder {
+        base.remoteReferenceResolver(resolver)
+        return this
+    }
+
+    /**
+     * 设置根对象 Bean 校验器；`null` 表示不校验。
+     */
+    public fun beanValidator(validator: DocumentBeanValidator?): CsvConfigBuilder {
+        base.beanValidator(validator)
+        return this
+    }
+
+    /**
+     * 开启指定反序列化特性。
+     */
+    public fun enable(feature: DeserializationFeature): CsvConfigBuilder {
+        base.enable(feature)
+        return this
+    }
+
+    /**
+     * 关闭指定反序列化特性。
+     */
+    public fun disable(feature: DeserializationFeature): CsvConfigBuilder {
+        base.disable(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭指定反序列化特性。
+     */
+    public fun configure(feature: DeserializationFeature, enabled: Boolean): CsvConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 便捷设置 `FAIL_ON_NULL_FOR_PRIMITIVES`。
+     */
+    public fun failOnNullForPrimitives(fail: Boolean): CsvConfigBuilder = configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, fail)
+
+    /**
      * 设置字段分隔符。
+     *
+     * 配置 Schema 后，[CsvSchema.columnSeparator] 非 null 时优先于本选项。
      */
     public fun delimiter(delimiter: Char): CsvConfigBuilder {
         this.delimiter = delimiter
@@ -119,6 +238,68 @@ public class CsvConfigBuilder {
         this.maxDepth = maxDepth
         return this
     }
+
+    /**
+     * 开启指定 CSV 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: CsvReadFeature): CsvConfigBuilder {
+        readFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭指定 CSV 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: CsvReadFeature): CsvConfigBuilder {
+        readFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭指定 CSV 读取特性。
+     *
+     * @param feature 读取特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: CsvReadFeature, enabled: Boolean): CsvConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 开启指定 CSV 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: CsvWriteFeature): CsvConfigBuilder {
+        writeFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭指定 CSV 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: CsvWriteFeature): CsvConfigBuilder {
+        writeFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭指定 CSV 写出特性。
+     *
+     * @param feature 写出特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: CsvWriteFeature, enabled: Boolean): CsvConfigBuilder = if (enabled) enable(feature) else disable(feature)
 
     /**
      * 注册多态子类型。
@@ -184,5 +365,14 @@ public class CsvConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): CsvConfig = CsvConfig(base.build(), delimiter, header, schema, nestedMode, maxDepth)
+    public fun build(): CsvConfig = CsvConfig(
+        base.build(),
+        delimiter,
+        header,
+        schema,
+        nestedMode,
+        maxDepth,
+        readFeatures.toSet(),
+        writeFeatures.toSet(),
+    )
 }

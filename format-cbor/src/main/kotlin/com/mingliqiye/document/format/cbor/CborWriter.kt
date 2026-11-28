@@ -1,6 +1,5 @@
 package com.mingliqiye.document.format.cbor
 
-import com.fasterxml.jackson.dataformat.cbor.CBORFactory
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.BinaryNode
@@ -17,8 +16,6 @@ import java.io.IOException
 import java.io.OutputStream
 import java.math.BigDecimal
 import java.math.BigInteger
-
-private val CBOR_FACTORY: CBORFactory = CBORFactory()
 
 /**
  * 将文档树写成 CBOR 二进制。
@@ -42,14 +39,25 @@ private val CBOR_FACTORY: CBORFactory = CBORFactory()
  * 池缓冲区、写出完成后归还，返回的 `ByteArray` 仍是一次复制（所有权归调用方）。
  * 默认 `null` 使用普通 `ByteArrayOutputStream`，行为与不加池时完全一致。
  *
+ * [writeFeatures] 直接落到 上游实现 generator 特性上：
+ * - [CborWriteFeature.WRITE_MINIMAL_INTS]：整数最短编码（默认开启）；
+ * - [CborWriteFeature.WRITE_TYPE_HEADER]：文档开头写自描述 tag（55799）；
+ * - [CborWriteFeature.LENIENT_UTF_ENCODING]：非法代理对替换为 `U+FFFD`；
+ * - [CborWriteFeature.STRINGREF]：生成 stringref 共享字符串引用；
+ * - [CborWriteFeature.ENCODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING]：按规范编码
+ *   负数 bignum。
+ * [CborWriteFeature.WRITE_MINIMAL_DOUBLES] 只影响 token 直写路径，见 [CborTokenWriter]。
+ *
  * @param canonical 是否按 canonical map key 顺序写出
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
+ * @param writeFeatures CBOR 写出特性集合，默认 [CborConfig.DEFAULT_WRITE_FEATURES]
  */
 public class CborWriter @JvmOverloads constructor(
     private val canonical: Boolean = false,
     private val preserveTags: Boolean = false,
     private val bufferPool: ByteArrayPool? = null,
+    private val writeFeatures: Set<CborWriteFeature> = CborConfig.DEFAULT_WRITE_FEATURES,
 ) {
 
     /**
@@ -73,7 +81,8 @@ public class CborWriter @JvmOverloads constructor(
         val output: OutputStream = pooledOutput ?: ByteArrayOutputStream()
         var generator: CBORGenerator? = null
         try {
-            val created = CBOR_FACTORY.createGenerator(output)
+            val factory = CborFeatureSupport.factory(CborConfig.DEFAULT_READ_FEATURES, writeFeatures)
+            val created = factory.createGenerator(output)
             generator = created
             for (node in nodes) {
                 writeValue(created, node)
@@ -148,7 +157,7 @@ public class CborWriter @JvmOverloads constructor(
      * - 不含小数点/指数标记的 raw 写成 CBOR 整数：能放进 Int/Long 时写最短整数，
      *   更大的整数写成 bignum（tag 2/3）。
      * - 其余 raw 用 [BigDecimal] 写成 CBOR 十进制分数（tag 4），保留 Node 模型的
-     *   [BigDecimal] 精度；读取端由 Jackson 还原为小数 [NumberNode]。
+     *   [BigDecimal] 精度；读取端由 上游实现 还原为小数 [NumberNode]。
      */
     private fun writeNumber(generator: CBORGenerator, node: NumberNode) {
         val raw = node.raw
@@ -185,13 +194,15 @@ public class CborWriter @JvmOverloads constructor(
  *
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
+ * @param writeFeatures CBOR 写出特性集合，默认 [CborConfig.DEFAULT_WRITE_FEATURES]
  * @return CBOR 二进制内容
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
 public fun Node.toCborBytes(
     preserveTags: Boolean = false,
     bufferPool: ByteArrayPool? = null,
-): ByteArray = CborWriter(preserveTags = preserveTags, bufferPool = bufferPool).write(this)
+    writeFeatures: Set<CborWriteFeature> = CborConfig.DEFAULT_WRITE_FEATURES,
+): ByteArray = CborWriter(preserveTags = preserveTags, bufferPool = bufferPool, writeFeatures = writeFeatures).write(this)
 
 /**
  * 将文档树按 canonical map key 顺序写成 CBOR 字节。
@@ -201,13 +212,20 @@ public fun Node.toCborBytes(
  *
  * @param preserveTags 是否识别并写出 CBOR tag 包装对象，默认 `false`
  * @param bufferPool 可选的中间缓冲区池，默认 `null`（不池化）
+ * @param writeFeatures CBOR 写出特性集合，默认 [CborConfig.DEFAULT_WRITE_FEATURES]
  * @return CBOR 二进制内容
  * @throws CborException 生成 CBOR 失败，或数字 raw 非法时抛出
  */
 public fun Node.toCanonicalCborBytes(
     preserveTags: Boolean = false,
     bufferPool: ByteArrayPool? = null,
-): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags, bufferPool = bufferPool).write(this)
+    writeFeatures: Set<CborWriteFeature> = CborConfig.DEFAULT_WRITE_FEATURES,
+): ByteArray = CborWriter(
+    canonical = true,
+    preserveTags = preserveTags,
+    bufferPool = bufferPool,
+    writeFeatures = writeFeatures,
+).write(this)
 
 private val CANONICAL_KEY_ORDER: Comparator<Map.Entry<String, Node>> =
     Comparator { left, right ->

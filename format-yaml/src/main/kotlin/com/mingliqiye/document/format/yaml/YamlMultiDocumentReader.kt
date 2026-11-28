@@ -15,6 +15,9 @@ import com.mingliqiye.document.format.yaml.exception.YamlParseException
  * tag 按节点种类还原（标量 -> StringNode，序列 -> ArrayNode，映射 -> ObjectNode），
  * 与 [YamlReader] 一致。
  *
+ * 读取特性（[readFeatures]）与 SnakeYAML LoaderOptions（[allowDuplicateKeys]、
+ * [codePointLimit]）对齐 上游实现 YAML 2.15，详见 [YamlConfig]。
+ *
  * 边界约定：
  * - 空白或只含注释的输入不构成文档，返回空列表；
  * - `---` / `...` 界定的空文档按 [NullNode] 返回，因此返回列表长度等于显式
@@ -27,12 +30,18 @@ import com.mingliqiye.document.format.yaml.exception.YamlParseException
  * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
  * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
  * @param allowCustomTags 是否允许未知自定义 tag，默认 `false`（保持 SafeConstructor 行为）
+ * @param readFeatures 读取特性集合，默认 [YamlConfig.DEFAULT_READ_FEATURES]
+ * @param allowDuplicateKeys 是否允许重复 mapping key，默认 `false`
+ * @param codePointLimit 单次输入最大 code point 数量；`0` 使用 SnakeYAML 默认值
  */
 public class YamlMultiDocumentReader @JvmOverloads constructor(
     private val source: String,
     private val maxDepth: Int = 0,
     private val maxAliases: Int = 0,
     private val allowCustomTags: Boolean = false,
+    private val readFeatures: Set<YamlReadFeature> = YamlConfig.DEFAULT_READ_FEATURES,
+    private val allowDuplicateKeys: Boolean = false,
+    private val codePointLimit: Int = 0,
 ) {
 
     /**
@@ -41,7 +50,15 @@ public class YamlMultiDocumentReader @JvmOverloads constructor(
      * @return 按文档顺序排列的文档树列表
      * @throws YamlParseException YAML 格式非法或包含不支持的类型时抛出
      */
-    public fun readAll(): List<Node> = YamlNodeMapping.readAll(source, maxDepth, maxAliases, allowCustomTags)
+    public fun readAll(): List<Node> = YamlNodeMapping.readAll(
+        source,
+        maxDepth,
+        maxAliases,
+        allowCustomTags,
+        readFeatures,
+        allowDuplicateKeys,
+        codePointLimit,
+    )
 
     public companion object {
 

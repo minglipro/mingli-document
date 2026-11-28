@@ -2,7 +2,6 @@ package com.mingliqiye.document.format.smile
 
 import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.core.JsonToken
-import com.fasterxml.jackson.dataformat.smile.SmileFactory
 import com.mingliqiye.document.format.smile.exception.SmileParseException
 import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.DocumentTokenType
@@ -11,7 +10,7 @@ import java.io.IOException
 /**
  * Smile Token 读取器。
  *
- * 包装 Jackson Smile [JsonParser]，把 Jackson Token 映射为通用
+ * 包装 上游实现 Smile [JsonParser]，把 上游实现 Token 映射为通用
  * [DocumentTokenType]，供 [com.mingliqiye.document.serialization.DocumentMapper.fromTokens]
  * 直接解码 Bean，避免先构建完整 [com.mingliqiye.document.core.Node] 树。
  *
@@ -20,19 +19,21 @@ import java.io.IOException
  * - `FIELD_NAME` → [DocumentTokenType.FIELD_NAME]，[textValue] 为字段名
  * - `VALUE_STRING` → [DocumentTokenType.STRING]
  * - `VALUE_NUMBER_INT` / `VALUE_NUMBER_FLOAT` → [DocumentTokenType.NUMBER]，
- *   [textValue] 保留 Jackson 给出的原始数字文本
+ *   [textValue] 保留 上游实现 给出的原始数字文本
  * - `VALUE_TRUE` / `VALUE_FALSE` → [DocumentTokenType.BOOLEAN]
  * - `VALUE_NULL` → [DocumentTokenType.NULL]
  * - `VALUE_EMBEDDED_OBJECT` → [DocumentTokenType.BINARY]，[binaryValue] 为字节内容
  *
  * @param source Smile 二进制内容
+ * @param config Smile 配置；`null` 表示使用 上游实现 默认读取特性
  */
 internal class SmileTokenReader(
     source: ByteArray,
+    config: SmileConfig? = null,
 ) : DocumentTokenReader {
 
     private val parser: JsonParser = try {
-        SMILE_FACTORY.createParser(source)
+        createSmileParserFactory(config).createParser(source)
     } catch (e: IOException) {
         throw SmileParseException("Invalid Smile: ${e.message}", e)
     }
@@ -99,10 +100,5 @@ internal class SmileTokenReader(
         JsonToken.VALUE_NULL -> DocumentTokenType.NULL
         JsonToken.VALUE_EMBEDDED_OBJECT -> DocumentTokenType.BINARY
         else -> throw SmileParseException("Unsupported Smile token: $token")
-    }
-
-    private companion object {
-
-        private val SMILE_FACTORY: SmileFactory = SmileFactory()
     }
 }

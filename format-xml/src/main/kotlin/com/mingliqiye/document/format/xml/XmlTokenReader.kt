@@ -71,8 +71,6 @@ internal class XmlTokenReader(
     private companion object {
 
         private const val PROTOCOL_TYPE = "type"
-        private const val PROTOCOL_NIL = "nil"
-        private const val PROTOCOL_XSI_NIL = "xsi:nil"
         private const val ARRAY_ITEM_NAME = "item"
         private const val TEXT_KEY = XmlConfig.DEFAULT_TEXT_KEY
         private const val ITEMS_KEY = XmlConfig.DEFAULT_ITEMS_KEY
@@ -86,10 +84,13 @@ internal class XmlTokenReader(
         }
 
         private fun appendElement(element: Element, tokens: MutableList<DocumentToken>) {
-            if (element.getAttribute(PROTOCOL_NIL) == "true" ||
-                element.getAttribute(PROTOCOL_XSI_NIL) == "true"
-            ) {
+            if (XmlXsi.isNil(element)) {
                 tokens.add(DocumentToken.nullValue())
+                return
+            }
+            val xsiType = XmlXsi.typeName(element)
+            if (xsiType != null) {
+                appendXsiTyped(element, xsiType, tokens)
                 return
             }
             when (element.getAttribute(PROTOCOL_TYPE)) {
@@ -100,6 +101,23 @@ internal class XmlTokenReader(
                 "boolean" -> tokens.add(DocumentToken.boolean(booleanValue(element.textContent)))
                 "binary" -> tokens.add(DocumentToken.binary(binaryValue(element.textContent)))
                 else -> appendInferred(element, tokens)
+            }
+        }
+
+        /**
+         * 按 `xsi:type` 的 XSD 内建标量类型生成 Token（默认读取特性开启自动识别）；
+         * 未知类型回退到结构推断，与 [XmlReader.toXsiTypedNode] 对齐。
+         */
+        private fun appendXsiTyped(element: Element, typeName: String, tokens: MutableList<DocumentToken>) {
+            val text = element.textContent
+            when (XmlXsi.scalarType(typeName)) {
+                XsdScalarType.BOOLEAN -> tokens.add(DocumentToken.boolean(booleanValue(text)))
+                XsdScalarType.NUMBER -> tokens.add(DocumentToken.number(XmlXsi.numberRaw(text)))
+                XsdScalarType.INTEGER -> tokens.add(DocumentToken.number(XmlXsi.integerRaw(text)))
+                XsdScalarType.BINARY -> tokens.add(DocumentToken.binary(XmlXsi.base64Binary(text)))
+                XsdScalarType.HEX_BINARY -> tokens.add(DocumentToken.binary(XmlXsi.hexBinary(text)))
+                XsdScalarType.STRING -> tokens.add(DocumentToken.string(text))
+                XsdScalarType.ANY, null -> appendInferred(element, tokens)
             }
         }
 

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * JSON 性能基准：本项目 vs Jackson。
+ * JSON 性能基准：本项目 vs 上游实现。
  *
  * 运行：gradle :benchmarks:jmh
  */

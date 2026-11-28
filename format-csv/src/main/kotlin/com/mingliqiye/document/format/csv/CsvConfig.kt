@@ -5,11 +5,13 @@ import com.mingliqiye.document.serialization.DocumentMapperConfig
 /**
  * CSV Mapper 配置。
  *
- * 在通用字段/读写配置基础上增加 CSV 分隔符、表头选项、可选的 [CsvSchema] 与嵌套值读写方式。
+ * 在通用字段/读写配置基础上增加 CSV 分隔符、表头选项、可选的 [CsvSchema]、嵌套值读写方式
+ * 与 上游实现 风格读写特性（[CsvReadFeature] / [CsvWriteFeature]）。
  *
  * 配置了 [schema] 时：
  * - 列顺序、列名与单元格类型由 Schema 决定，[delimiter] 仍由本配置控制；
- * - 表头由 [CsvSchema.header] 决定，[header] 被忽略（Schema 优先）。
+ * - 表头由 [CsvSchema.header] 决定，[header] 被忽略（Schema 优先）；
+ * - 引号/转义/行分隔符/列分隔符/null 文本/注释/首行跳过等由 Schema 选项控制。
  *
  * 配置了 [nestedMode] 时启用嵌套单元格：
  * - [CsvNestedMode.JSON]：`{...}` / `[...]` 单元格解析为嵌套节点，嵌套节点写出为 JSON 文本；
@@ -41,11 +43,41 @@ public class CsvConfig internal constructor(
      * [com.mingliqiye.document.format.csv.exception.CsvParseException]。
      */
     public val maxDepth: Int = DEFAULT_MAX_DEPTH,
+    /**
+     * 显式开启的读取特性集合，默认 [DEFAULT_READ_FEATURES]（对齐 上游实现 默认值）。
+     *
+     * 使用 [CsvConfigBuilder.enable] / [CsvConfigBuilder.disable] /
+     * [CsvConfigBuilder.configure] 配置，查询使用 [isEnabled]。
+     */
+    public val readFeatures: Set<CsvReadFeature> = DEFAULT_READ_FEATURES,
+    /**
+     * 显式开启的写出特性集合，默认 [DEFAULT_WRITE_FEATURES]（对齐 上游实现 默认值）。
+     *
+     * 使用 [CsvConfigBuilder.enable] / [CsvConfigBuilder.disable] /
+     * [CsvConfigBuilder.configure] 配置，查询使用 [isEnabled]。
+     */
+    public val writeFeatures: Set<CsvWriteFeature> = DEFAULT_WRITE_FEATURES,
 ) : DocumentMapperConfig(base) {
 
     init {
         require(maxDepth > 0) { "maxDepth must be positive, but was $maxDepth" }
     }
+
+    /**
+     * 指定读取特性是否开启。
+     *
+     * @param feature 读取特性
+     * @return 开启时返回 `true`
+     */
+    public fun isEnabled(feature: CsvReadFeature): Boolean = feature in readFeatures
+
+    /**
+     * 指定写出特性是否开启。
+     *
+     * @param feature 写出特性
+     * @return 开启时返回 `true`
+     */
+    public fun isEnabled(feature: CsvWriteFeature): Boolean = feature in writeFeatures
 
     public companion object {
 
@@ -53,6 +85,28 @@ public class CsvConfig internal constructor(
          * 默认解析最大嵌套深度。
          */
         public const val DEFAULT_MAX_DEPTH: Int = 512
+
+        /**
+         * 默认读取特性：对齐 上游实现 默认值。
+         *
+         * 包含 [CsvReadFeature.TRIM_HEADER_SPACES]、[CsvReadFeature.ALLOW_TRAILING_COMMA]、
+         * [CsvReadFeature.FAIL_ON_MISSING_HEADER_COLUMNS]、
+         * [CsvReadFeature.FAIL_ON_DUPLICATE_HEADER_COLUMNS]。
+         */
+        public val DEFAULT_READ_FEATURES: Set<CsvReadFeature> = setOf(
+            CsvReadFeature.TRIM_HEADER_SPACES,
+            CsvReadFeature.ALLOW_TRAILING_COMMA,
+            CsvReadFeature.FAIL_ON_MISSING_HEADER_COLUMNS,
+            CsvReadFeature.FAIL_ON_DUPLICATE_HEADER_COLUMNS,
+        )
+
+        /**
+         * 默认写出特性：对齐 上游实现 默认值，仅开启
+         * [CsvWriteFeature.WRITE_LINEFEED_AFTER_LAST_ROW]。
+         */
+        public val DEFAULT_WRITE_FEATURES: Set<CsvWriteFeature> = setOf(
+            CsvWriteFeature.WRITE_LINEFEED_AFTER_LAST_ROW,
+        )
 
         /**
          * 创建 CSV 配置构建器。

@@ -23,21 +23,32 @@ import java.util.Date
  * - `!!binary` 由 SnakeYAML 解码为 `byte[]`，这里映射为 [BinaryNode] 以保留原始字节；
  * - `!!timestamp` 等日期值写成 ISO-8601 字符串节点；
  * - 开启自定义 tag 支持后，未知 tag 按基础类型还原：标量 -> [StringNode]，
- *   序列 -> [ArrayNode]，映射 -> [ObjectNode]（见 [YamlConstructor]）。
+ *   序列 -> [ArrayNode]，映射 -> [ObjectNode]（见 [YamlConstructor]）；
+ * - 上游实现 YAML 读取特性（[YamlReadFeature]）由 [YamlConstructor] 在构造阶段实现。
  */
 internal object YamlNodeMapping {
 
     /**
      * 创建安全 YAML 实例。
      *
-     * 关闭重复键容忍，重复映射键会作为格式错误上报。
+     * 关闭重复键容忍（可通过 [allowDuplicateKeys] 打开），重复映射键会作为格式错误上报。
      *
      * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
      * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
      * @param allowCustomTags 是否允许未知自定义 tag
+     * @param readFeatures 上游实现 YAML 对齐的读取特性集合
+     * @param allowDuplicateKeys 是否允许重复 mapping key
+     * @param codePointLimit 单次输入最大 code point 数量；`0` 使用 SnakeYAML 默认值
      */
-    fun createYaml(maxDepth: Int = 0, maxAliases: Int = 0, allowCustomTags: Boolean = false): Yaml = Yaml(
-        YamlConstructors.create(maxDepth, maxAliases, allowCustomTags),
+    fun createYaml(
+        maxDepth: Int = 0,
+        maxAliases: Int = 0,
+        allowCustomTags: Boolean = false,
+        readFeatures: Set<YamlReadFeature> = YamlConfig.DEFAULT_READ_FEATURES,
+        allowDuplicateKeys: Boolean = false,
+        codePointLimit: Int = 0,
+    ): Yaml = Yaml(
+        YamlConstructors.create(maxDepth, maxAliases, allowCustomTags, readFeatures, allowDuplicateKeys, codePointLimit),
     )
 
     /**
@@ -47,10 +58,24 @@ internal object YamlNodeMapping {
      * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
      * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
      * @param allowCustomTags 是否允许未知自定义 tag
+     * @param readFeatures 上游实现 YAML 对齐的读取特性集合
+     * @param allowDuplicateKeys 是否允许重复 mapping key
+     * @param codePointLimit 单次输入最大 code point 数量；`0` 使用 SnakeYAML 默认值
      * @throws YamlParseException YAML 格式非法时抛出
      */
-    fun readRoot(source: String, maxDepth: Int = 0, maxAliases: Int = 0, allowCustomTags: Boolean = false): Node = load {
-        toNode(createYaml(maxDepth, maxAliases, allowCustomTags).load<Any?>(source))
+    fun readRoot(
+        source: String,
+        maxDepth: Int = 0,
+        maxAliases: Int = 0,
+        allowCustomTags: Boolean = false,
+        readFeatures: Set<YamlReadFeature> = YamlConfig.DEFAULT_READ_FEATURES,
+        allowDuplicateKeys: Boolean = false,
+        codePointLimit: Int = 0,
+    ): Node = load {
+        toNode(
+            createYaml(maxDepth, maxAliases, allowCustomTags, readFeatures, allowDuplicateKeys, codePointLimit)
+                .load<Any?>(source),
+        )
     }
 
     /**
@@ -63,11 +88,23 @@ internal object YamlNodeMapping {
      * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
      * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
      * @param allowCustomTags 是否允许未知自定义 tag
+     * @param readFeatures 上游实现 YAML 对齐的读取特性集合
+     * @param allowDuplicateKeys 是否允许重复 mapping key
+     * @param codePointLimit 单次输入最大 code point 数量；`0` 使用 SnakeYAML 默认值
      * @throws YamlParseException YAML 格式非法时抛出
      */
-    fun readAll(source: String, maxDepth: Int = 0, maxAliases: Int = 0, allowCustomTags: Boolean = false): List<Node> = load {
+    fun readAll(
+        source: String,
+        maxDepth: Int = 0,
+        maxAliases: Int = 0,
+        allowCustomTags: Boolean = false,
+        readFeatures: Set<YamlReadFeature> = YamlConfig.DEFAULT_READ_FEATURES,
+        allowDuplicateKeys: Boolean = false,
+        codePointLimit: Int = 0,
+    ): List<Node> = load {
         val nodes = ArrayList<Node>()
-        for (document in createYaml(maxDepth, maxAliases, allowCustomTags).loadAll(source)) {
+        val yaml = createYaml(maxDepth, maxAliases, allowCustomTags, readFeatures, allowDuplicateKeys, codePointLimit)
+        for (document in yaml.loadAll(source)) {
             nodes.add(toNode(document))
         }
         nodes

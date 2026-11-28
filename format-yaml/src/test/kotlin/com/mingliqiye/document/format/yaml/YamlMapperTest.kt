@@ -13,7 +13,9 @@ class YamlMapperTest {
 
         assertEquals("yaml", mapper.formatName)
         val node = mapper.toNode(mapOf("name" to "小于"))
-        assertTrue(mapper.format(node).contains("name: 小于"))
+        // 默认对齐 上游实现 YAML：字符串值双引号 + 显式文档起始标记。
+        assertTrue(mapper.format(node).contains("name: \"小于\""))
+        assertTrue(mapper.format(node).contains("---"))
         assertEquals("小于", mapper.parse("name: 小于", Person::class.java).name)
     }
 
@@ -22,7 +24,7 @@ class YamlMapperTest {
         val mapper = YamlMapper(YamlConfig.builder().pretty(true).build())
         val text = mapper.format(linkedMapOf("name" to "小于", "age" to 18))
 
-        assertTrue(text.contains("name: 小于"))
+        assertTrue(text.contains("name: \"小于\""))
         assertTrue(text.contains("\n"))
     }
 

@@ -218,23 +218,37 @@ class YamlMultiDocumentTest {
             ObjectNode.of("b" to StringNode.of("y")),
         )
 
+        // 默认对齐 上游实现：WRITE_DOC_START_MARKER 开启，每个文档都有 `---`。
         val text = YamlCodec.writeAll(nodes, pretty = true)
-        assertEquals(1, Regex("(?m)^---").findAll(text).count())
+        assertEquals(2, Regex("(?m)^---").findAll(text).count())
         assertEquals(nodes, YamlCodec.parseAll(text))
 
         val compact = YamlCodec.writeAll(nodes, pretty = false)
         assertTrue(compact.contains("---"))
         assertEquals(nodes, YamlCodec.parseAll(compact))
+
+        val noMarkerSettings = YamlWriteSettings(
+            writeFeatures = YamlConfig.DEFAULT_WRITE_FEATURES - YamlWriteFeature.WRITE_DOC_START_MARKER,
+        )
+        val noMarker = YamlCodec.writeAll(nodes, noMarkerSettings, pretty = true)
+        assertEquals(1, Regex("(?m)^---").findAll(noMarker).count())
+        assertEquals(nodes, YamlCodec.parseAll(noMarker))
     }
 
     @Test
-    fun codecWriteAllSingleDocumentHasNoLeadingSeparator() {
+    fun codecWriteAllSingleDocumentHonorsDocStartMarker() {
         val nodes: List<Node> = listOf(ObjectNode.of("a" to StringNode.of("x")))
 
         val text = YamlCodec.writeAll(nodes, pretty = true)
-
-        assertFalse(text.trimStart().startsWith("---"))
+        assertTrue(text.trimStart().startsWith("---"))
         assertEquals(nodes, YamlCodec.parseAll(text))
+
+        val noMarkerSettings = YamlWriteSettings(
+            writeFeatures = YamlConfig.DEFAULT_WRITE_FEATURES - YamlWriteFeature.WRITE_DOC_START_MARKER,
+        )
+        val noMarker = YamlCodec.writeAll(nodes, noMarkerSettings, pretty = true)
+        assertFalse(noMarker.trimStart().startsWith("---"))
+        assertEquals(nodes, YamlCodec.parseAll(noMarker))
     }
 
     @Test

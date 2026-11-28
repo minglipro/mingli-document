@@ -10,15 +10,18 @@ import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import java.util.Base64
 
-private const val HEX_DIGITS = "0123456789abcdef"
-
 /**
  * 将 JSON 树序列化为文本。
  *
+ * 输出行为由 [JsonWriteOptions] 控制（引号字段名、数字转字符串、非 ASCII 转义等）。
  * 由 [toJsonString] 调用；不对外暴露。
+ *
+ * @param pretty 是否使用两空格缩进的格式化输出
+ * @param options 写出特性
  */
 internal class JsonWriter(
     private val pretty: Boolean,
+    private val options: JsonWriteOptions = JsonWriteOptions.DEFAULT,
 ) {
 
     private val builder = StringBuilder()
@@ -35,7 +38,7 @@ internal class JsonWriter(
         when (node) {
             is ObjectNode -> appendObject(node, indent)
             is ArrayNode -> appendArray(node, indent)
-            is NumberNode -> builder.append(node.raw)
+            is NumberNode -> appendNumber(node.raw)
             is StringNode -> appendString(node.value)
             is BooleanNode -> builder.append(if (node.value) "true" else "false")
             is BinaryNode -> appendString(Base64.getEncoder().encodeToString(node.value))
@@ -58,7 +61,7 @@ internal class JsonWriter(
             if (pretty) {
                 appendNewline(indent + 1)
             }
-            appendString(key)
+            appendFieldName(key)
             builder.append(if (pretty) ": " else ":")
             appendNode(value, indent + 1)
         }
@@ -91,34 +94,30 @@ internal class JsonWriter(
         builder.append(']')
     }
 
+    private fun appendFieldName(name: String) {
+        if (options.quoteFieldNames) {
+            appendString(name)
+        } else {
+            builder.append(name)
+        }
+    }
+
     private fun appendString(value: String) {
         builder.append('"')
-        for (ch in value) {
-            when (ch) {
-                '"' -> builder.append("\\\"")
-                '\\' -> builder.append("\\\\")
-                '\b' -> builder.append("\\b")
-                '\u000C' -> builder.append("\\f")
-                '\n' -> builder.append("\\n")
-                '\r' -> builder.append("\\r")
-                '\t' -> builder.append("\\t")
-                else -> {
-                    if (ch < ' ') {
-                        appendUnicodeEscape(ch)
-                    } else {
-                        builder.append(ch)
-                    }
-                }
-            }
+        if (options.needsEscape(value)) {
+            builder.append(options.escape(value))
+        } else {
+            builder.append(value)
         }
         builder.append('"')
     }
 
-    private fun appendUnicodeEscape(ch: Char) {
-        builder.append("\\u")
-        val code = ch.code
-        for (shift in 12 downTo 0 step 4) {
-            builder.append(HEX_DIGITS[(code shr shift) and 0xF])
+    private fun appendNumber(raw: String) {
+        val text = options.numberLiteral(raw)
+        if (options.shouldQuoteNumber(text)) {
+            appendString(text)
+        } else {
+            builder.append(text)
         }
     }
 
@@ -134,6 +133,10 @@ internal class JsonWriter(
  * 将 JSON 树序列化为 JSON 字符串。
  *
  * @param pretty 是否使用两空格缩进的格式化输出
+ * @param writeFeatures JSON 写出特性；默认与 [JsonConfig.DEFAULT_WRITE_FEATURES] 一致
  * @return JSON 文本
  */
-public fun Node.toJsonString(pretty: Boolean = false): String = JsonWriter(pretty).write(this)
+public fun Node.toJsonString(
+    pretty: Boolean = false,
+    writeFeatures: Set<JsonWriteFeature> = JsonConfig.DEFAULT_WRITE_FEATURES,
+): String = JsonWriter(pretty, JsonWriteOptions(writeFeatures)).write(this)

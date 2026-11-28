@@ -12,12 +12,15 @@ import java.io.ByteArrayOutputStream
  * `$ion_1_0` 二进制版本标记开头；`BinaryNode` 写为 Ion blob。
  *
  * [preserveTypes] = true 时识别 [IonTypeFidelity] 包装对象并写成对应的
- * timestamp / symbol / clob / blob。
+ * timestamp / symbol / clob / blob；[IonWriteFeature.USE_NATIVE_TYPE_ID] 开启时
+ * 把 `$ionAnnotations` 包装对象写成原生 Ion annotation。
  *
  * @param preserveTypes 是否识别类型保真包装对象
+ * @param writeFeatures Ion 写出特性
  */
 internal class IonBinaryWriter(
     private val preserveTypes: Boolean = false,
+    private val writeFeatures: Set<IonWriteFeature> = IonConfig.DEFAULT_WRITE_FEATURES,
 ) {
 
     /**
@@ -26,7 +29,7 @@ internal class IonBinaryWriter(
     fun write(node: Node): ByteArray {
         val output = ByteArrayOutputStream()
         val writer = ION_SYSTEM.newBinaryWriter(output)
-        writeIonNode(writer, node, preserveTypes)
+        writeIonNode(writer, node, preserveTypes, writeFeatures)
         writer.finish()
         return output.toByteArray()
     }

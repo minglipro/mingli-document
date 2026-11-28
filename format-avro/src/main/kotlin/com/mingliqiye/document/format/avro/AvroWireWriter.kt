@@ -6,7 +6,6 @@ import com.mingliqiye.document.format.avro.exception.AvroException
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericDatumWriter
-import org.apache.avro.io.EncoderFactory
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.util.Base64
@@ -28,6 +27,8 @@ import java.util.Base64
  */
 internal class AvroWireWriter(
     private val schema: Schema,
+    /** 是否使用 Avro 缓冲编码器（对齐 上游实现 `AVRO_BUFFERING`，默认开启）。 */
+    internal val buffering: Boolean = true,
 ) {
 
     /**
@@ -41,7 +42,7 @@ internal class AvroWireWriter(
         val datum = toDatum(node, schema, "$")
         val output = ByteArrayOutputStream()
         try {
-            val encoder = EncoderFactory.get().binaryEncoder(output, null)
+            val encoder = AvroFeatureSupport.createEncoder(output, buffering)
             GenericDatumWriter<Any?>(schema).write(datum, encoder)
             encoder.flush()
         } catch (e: Exception) {

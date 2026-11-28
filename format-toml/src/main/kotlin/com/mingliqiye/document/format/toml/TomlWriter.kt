@@ -42,20 +42,28 @@ private val longMax = BigInteger.valueOf(Long.MAX_VALUE)
  * 为简化实现，对象统一写成内联 table、数组统一写成内联数组：
  * `user = { name = "小于", age = 18 }`。根节点必须是 [ObjectNode]。
  *
- * TOML 没有 null 语义：对象（含内联 table）中值为 null 的字段会被省略；
- * 数组中不允许出现 null，出现时抛 [TomlException]。
+ * `null` 处理对齐 上游实现 TOML 的 `TomlWriteFeature.FAIL_ON_NULL_WRITE`：
+ * - 关闭（默认）：`null` 写成空字符串 `""`（TOML 规范不允许 null）；
+ * - 开启：任何 `null` 值写出都抛 [TomlException]。
  *
  * 注意：tomlj 1.0.0 的解析器无法回读内联 table / 数组中的空数组
  * （`{ a = [] }`、`[ [], [] ]`），因此嵌套空数组只能写出、无法用该解析器读回。
+ *
+ * @param writeFeatures TOML 写出特性集合，默认 [TomlConfig.DEFAULT_WRITE_FEATURES]
  */
-internal class TomlWriter {
+internal class TomlWriter @JvmOverloads constructor(
+    private val writeFeatures: Set<TomlWriteFeature> = TomlConfig.DEFAULT_WRITE_FEATURES,
+) {
+
+    private val failOnNullWrite: Boolean = TomlWriteFeature.FAIL_ON_NULL_WRITE in writeFeatures
 
     private var out: Appendable = StringBuilder()
 
     /**
      * 写出节点并返回 TOML 文本。
      *
-     * @throws TomlException 根不是对象、数字无法写成合法 TOML 或数组元素为 null 时抛出
+     * @throws TomlException 根不是对象、数字无法写成合法 TOML 或开启
+     *   `FAIL_ON_NULL_WRITE` 后写出 null 时抛出
      */
     fun write(node: Node): String {
         val builder = StringBuilder()
@@ -76,7 +84,8 @@ internal class TomlWriter {
     /**
      * 把单个值写成 TOML 字面量文本（不输出键与换行）。
      *
-     * 供保留注释的写出器复用，行为与 [write] 中的值写出完全一致。
+     * 供保留注释的写出器复用，行为与 [write] 中的值写出完全一致：
+     * 默认把 null 写成 `""`，开启 `FAIL_ON_NULL_WRITE` 时抛出 [TomlException]。
      */
     fun formatValueText(node: Node): String {
         val builder = StringBuilder()
@@ -95,9 +104,6 @@ internal class TomlWriter {
 
     private fun writeObjectFields(node: ObjectNode) {
         for ((key, value) in node.asMap()) {
-            if (value is NullNode) {
-                continue
-            }
             out.append(formatKey(key)).append(" = ")
             writeValue(value)
             out.append('\n')
@@ -112,18 +118,24 @@ internal class TomlWriter {
             is NumberNode -> out.append(formatNumber(node))
             is BooleanNode -> out.append(node.value.toString())
             is BinaryNode -> out.append(formatString(Base64.getEncoder().encodeToString(node.value)))
-            is NullNode -> throw TomlException("TOML does not support null values")
+            is NullNode -> writeNull()
         }
     }
 
+    private fun writeNull() {
+        if (failOnNullWrite) {
+            throw TomlException("TOML null writing disabled (TomlWriteFeature.FAIL_ON_NULL_WRITE)")
+        }
+        out.append("\"\"")
+    }
+
     private fun writeInlineTable(node: ObjectNode) {
-        val fields = node.asMap().entries.filter { it.value !is NullNode }
-        if (fields.isEmpty()) {
+        if (node.size == 0) {
             out.append("{}")
             return
         }
         out.append("{ ")
-        fields.forEachIndexed { index, entry ->
+        node.asMap().entries.forEachIndexed { index, entry ->
             if (index > 0) {
                 out.append(", ")
             }
@@ -238,9 +250,14 @@ internal class TomlWriter {
 /**
  * 将文档树写成 TOML 字符串。
  *
- * 根节点必须是对象；输出使用内联 table / 内联数组。
+ * 根节点必须是对象；输出使用内联 table / 内联数组。`null` 默认写成 `""`，
+ * 开启 [TomlWriteFeature.FAIL_ON_NULL_WRITE] 后写出 null 抛 [TomlException]。
  *
+ * @param writeFeatures TOML 写出特性集合，默认 [TomlConfig.DEFAULT_WRITE_FEATURES]
  * @return TOML 文本
- * @throws TomlException 根不是对象、数字无法写成合法 TOML 或数组元素为 null 时抛出
+ * @throws TomlException 根不是对象、数字无法写成合法 TOML 或 null 写出被禁止时抛出
  */
-public fun Node.toTomlString(): String = TomlWriter().write(this)
+@JvmOverloads
+public fun Node.toTomlString(
+    writeFeatures: Set<TomlWriteFeature> = TomlConfig.DEFAULT_WRITE_FEATURES,
+): String = TomlWriter(writeFeatures).write(this)

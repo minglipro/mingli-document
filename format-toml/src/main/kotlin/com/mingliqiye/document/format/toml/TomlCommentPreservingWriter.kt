@@ -2,7 +2,6 @@ package com.mingliqiye.document.format.toml
 
 import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.Node
-import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.ObjectNode
 
 /**
@@ -22,6 +21,8 @@ import com.mingliqiye.document.core.ObjectNode
 public class TomlCommentPreservingWriter @JvmOverloads constructor(
     /** 写出配置。 */
     public val config: TomlCommentConfig = TomlCommentConfig(),
+    /** TOML 写出特性集合，默认 [TomlConfig.DEFAULT_WRITE_FEATURES]。 */
+    public val writeFeatures: Set<TomlWriteFeature> = TomlConfig.DEFAULT_WRITE_FEATURES,
 ) {
 
     /**
@@ -30,7 +31,7 @@ public class TomlCommentPreservingWriter @JvmOverloads constructor(
      * @param document 保留注释的文档
      * @return TOML 文本
      */
-    public fun write(document: TomlCommentedDocument): String = TomlDocumentRenderer(document, config).render()
+    public fun write(document: TomlCommentedDocument): String = TomlDocumentRenderer(document, config, writeFeatures).render()
 }
 
 /**
@@ -42,6 +43,7 @@ public class TomlCommentPreservingWriter @JvmOverloads constructor(
 internal class TomlDocumentRenderer(
     private val document: TomlCommentedDocument,
     private val config: TomlCommentConfig,
+    writeFeatures: Set<TomlWriteFeature> = TomlConfig.DEFAULT_WRITE_FEATURES,
 ) {
 
     private val structure = document.structure
@@ -52,7 +54,7 @@ internal class TomlDocumentRenderer(
     private val fileTrailerComments = ArrayList<TomlComment>()
     private val endOrphanComments = ArrayList<TomlComment>()
     private var endOfFileBlankLines = 0
-    private val valueWriter = TomlWriter()
+    private val valueWriter = TomlWriter(writeFeatures)
 
     fun render(): String {
         buildEmissions()
@@ -95,9 +97,6 @@ internal class TomlDocumentRenderer(
     }
 
     private fun appendKeyLine(tablePath: List<String>, tableIndex: Int, key: String, value: Node) {
-        if (value is NullNode) {
-            return
-        }
         val text = valueWriter.formatKeyText(key) + " = " + valueWriter.formatValueText(value)
         emissions.add(TomlEmission(TomlEmissionKind.KEY_VALUE, tablePath, tableIndex, listOf(key), text))
     }
@@ -122,7 +121,7 @@ internal class TomlDocumentRenderer(
     }
 
     private fun hasBodyValues(sectionPath: List<String>, value: ObjectNode): Boolean = value.asMap().entries.any { (key, child) ->
-        child !is NullNode && !isSectionValue(sectionPath + key, child)
+        !isSectionValue(sectionPath + key, child)
     }
 
     private fun appendObjectSection(path: List<String>, tableIndex: Int, value: ObjectNode) {
@@ -161,7 +160,7 @@ internal class TomlDocumentRenderer(
 
     private fun appendBody(section: SectionPlan, value: ObjectNode) {
         for ((key, child) in value.asMap()) {
-            if (child is NullNode || isSectionValue(section.tablePath + key, child)) {
+            if (isSectionValue(section.tablePath + key, child)) {
                 continue
             }
             appendKeyLine(section.tablePath, section.tableIndex, key, child)

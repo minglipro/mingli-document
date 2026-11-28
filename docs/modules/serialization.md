@@ -180,7 +180,7 @@ val config = DocumentMapperConfig.builder()
 
 ## DeserializationFeature
 
-默认全部关闭（与 Jackson 默认一致）：
+默认全部关闭（与 参考实现 默认一致）：
 
 | 特性 | 默认 | 行为 |
 |---|---|---|

@@ -1,6 +1,6 @@
 ---
 title: CBOR
-description: format-cbor 模块：CborMapper、canonical 编码、tag 保真与 CBOR sequence 多值读写
+description: format-cbor 模块：CborMapper、参考实现 CBOR 配置特性、canonical 编码、tag 保真与 CBOR sequence 多值读写
 ---
 
 # CBOR
@@ -21,13 +21,15 @@ implementation("com.mingliqiye.document.format:cbor:2.5.1")
 | artifactId | `cbor` |
 | 版本 | `2.5.1` |
 | 传递依赖 | `core`、`exception`、`serialization` |
-| 第三方依赖 | `com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.15.3` |
+| 第三方依赖 | `第三方底层库坐标.dataformat:CBOR 底层库:2.20.0` |
 | 字节码 | JDK 8 |
 | 包名 | `com.mingliqiye.document.format.cbor` |
 
 ## 特性
 
 - **CBOR 二进制**：map / array / 文本字符串 / 字节字符串 / 整数 / 浮点 / 十进制分数 / null；
+- **对齐 参考实现 CBOR 配置**：完整提供 `CBORParser.Feature` / `CBORGenerator.Feature`（参考实现 2.20+）
+  与 `STRICT_DUPLICATE_DETECTION`，默认值对齐 参考实现 2.x；
 - **`BinaryNode` ↔ CBOR byte string**：字节串与文本串严格区分，Java `byte[]` 可无损往返；
 - **Token 直读/直写**：默认路径直接从 CBOR 事件解码 Bean / 直接写 Token 流；
 - **整数最短编码**：能放进 `Int` / `Long` 时用最短形式，更大的整数写成 bignum（tag 2/3）；
@@ -40,9 +42,22 @@ implementation("com.mingliqiye.document.format:cbor:2.5.1")
 
 ## 配置：`CborConfig`
 
+`CborConfig` 继承 `DocumentMapperConfig`，在通用配置上增加 CBOR 专属选项。
+
+### 专属字段
+
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `preserveTags` | `Boolean` | `false` | 是否保留 CBOR tag（包装对象协议） |
+| `preserveTags` | `Boolean` | `false` | 是否保留 CBOR tag（包装对象协议，见 [Tag 保真](#tag-保真)） |
+| `bufferPool` | `ByteArrayPool?` | `null` | 可选输出缓冲区池；`null` 表示不池化 |
+| `readFeatures` | `Set<CborReadFeature>` | `DEFAULT_READ_FEATURES`（空集合） | CBOR 读取特性 |
+| `writeFeatures` | `Set<CborWriteFeature>` | `DEFAULT_WRITE_FEATURES`（`WRITE_MINIMAL_INTS`） | CBOR 写出特性 |
+
+查询特性：`config.isEnabled(feature)`；同时提供便捷属性：
+`standardNegativeBigIntDecoding`、`undefinedAsEmbeddedObject`、`simpleValueAsEmbeddedObject`、
+`strictDuplicateDetection`、`writeMinimalInts`、`writeTypeHeader`、`lenientUtfEncoding`、
+`stringReferences`、`writeMinimalDoubles`、`standardNegativeBigIntEncoding`、
+`writeStrictDuplicateDetection`。
 
 常量：
 
@@ -50,29 +65,87 @@ implementation("com.mingliqiye.document.format:cbor:2.5.1")
 |---|---|---|
 | `CborConfig.TAG_FIELD` | `"$cborTag"` | tag 包装对象中保存 tag 整数的字段名 |
 | `CborConfig.VALUE_FIELD` | `"value"` | tag 包装对象中保存实际值的字段名 |
+| `CborConfig.UNDEFINED_FIELD` | `"$cborUndefined"` | `undefined` 标记对象的字段名 |
+| `CborConfig.SIMPLE_VALUE_FIELD` | `"$cborSimpleValue"` | CBOR simple value 标记对象的字段名 |
 
-`CborConfigBuilder` 方法（与其它格式的 Builder 不同，它只有两个配置方法）：
+### 参考实现 CBOR 读取特性（`CborReadFeature`）
+
+对齐 参考实现 `CBORParser.Feature`（参考实现 2.20+；参考实现 3.x 中更名为 `CBORReadFeature`），
+并补充通用 `JsonParser.Feature.STRICT_DUPLICATE_DETECTION`。默认值对齐 参考实现 2.x。
+
+| 特性 | 默认（2.x） | 默认（3.x） | 行为 |
+|---|---|---|---|
+| `DECODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING` | 关闭 | 开启 | tag 3 负数 bignum 按 RFC 8949 解码；关闭时保持 参考实现 ≤2.19 历史解码 |
+| `READ_UNDEFINED_AS_EMBEDDED_OBJECT` | 关闭 | 开启 | `undefined` 读成标记对象 `{"$cborUndefined": true}`；关闭时读成 `NullNode` |
+| `READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT` | 关闭 | 开启 | simple value 读成标记对象 `{"$cborSimpleValue": <整数>}`；关闭时读成数字 |
+| `STRICT_DUPLICATE_DETECTION` | 关闭 | 关闭 | map 重复 key 抛 `CborParseException`；关闭时后者覆盖前者 |
+
+### 参考实现 CBOR 写出特性（`CborWriteFeature`）
+
+对齐 参考实现 `CBORGenerator.Feature`（参考实现 2.20+；参考实现 3.x 中更名为 `CBORWriteFeature`），
+并补充通用 `JsonGenerator.Feature.STRICT_DUPLICATE_DETECTION`。默认值对齐 参考实现 2.x。
+
+| 特性 | 默认（2.x） | 默认（3.x） | 行为 |
+|---|---|---|---|
+| `WRITE_MINIMAL_INTS` | 开启 | 开启 | 整数最短编码；关闭时 int 范围写 4 字节、long 范围写 8 字节，更大的整数仍写 bignum |
+| `WRITE_TYPE_HEADER` | 关闭 | 关闭 | 文档开头写自描述 tag（`d9d9f7`），sequence 只写一次 |
+| `LENIENT_UTF_ENCODING` | 关闭 | 关闭 | 非法代理对写 `U+FFFD`；关闭时抛 `CborException` |
+| `STRINGREF` | 关闭 | 关闭 | 生成 stringref 共享字符串引用（命名空间 tag 256、引用 tag 25） |
+| `WRITE_MINIMAL_DOUBLES` | 关闭 | 关闭 | Token 直写路径的 `double` 尽量写 4 字节 float；关闭时沿用十进制分数（tag 4）。**模块差异**：参考实现 默认写 8 字节 double |
+| `ENCODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING` | 关闭 | 开启 | tag 3 负数 bignum 按 RFC 8949 编码；关闭时保持 参考实现 ≤2.19 历史编码 |
+| `STRICT_DUPLICATE_DETECTION` | 关闭 | 关闭 | Token 写出重复字段名抛 `CborException`；Bean/Map/Node 序列化不会产生重复字段名 |
+
+参考实现 3.x 默认开启三个读取特性与 `ENCODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING`，
+需要 3.x 行为时显式 `enable(...)`；本模块默认保持 参考实现 2.x 行为以兼容既有字节输出。
+
+### Builder 方法
+
+`CborConfig.builder()` 返回 `CborConfigBuilder`：
 
 | 方法 | 说明 |
 |---|---|
-| `base(DocumentMapperConfig)` | 复用通用配置（字段转换器、缺字段策略、深度限制等） |
 | `preserveTags(Boolean)` | 是否保留 CBOR tag |
+| `bufferPool(ByteArrayPool?)` | 输出缓冲区池 |
+| `readFeatures(Set<CborReadFeature>)` / `writeFeatures(Set<CborWriteFeature>)` | 整体设置特性集合 |
+| `enable(CborReadFeature)` / `disable(CborReadFeature)` / `configure(CborReadFeature, Boolean)` | 读取特性开关 |
+| `enable(CborWriteFeature)` / `disable(CborWriteFeature)` / `configure(CborWriteFeature, Boolean)` | 写出特性开关 |
+| `field(Class, String, DocumentBaseConverter)` | 为字段绑定转换器 |
+| `missingFieldPolicy(MissingFieldPolicy)` | 缺字段策略 |
+| `failOnUnknownFields(Boolean)` | 未知字段是否报错 |
+| `writeNulls(Boolean)` | null 字段是否写出 |
+| `maxNodeDepth(Int)` | Node 树最大深度（0 表示不限制） |
+| `subtype(base, typeName, subClass)` / `subtype(base, typeName, subClass, typeProperty)` | 注册多态子类型 |
+| `typeProperty(base, typeProperty)` | 覆盖多态类型属性名 |
+| `resolveReferences(Boolean)` / `writeReferences(Boolean)` | 本地 `$ref` 解析/写出 |
+| `base(DocumentMapperConfig)` | 直接复用完整通用配置；与上述通用便捷方法互斥 |
 | `build()` | 构建 `CborConfig` |
 
 ```kotlin
 import com.mingliqiye.document.format.cbor.CborConfig
 import com.mingliqiye.document.format.cbor.CborMapper
+import com.mingliqiye.document.format.cbor.CborReadFeature
+import com.mingliqiye.document.format.cbor.CborWriteFeature
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 
 val mapper = CborMapper(
     CborConfig.builder()
-        .base(DocumentMapperConfig.builder().maxNodeDepth(64).build())
-        .preserveTags(true)
+        .enable(CborReadFeature.STRICT_DUPLICATE_DETECTION)
+        .enable(CborReadFeature.DECODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING)
+        .disable(CborWriteFeature.WRITE_MINIMAL_INTS)
+        .enable(CborWriteFeature.WRITE_TYPE_HEADER)
+        .writeNulls(false)
+        .maxNodeDepth(64)
         .build(),
 )
 ```
 
-> `CborConfigBuilder` 没有独立的 `field(...)`、`maxNodeDepth(...)` 等方法；通用选项通过 `base(DocumentMapperConfig)` 提供。
+> 注意：
+> - 开启 `READ_UNDEFINED_AS_EMBEDDED_OBJECT` 或 `READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT` 时，
+>   `parse(ByteArray)` 的 Token 快路径会被禁用（改用 Node 路径表示标记对象）；
+> - `WRITE_MINIMAL_DOUBLES` 只在 Token 直写路径（Bean 的 `Double` 字段）生效，Node 数字仍走
+>   整数/十进制分数策略；
+> - 需要 `namingStrategy`、`fileCharset`、`atomicFileWrite` 等其它通用选项时，用
+>   `base(DocumentMapperConfig)` 传入完整通用配置。
 
 ## Mapper 构造与 Builder
 
@@ -107,11 +180,11 @@ val mapper = CborMapper(
 
 | 类/函数 | 说明 |
 |---|---|
-| `CborReader(source, maxDepth = 0, preserveTags = false)` | 单值读取器，`read(): Node` |
+| `CborReader(source, maxDepth = 0, preserveTags = false, readFeatures = DEFAULT_READ_FEATURES)` | 单值读取器，`read(): Node` |
 | `CborReader(source, ...)` 的 `read()` | 单值入口要求输入恰好一个顶层数据项 |
-| `CborSequenceReader(source, maxDepth = 0, maxItems = 0, preserveTags = false)` | sequence 读取器，`readAll(): List<Node>` |
-| `CborSequenceReader.parseAll(source, maxDepth, maxItems, preserveTags)` | 静态多值解析 |
-| `ByteArray.toCborNodes()` | 扩展函数：sequence 字节 → `List<Node>` |
+| `CborSequenceReader(source, maxDepth = 0, maxItems = 0, preserveTags = false, readFeatures = DEFAULT_READ_FEATURES)` | sequence 读取器，`readAll(): List<Node>` |
+| `CborSequenceReader.parseAll(source, maxDepth, maxItems, preserveTags, readFeatures)` | 静态多值解析 |
+| `ByteArray.toCborNodes(readFeatures = DEFAULT_READ_FEATURES)` | 扩展函数：sequence 字节 → `List<Node>` |
 
 ```kotlin
 import com.mingliqiye.document.format.cbor.CborReader
@@ -121,23 +194,29 @@ val node = CborReader(mapper.formatBytes(user)).read()
 
 读取类型映射：
 
-| CBOR 类型 | Node |
+| 类型 | Node |
 |---|---|
-| `null` / `undefined` | `NullNode` |
+| `null` | `NullNode` |
+| `undefined` | `NullNode`；开启 `READ_UNDEFINED_AS_EMBEDDED_OBJECT` 时为 `{"$cborUndefined": true}` |
 | `false` / `true` | `BooleanNode` |
 | 整数（含 bignum） | `NumberNode`，保留十进制文本 `raw` |
-| 半精度 / 单精度 / 双精度浮点 | `NumberNode`（Jackson 解码后的文本；NaN/Infinity 拒绝） |
+| 半精度 / 单精度 / 双精度浮点 | `NumberNode`（参考实现 解码后的文本；NaN/Infinity 拒绝） |
 | 十进制分数（tag 4） | `NumberNode`（精确 `BigDecimal`） |
 | 文本字符串（含 tag 0 日期文本） | `StringNode` |
 | 字节字符串 | `BinaryNode`（不会被当成文本） |
+| CBOR simple value | `NumberNode`；开启 `READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT` 时为 `{"$cborSimpleValue": <整数>}` |
 | 数组（含不定长） | `ArrayNode` |
 | map（含不定长） | `ObjectNode` |
 
 补充说明：
 
-- 默认不保留 tag；tag 2/3（bignum）、tag 4（十进制分数）由 Jackson 语义解码；
+- 默认不保留 tag；tag 2/3（bignum）、tag 4（十进制分数）由 参考实现 语义解码；
+- `readFeatures` 直接落到 参考实现 parser 特性：负数 bignum 规范解码（
+  `DECODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING`）、`undefined` / simple value 的标记对象
+  （`READ_UNDEFINED_AS_EMBEDDED_OBJECT` / `READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT`）、
+  重复 key 检测（`STRICT_DUPLICATE_DETECTION`）；
 - NaN / Infinity 无法由 `NumberNode` 表示，抛 `CborParseException`；
-- CBOR map 的 key：文本 key 原样使用，整数 key 转为十进制字符串；其他类型 key 不在模块支持范围内，Jackson 解析失败时抛 `CborParseException`；
+- CBOR map 的 key：文本 key 原样使用，整数 key 转为十进制字符串；其他类型 key 不在模块支持范围内，参考实现 解析失败时抛 `CborParseException`；
 - 单值入口要求恰好一个顶层数据项：无值、多值都抛 `CborParseException`。
 
 ### Sequence 读取边界
@@ -159,11 +238,11 @@ val node = CborReader(mapper.formatBytes(user)).read()
 | `formatCanonicalBytes(value)` | 实体 → canonical CBOR 字节（先构建 Node 树，再按 canonical key 顺序写出） |
 | `formatAll(values: Iterable<Any?>): ByteArray` | 多个实体 → CBOR sequence 字节 |
 | `parseAllToNodes(source, maxItems = 0)` / `parseAll(source, targetType, maxItems = 0)` | sequence 多值读取 |
-| `CborWriter(canonical = false, preserveTags = false).write(node)` | 公开的 Node → CBOR 单值写出器 |
-| `Node.toCborBytes(preserveTags = false)` | 扩展函数：Node → CBOR 字节 |
-| `Node.toCanonicalCborBytes(preserveTags = false)` | 扩展函数：Node → canonical CBOR 字节 |
-| `CborSequenceWriter(canonical = false, preserveTags = false).writeAll(nodes)` | 公开的 sequence 写出器 |
-| `Collection<Node>.toCborSequenceBytes(canonical = false, preserveTags = false)` | 扩展函数：Node 集合 → sequence 字节 |
+| `CborWriter(canonical = false, preserveTags = false, bufferPool = null, writeFeatures = DEFAULT_WRITE_FEATURES).write(node)` | 公开的 Node → CBOR 单值写出器 |
+| `Node.toCborBytes(preserveTags = false, bufferPool = null, writeFeatures = DEFAULT_WRITE_FEATURES)` | 扩展函数：Node → CBOR 字节 |
+| `Node.toCanonicalCborBytes(preserveTags = false, bufferPool = null, writeFeatures = DEFAULT_WRITE_FEATURES)` | 扩展函数：Node → canonical CBOR 字节 |
+| `CborSequenceWriter(canonical = false, preserveTags = false, bufferPool = null, writeFeatures = DEFAULT_WRITE_FEATURES).writeAll(nodes)` | 公开的 sequence 写出器 |
+| `Collection<Node>.toCborSequenceBytes(canonical = false, preserveTags = false, bufferPool = null, writeFeatures = DEFAULT_WRITE_FEATURES)` | 扩展函数：Node 集合 → sequence 字节 |
 
 不支持：
 
@@ -187,10 +266,16 @@ val node = CborReader(mapper.formatBytes(user)).read()
 - 默认 Token 直写的对象/数组使用 CBOR **不定长**形式；`CborWriter` 使用**定长**形式。两者都合法且可互相读回；
 - `CborWriter` 中对象/数组按实际元素数量写成定长 CBOR；
 - 数字按 `NumberNode.raw`：
-  - 不含小数点/指数标记 → CBOR 整数，能放进 `Int` / `Long` 时最短编码，更大的整数写 bignum（tag 2/3）；
+  - 不含小数点/指数标记 → CBOR 整数，`WRITE_MINIMAL_INTS` 开启（默认）时最短编码，关闭时按 int/long 范围写 4/8 字节；更大的整数写 bignum（tag 2/3）；
   - 其余 → CBOR 十进制分数（tag 4），保留 `BigDecimal` 精度；
 - `StringNode` → 文本字符串；`BinaryNode` → 字节字符串；`NullNode` → `null`；
-- `preserveTags=true` 时识别 tag 包装对象，先写 tag 再写 value，支持对象/数组/标量与嵌套 tag。
+- `preserveTags=true` 时识别 tag 包装对象，先写 tag 再写 value，支持对象/数组/标量与嵌套 tag；
+- `writeFeatures` 直接落到 参考实现 generator 特性：`WRITE_TYPE_HEADER`（自描述 tag）、
+  `LENIENT_UTF_ENCODING`（替换非法代理对）、`STRINGREF`（共享字符串引用）、
+  `ENCODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING`（规范负数 bignum）、
+  `STRICT_DUPLICATE_DETECTION`（重复字段名报错）；
+- `WRITE_MINIMAL_DOUBLES` 只在 Token 直写路径（Bean 的 `Double` 字段）生效：开启时写最小二进制浮点，
+  关闭时沿用模块历史的十进制分数写法（与 参考实现 默认写 8 字节 double 不同，见配置说明）。
 
 ## CBOR sequence（多值）
 
@@ -243,12 +328,19 @@ val more = CborSequenceWriter(preserveTags = true).writeAll(listOf(nodeA, nodeB)
 - 保真模式下 `parse(ByteArray)` 禁用 Token 快路径（回退 Node 解析），`formatBytes` 改为 Node 写出（`CborWriter`）；
 - Bean 映射会把包装对象当普通对象处理，因此保真模式下的 Bean 映射不感知 tag。
 
-读取侧可见性（Jackson 2.15 行为）：
+读取侧可见性（参考实现 2.20 行为）：
 
 - tag 0/1/24 等普通 tag 在对应值上可见，会被包装保留；
-- tag 2/3（bignum）、tag 4（十进制分数）已被 Jackson 语义解码，不会包装；写出时由数字策略重新编码等价 tag；
-- 同一值上叠加多个 tag 时只能看到最外层第一个（Jackson 公有 API 限制），其余 tag 丢失；
+- tag 2/3（bignum）、tag 4（十进制分数）已被 参考实现 语义解码，不会包装；写出时由数字策略重新编码等价 tag；
+- 同一值上叠加多个 tag 时只能看到最外层第一个（参考实现 公有 API 限制），其余 tag 丢失；
 - CBOR map key 上的 tag 不保留。
+
+与写出特性的交互：
+
+- `WRITE_TYPE_HEADER`（自描述 tag `d9d9f7`）与 `STRINGREF`（命名空间 tag 256、引用 tag 25）
+  都依赖 tag 语义；与 `preserveTags=true` 同时使用时，读取端会把这些命名空间 tag 当作普通
+  tag 包装，通常不应同时开启（保真模式建议保持这两个特性关闭）；
+- `WRITE_MINIMAL_INTS` 不影响 tag 包装对象；`canonical` 模式只对包装对象内部的 map key 排序。
 
 ```kotlin
 import com.mingliqiye.document.format.cbor.CborConfig
@@ -288,7 +380,7 @@ val nodeBytes = node.toCanonicalCborBytes()
 
 - 对象 key 按 UTF-8 编码长度升序，同长度按字节序排序；
 - 数组保持原顺序；
-- 整数使用最短编码形式；
+- 整数使用最短编码形式（关闭 `WRITE_MINIMAL_INTS` 时按定长编码，canonical 字节会相应变化）；
 - `preserveTags=true` 时 tag 包装对象也会被识别并写出。
 
 注意：canonical 只保证 map key 顺序与整数最短编码，不覆盖所有 RFC 8949 确定性要求（例如浮点最短形式等），不是完整的确定性编码实现。
@@ -526,15 +618,19 @@ check(mapper.parse(definiteBytes2, Node::class.java) == mapper.parse(tokenBytes,
 |---|---|
 | 文本 API（`parse(String)` / `format`） | `DocumentSerializationException`（只支持二进制） |
 | `formatPretty` | `DocumentSerializationException`（二进制格式不支持 pretty） |
-| NaN / Infinity | 读取抛 `CborParseException`；`NumberNode` 也无法表示 |
+| NaN / Infinity | 读取抛 `CborParseException`；`NumberNode` 也无法表示；写出时 `WRITE_MINIMAL_DOUBLES` 路径同样拒绝 |
 | 非字符串 map key | 文本 key 原样、整数 key 转十进制字符串；其他类型失败 |
 | 无值 / 多个顶层值（单值入口） | `CborParseException` |
 | 单值入口输入 sequence | `CborParseException`（请用 `CborSequenceReader`） |
-| `preserveTags=false` | tag 不保留；tag 2/3/4 由 Jackson 语义解码，tag 0 日期读成字符串 |
-| `preserveTags=true` | Token 快路径禁用；Bean 映射看不到 tag；多个嵌套 tag 只能保留最外层 |
-| canonical 编码 | 只保证 map key 顺序与整数最短编码，不是完整 RFC 8949 确定性要求 |
+| `preserveTags=false` | tag 不保留；tag 2/3/4 由 参考实现 语义解码，tag 0 日期读成字符串 |
+| `preserveTags=true` | Token 快路径禁用；Bean 映射看不到 tag；多个嵌套 tag 只能保留最外层；与 `WRITE_TYPE_HEADER` / `STRINGREF` 不建议同时开启 |
+| `READ_UNDEFINED_AS_EMBEDDED_OBJECT` / `READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT` | 读取为标记对象并禁用 Token 快路径；标记对象无法直接写回（参考实现 无对应写出 API），需要写回时自行转换为普通值 |
+| `WRITE_MINIMAL_DOUBLES` | 仅 Token 直写路径（Bean 的 `Double`）生效；Node 数字仍走整数/十进制分数策略 |
+| `stringref` 输出 | 需要支持 stringref 的读取器（参考实现 CBOR 读取器默认支持）；与 `preserveTags` 不建议同时开启 |
+| `WRITE_TYPE_HEADER` 输出 | 读取端 default 模式忽略自描述 tag；`preserveTags=true` 时会读成 `$cborTag` 包装 |
+| `STRICT_DUPLICATE_DETECTION` | 读取时重复 key 抛 `CborParseException`；写出特性只约束直接使用 `CborTokenWriter` 的调用方 |
+| canonical 编码 | 只保证 map key 顺序与整数最短编码（受 `WRITE_MINIMAL_INTS` 影响），不是完整 RFC 8949 确定性要求 |
 | sequence 解析 | 整段解析，任一项失败整体失败；无逐项/流式增量 API |
-| `CborConfigBuilder` | 只提供 `base` 与 `preserveTags`，其余通过 `base(DocumentMapperConfig)` |
 | `format(value, File/Path)` | 先得到完整 `ByteArray` 再写文件 |
 
 ## 与通用 `DocumentMapper` 的差异
@@ -542,6 +638,9 @@ check(mapper.parse(definiteBytes2, Node::class.java) == mapper.parse(tokenBytes,
 - 继承 `BinaryDocumentMapper`：仅二进制 API，文本/字符流 API 抛 `DocumentSerializationException`；
 - 构造：`CborConfig` 专属配置类与 `CborMapper.builder()`；
 - `parse(ByteArray)` / `formatBytes`：默认 Token 直读/直写（不定长 CBOR），可选 Node 路径（定长）；
+- 配置：`CborConfig.readFeatures` / `writeFeatures` 对齐 参考实现 CBOR 的 parser/generator 特性，
+  并补充 `STRICT_DUPLICATE_DETECTION`；`CborConfigBuilder` 提供 `enable` / `disable` / `configure`
+  与通用配置便捷方法；
 - 额外能力：`formatCanonicalBytes`、CBOR sequence（`parseAllToNodes` / `parseAll` / `formatAll`、`CborSequenceReader` / `CborSequenceWriter`）、tag 保真；
 - 公开的 Node 级工具：`CborReader`、`CborWriter`、`CborSequenceReader` / `CborSequenceWriter`、`Node.toCborBytes` / `Node.toCanonicalCborBytes` / `ByteArray.toCborNodes` / `Collection<Node>.toCborSequenceBytes`。
 

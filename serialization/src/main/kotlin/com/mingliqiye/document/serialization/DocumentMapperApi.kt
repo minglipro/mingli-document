@@ -14,7 +14,7 @@ import java.nio.file.Path
 /**
  * Java 实体与文档树之间的映射 API。
  *
- * 对应 Jackson 的 `ObjectMapper` 抽象，区别是：
+ * 对应 上游实现 的 `ObjectMapper` 抽象，区别是：
  * - 这里不直接绑定 JSON，而是面向统一的 [Node] 树；
  * - 文本解析/格式化由 `JsonMapper`、`YamlMapper` 等格式模块子类注入；
  * - 提供实体与实体、实体与树之间的转换。

@@ -60,7 +60,7 @@ public open class DocumentMapperConfig protected constructor(
     public val beanValidator: DocumentBeanValidator? = null,
     /**
      * 显式开启的反序列化特性集合；默认空集合，即所有特性保持关闭
-     * （与 Jackson 默认配置一致）。
+     * （与 上游实现 默认配置一致）。
      *
      * 通过 [DocumentMapperConfigBuilder.enable] / [DocumentMapperConfigBuilder.configure]
      * 等 API 配置，查询使用 [isEnabled]。复制构造与格式专属 Config 都会携带该集合。

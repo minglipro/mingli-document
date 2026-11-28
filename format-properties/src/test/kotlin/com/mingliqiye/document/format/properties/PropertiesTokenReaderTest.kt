@@ -4,7 +4,6 @@ import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
-import com.mingliqiye.document.format.properties.exception.PropertiesParseException
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.DocumentTokenType
@@ -119,7 +118,8 @@ class PropertiesTokenReaderTest {
     }
 
     @Test
-    fun arrayHolesBecomeEmptyObjects() {
+    fun arraysAreDenseByIndexOrder() {
+        // 上游实现 语义：下标只用于排序，不补空洞；tags[2] 是唯一元素。
         val tokens = readTokens(PropertiesTokenReader("tags[2]=c"))
 
         assertEquals(
@@ -127,16 +127,13 @@ class PropertiesTokenReaderTest {
                 DocumentTokenType.START_OBJECT,
                 DocumentTokenType.FIELD_NAME,
                 DocumentTokenType.START_ARRAY,
-                DocumentTokenType.START_OBJECT,
-                DocumentTokenType.END_OBJECT,
-                DocumentTokenType.START_OBJECT,
-                DocumentTokenType.END_OBJECT,
                 DocumentTokenType.STRING,
                 DocumentTokenType.END_ARRAY,
                 DocumentTokenType.END_OBJECT,
             ),
             tokens.map { it.type },
         )
+        assertEquals(listOf("tags", "c"), tokens.mapNotNull { it.text })
     }
 
     @Test
@@ -151,6 +148,9 @@ class PropertiesTokenReaderTest {
             "a.b[2]=x",
             "a.b.c=1\na.b.d=2\na.e[0]=x",
             "list%5B0%5D=x\nuser%2Ename=小于",
+            "p.1.x=1\np.2.x=2",
+            "str=first\nstr.11=third\nstr.2=second",
+            "a=1\na.b=2",
         )
 
         for (source in samples) {
@@ -161,24 +161,12 @@ class PropertiesTokenReaderTest {
     }
 
     @Test
-    fun conflictingPathsThrowSameParseExceptionAsNodeReader() {
-        val nativeError = assertFailsWith<PropertiesParseException> {
-            PropertiesTokenReader("a=1\na.b=2")
-        }
-        val nodeError = assertFailsWith<PropertiesParseException> {
-            PropertiesReader("a=1\na.b=2").read()
-        }
-
-        assertEquals(nodeError.message, nativeError.message)
-    }
-
-    @Test
     fun invalidPropertiesTextThrowsSameParseExceptionAsNodeReader() {
         val source = "a=\\uZZZZ"
-        val nativeError = assertFailsWith<PropertiesParseException> {
+        val nativeError = assertFailsWith<com.mingliqiye.document.format.properties.exception.PropertiesParseException> {
             PropertiesTokenReader(source)
         }
-        val nodeError = assertFailsWith<PropertiesParseException> {
+        val nodeError = assertFailsWith<com.mingliqiye.document.format.properties.exception.PropertiesParseException> {
             PropertiesReader(source).read()
         }
 
@@ -209,6 +197,25 @@ class PropertiesTokenReaderTest {
         assertEquals(18, (map["age"] as NumberNode).toInt())
         val nested = map["nested"] as ObjectNode
         assertEquals(true, (nested["flag"] as BooleanNode).value)
+    }
+
+    @Test
+    fun mapperUsesCustomPropertiesConfig() {
+        val config = PropertiesConfig.builder()
+            .pathSeparator("->")
+            .writeIndexUsingMarkers(true)
+            .build()
+        val mapper = PropertiesMapper(config)
+
+        val user = mapper.parse(
+            "name=小于\nage=18\ntags[1]=a\ntags[2]=b",
+            User::class.java,
+        )
+
+        assertEquals("小于", user.name)
+        assertEquals(listOf("a", "b"), user.tags)
+        val text = mapper.format(user)
+        assertTrue(text.contains("tags[1]=a"), text)
     }
 
     @Test

@@ -15,14 +15,16 @@ import java.util.LinkedHashMap
  *
  * 由 [JsonReader] 调用；不对外暴露。
  *
- * 语法本身保持严格（拒绝尾逗号、单引号、非法数字等）；在 [allowComments]
+ * 语法本身保持严格（默认拒绝尾逗号、单引号、非法数字等）；在 [allowComments]
  * 为 `true` 时，`skipWhitespace` 会额外跳过多余空白、`//` 行注释和块注释。
+ * [readFeatures] 中的 [JsonReadFeature] 可逐项放宽语法，语义对齐 上游实现 2.15.3。
  *
  * @param source JSON 文本
  * @param allowComments 是否允许 JSONC 注释
  * @param duplicateKeyPolicy 对象内重复 key 策略
  * @param maxDepth 对象/数组最大嵌套深度
  * @param initialDepth 起始嵌套深度，供 [JsonTokenReader] 跳过重复字段值时复用
+ * @param readFeatures 显式开启的 JSON 读取特性
  */
 internal class JsonParser(
     private val source: String,
@@ -30,8 +32,12 @@ internal class JsonParser(
     private val duplicateKeyPolicy: DuplicateKeyPolicy = DuplicateKeyPolicy.LAST_WINS,
     private val maxDepth: Int = JsonConfig.DEFAULT_MAX_DEPTH,
     initialDepth: Int = 0,
+    readFeatures: Set<JsonReadFeature> = JsonConfig.DEFAULT_READ_FEATURES,
 ) {
 
+    private val features = JsonReadOptions(readFeatures)
+    private val commentsEnabled = allowComments || features.allowJavaComments
+    private val keyPolicy = if (features.strictDuplicateDetection) DuplicateKeyPolicy.FAIL else duplicateKeyPolicy
     private var position = 0
     private var depth = initialDepth
 
@@ -55,30 +61,36 @@ internal class JsonParser(
         if (!hasNext()) {
             throw error("Unexpected end of input")
         }
-        return when (val ch = source[position]) {
-            '{' -> parseObject()
-
-            '[' -> parseArray()
-
-            '"' -> StringNode.of(parseString())
-
-            't' -> {
+        val ch = source[position]
+        if (features.allowNonNumericNumbers) {
+            JsonReadOptions.matchNonNumeric(source, position)?.let { (literal, length) ->
+                position += length
+                return NumberNode.ofRaw(literal)
+            }
+        }
+        return when {
+            ch == '{' -> parseObject()
+            ch == '[' -> parseArray()
+            ch == '"' -> StringNode.of(parseString())
+            ch == '\'' && features.allowSingleQuotes -> StringNode.of(parseString())
+            ch == 't' -> {
                 expectLiteral("true")
                 BooleanNode.of(true)
             }
 
-            'f' -> {
+            ch == 'f' -> {
                 expectLiteral("false")
                 BooleanNode.of(false)
             }
 
-            'n' -> {
+            ch == 'n' -> {
                 expectLiteral("null")
                 NullNode.INSTANCE
             }
 
-            '-', in '0'..'9' -> parseNumber()
-
+            ch == '+' && features.allowLeadingPlusSignForNumbers -> parseNumber()
+            ch == '.' && features.allowLeadingDecimalPointForNumbers -> parseNumber()
+            ch == '-' || ch in '0'..'9' -> parseNumber()
             else -> throw error("Unexpected character '$ch'")
         }
     }
@@ -94,10 +106,7 @@ internal class JsonParser(
             }
             while (true) {
                 skipWhitespace()
-                if (!hasNext() || source[position] != '"') {
-                    throw error("Expected object key")
-                }
-                val key = parseString()
+                val key = parseFieldName()
                 skipWhitespace()
                 expect(':')
                 skipWhitespace()
@@ -107,7 +116,11 @@ internal class JsonParser(
                     consume(',') -> {
                         skipWhitespace()
                         if (peek() == '}') {
-                            throw error("Trailing comma in object")
+                            if (!features.allowTrailingComma) {
+                                throw error("Trailing comma in object")
+                            }
+                            position++
+                            return ObjectNode.from(fields)
                         }
                     }
 
@@ -121,6 +134,40 @@ internal class JsonParser(
         }
     }
 
+    private fun parseFieldName(): String {
+        if (!hasNext()) {
+            throw error("Expected object key")
+        }
+        return when {
+            source[position] == '"' -> parseString()
+            source[position] == '\'' && features.allowSingleQuotes -> parseString()
+            features.allowUnquotedFieldNames -> parseUnquotedFieldName()
+            else -> throw error("Expected object key")
+        }
+    }
+
+    private fun parseUnquotedFieldName(): String {
+        val start = position
+        while (hasNext()) {
+            val ch = source[position]
+            if (ch.isWhitespace() ||
+                ch == ':' ||
+                ch == ',' ||
+                ch == '}' ||
+                ch == ']' ||
+                (commentsEnabled && ch == '/') ||
+                (features.allowYamlComments && ch == '#')
+            ) {
+                break
+            }
+            position++
+        }
+        if (position == start) {
+            throw error("Expected object key")
+        }
+        return source.substring(start, position)
+    }
+
     /**
      * 按重复 key 策略解析并写入一个对象字段值。
      *
@@ -128,7 +175,7 @@ internal class JsonParser(
      * @param key 当前字段名
      */
     private fun parseFieldValue(fields: LinkedHashMap<String, Node>, key: String) {
-        when (duplicateKeyPolicy) {
+        when (keyPolicy) {
             DuplicateKeyPolicy.LAST_WINS -> fields[key] = parseValue()
             DuplicateKeyPolicy.FIRST_WINS -> {
                 if (key in fields) {
@@ -172,13 +219,30 @@ internal class JsonParser(
             }
             while (true) {
                 skipWhitespace()
+                if (features.allowMissingValues && peek() == ',') {
+                    elements.add(NullNode.INSTANCE)
+                    position++
+                    skipWhitespace()
+                    continue
+                }
+                if (features.allowMissingValues && peek() == ']') {
+                    elements.add(NullNode.INSTANCE)
+                    position++
+                    return ArrayNode.from(elements)
+                }
                 elements.add(parseValue())
                 skipWhitespace()
                 when {
                     consume(',') -> {
                         skipWhitespace()
                         if (peek() == ']') {
-                            throw error("Trailing comma in array")
+                            if (features.allowTrailingComma) {
+                                position++
+                                return ArrayNode.from(elements)
+                            }
+                            if (!features.allowMissingValues) {
+                                throw error("Trailing comma in array")
+                            }
                         }
                     }
 
@@ -193,19 +257,23 @@ internal class JsonParser(
     }
 
     private fun parseString(): String {
-        expect('"')
+        val quote = source[position]
+        if (quote != '"' && !(quote == '\'' && features.allowSingleQuotes)) {
+            throw error("Expected string")
+        }
+        position++
         val start = position
         var index = position
         while (index < source.length) {
             val ch = source[index]
             when {
-                ch == '"' -> {
+                ch == quote -> {
                     position = index + 1
                     return source.substring(start, index)
                 }
 
                 ch == '\\' -> break
-                ch < ' ' -> throw error("Unescaped control character in string")
+                ch < ' ' && !features.allowUnescapedControlChars -> throw error("Unescaped control character in string")
                 else -> index++
             }
         }
@@ -218,10 +286,10 @@ internal class JsonParser(
                 throw error("Unterminated string")
             }
             when (val ch = source[position++]) {
-                '"' -> return builder.toString()
+                quote -> return builder.toString()
                 '\\' -> builder.append(parseEscape())
                 else -> {
-                    if (ch < ' ') {
+                    if (ch < ' ' && !features.allowUnescapedControlChars) {
                         throw error("Unescaped control character in string")
                     }
                     builder.append(ch)
@@ -234,7 +302,8 @@ internal class JsonParser(
         if (!hasNext()) {
             throw error("Unterminated escape sequence")
         }
-        return when (val escaped = source[position++]) {
+        val escaped = source[position++]
+        return when (escaped) {
             '"' -> '"'
             '\\' -> '\\'
             '/' -> '/'
@@ -244,7 +313,17 @@ internal class JsonParser(
             'r' -> '\r'
             't' -> '\t'
             'u' -> parseUnicodeEscape()
-            else -> throw error("Invalid escape sequence: \\$escaped")
+            '\'' -> if (features.allowSingleQuotes || features.allowBackslashEscapingAnyCharacter) {
+                '\''
+            } else {
+                throw error("Invalid escape sequence: \\$escaped")
+            }
+
+            else -> if (features.allowBackslashEscapingAnyCharacter) {
+                escaped
+            } else {
+                throw error("Invalid escape sequence: \\$escaped")
+            }
         }
     }
 
@@ -265,30 +344,58 @@ internal class JsonParser(
 
     private fun parseNumber(): NumberNode {
         val start = position
-        consume('-')
+        if (hasNext() && source[position] == '+') {
+            if (!features.allowLeadingPlusSignForNumbers) {
+                throw error("Leading plus sign is not allowed")
+            }
+            position++
+            if (hasNext() && source[position] == '-') {
+                throw error("Invalid number: unexpected '-'")
+            }
+        } else {
+            consume('-')
+        }
 
         if (!hasNext()) {
             throw error("Unexpected end of number")
         }
 
+        var digits = 0
         when (val first = source[position]) {
             '0' -> {
                 position++
+                digits++
                 if (hasNext() && source[position].isDigit()) {
-                    throw error("Leading zero is not allowed")
+                    if (!features.allowLeadingZerosForNumbers) {
+                        throw error("Leading zero is not allowed")
+                    }
+                    consumeDigits()
                 }
             }
 
-            in '1'..'9' -> consumeDigits()
+            in '1'..'9' -> {
+                consumeDigits()
+                digits++
+            }
+
+            '.' -> if (!features.allowLeadingDecimalPointForNumbers) {
+                throw error("Invalid number: unexpected '$first'")
+            }
 
             else -> throw error("Invalid number: unexpected '$first'")
         }
 
         if (consume('.')) {
-            if (!hasNext() || !source[position].isDigit()) {
+            if (hasNext() && source[position].isDigit()) {
+                consumeDigits()
+                digits++
+            } else if (!features.allowTrailingDecimalPointForNumbers) {
                 throw error("Expected digit after decimal point")
             }
-            consumeDigits()
+        }
+
+        if (digits == 0) {
+            throw error("Invalid number")
         }
 
         if (consume('e') || consume('E')) {
@@ -339,12 +446,13 @@ internal class JsonParser(
             val ch = source[position]
             when {
                 ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> position++
-                allowComments && ch == '/' -> {
+                commentsEnabled && ch == '/' -> {
                     if (!skipComment()) {
                         return
                     }
                 }
 
+                features.allowYamlComments && ch == '#' -> skipYamlComment()
                 isWhitespace(ch) -> position++
                 else -> return
             }
@@ -394,6 +502,15 @@ internal class JsonParser(
             position++
         }
         throw error("Unterminated block comment")
+    }
+
+    /**
+     * 跳过 YAML 风格 `#` 行注释（到行尾）。
+     */
+    private fun skipYamlComment() {
+        while (hasNext() && source[position] != '\n' && source[position] != '\r') {
+            position++
+        }
     }
 
     /**

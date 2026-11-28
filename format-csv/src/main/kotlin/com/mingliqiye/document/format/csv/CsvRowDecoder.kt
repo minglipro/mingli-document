@@ -1,28 +1,26 @@
 package com.mingliqiye.document.format.csv
 
-import com.mingliqiye.document.core.BooleanNode
 import com.mingliqiye.document.core.Node
-import com.mingliqiye.document.core.NumberNode
+import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.ObjectNode
-import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.csv.exception.CsvParseException
 import org.apache.commons.csv.CSVRecord
-import java.math.BigDecimal
 
 /**
  * CSV 单行解码器（内部实现）。
  *
- * [CsvReader] 与流式 `CsvMapper.parseStream` 共用本类，保证表头、类型推断与嵌套规则
- * 在整段解析与逐行解析两条路径上完全一致。
+ * [CsvReader] 与流式 `CsvMapper.parseStream` 共用本类，保证表头、类型推断、空单元格语义、
+ * 上游实现 读取特性与嵌套规则在整段解析与逐行解析两条路径上完全一致。
  *
- * @param header 是否把首行当作表头
  * @param nestedMode 嵌套值读取方式；`null` 表示平坦表格
  * @param maxDepth 解析最大嵌套深度（根数组为 `1`、行对象为 `2`、单元格标量为 `3`）；
  *   `0` 或负数表示不限制
+ * @param support 读取特性与 Schema 选项应用层
  */
 internal class CsvRowDecoder(
     private val nestedMode: CsvNestedMode?,
     private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+    private val support: CsvReadSupport,
 ) {
 
     private var columns: List<CsvColumn>? = null
@@ -45,15 +43,16 @@ internal class CsvRowDecoder(
      */
     fun readRow(record: CSVRecord): Node {
         checkRowDepth()
+        val cells = support.cells(record)
         if (nestedMode == CsvNestedMode.COLUMNS) {
-            val refs = columns ?: defaultColumns(record.size())
-            return buildNestedRow(record, refs)
+            val refs = columns ?: defaultColumns(cells.size)
+            return buildNestedRow(cells, refs)
         }
-        val names = columns ?: defaultColumns(record.size())
+        val names = columns?.map { it.name } ?: defaultNames(cells.size)
         val fields = LinkedHashMap<String, Node>(names.size)
         for (index in names.indices) {
-            val text = if (index < record.size()) record.get(index) else ""
-            fields[names[index].name] = inferCell(text)
+            val node = fieldNode(index < cells.size, if (index < cells.size) cells[index] else "") ?: continue
+            fields[names[index]] = node
         }
         return ObjectNode.from(fields)
     }
@@ -68,14 +67,14 @@ internal class CsvRowDecoder(
     }
 
     private fun readColumns(record: CSVRecord): List<CsvColumn> {
-        val seen = HashSet<String>(record.size())
-        val columns = ArrayList<CsvColumn>(record.size())
-        for (index in 0 until record.size()) {
-            val column = record.get(index)
-            if (!seen.add(column)) {
-                throw CsvParseException("Duplicate CSV header '$column'")
+        val names = support.headerNames(record)
+        val seen = HashSet<String>(names.size)
+        val columns = ArrayList<CsvColumn>(names.size)
+        for (name in names) {
+            if (!seen.add(name) && nestedMode == CsvNestedMode.COLUMNS) {
+                throw CsvParseException("Duplicate CSV header '$name'")
             }
-            columns.add(CsvColumn(column, pathOf(column)))
+            columns.add(CsvColumn(name, pathOf(name)))
         }
         validateNestedColumns(columns)
         return columns
@@ -114,22 +113,68 @@ internal class CsvRowDecoder(
         }
     }
 
-    private fun defaultColumns(size: Int): List<CsvColumn> {
-        val columns = ArrayList<CsvColumn>(size)
+    private fun defaultNames(size: Int): List<String> {
+        val columns = ArrayList<String>(size)
         for (index in 1..size) {
-            val name = "column$index"
-            columns.add(CsvColumn(name, listOf(name)))
+            columns.add("column$index")
         }
         return columns
     }
 
-    private fun buildNestedRow(record: CSVRecord, columns: List<CsvColumn>): Node {
+    private fun defaultColumns(size: Int): List<CsvColumn> = defaultNames(size).map { CsvColumn(it, listOf(it)) }
+
+    private fun buildNestedRow(cells: List<String>, columns: List<CsvColumn>): Node {
         val root = LinkedHashMap<String, NestedValue>()
         for ((index, column) in columns.withIndex()) {
-            val text = if (index < record.size()) record.get(index) else ""
-            insertNested(root, column.path, NestedLeaf(inferScalar(text)), column.name)
+            val node = fieldNode(index < cells.size, if (index < cells.size) cells[index] else "") ?: continue
+            insertNested(root, column.path, NestedLeaf(node), column.name)
         }
         return toNode(root)
+    }
+
+    /**
+     * 计算单元格对应的节点：返回 `null` 表示该字段缺失（不写入行对象）。
+     *
+     * @param present 记录中是否存在该列
+     * @param text 单元格文本（缺失列为空串）
+     * @return 字段节点；缺失时返回 null
+     */
+    private fun fieldNode(present: Boolean, text: String): Node? {
+        if (present && support.isNullValueText(text)) {
+            return NullNode.INSTANCE
+        }
+        if (!present) {
+            if (support.insertNullsForMissingColumns) {
+                return NullNode.INSTANCE
+            }
+            return when (support.emptyCell()) {
+                CsvEmptyCell.MISSING -> null
+                CsvEmptyCell.NULL -> NullNode.INSTANCE
+                CsvEmptyCell.EMPTY -> support.infer(text)
+            }
+        }
+        if (text.isEmpty()) {
+            return when (support.emptyCell()) {
+                CsvEmptyCell.MISSING -> null
+                CsvEmptyCell.NULL -> NullNode.INSTANCE
+                CsvEmptyCell.EMPTY -> support.infer(text)
+            }
+        }
+        return inferCell(text)
+    }
+
+    private fun inferCell(text: String): Node {
+        if (nestedMode == CsvNestedMode.JSON) {
+            val trimmed = text.trim()
+            if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+                return try {
+                    CsvJsonCodec.parse(trimmed, cellNestingLimit())
+                } catch (e: CsvParseException) {
+                    throw CsvParseException("Invalid nested JSON in CSV cell: ${e.message}", e)
+                }
+            }
+        }
+        return support.infer(text)
     }
 
     private fun insertNested(
@@ -173,38 +218,11 @@ internal class CsvRowDecoder(
         return ObjectNode.from(fields)
     }
 
-    private fun inferCell(text: String): Node {
-        if (nestedMode == CsvNestedMode.JSON) {
-            val trimmed = text.trim()
-            if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-                return try {
-                    CsvJsonCodec.parse(trimmed, cellNestingLimit())
-                } catch (e: CsvParseException) {
-                    throw CsvParseException("Invalid nested JSON in CSV cell: ${e.message}", e)
-                }
-            }
-        }
-        return inferScalar(text)
-    }
-
     /**
      * 单元格相对嵌套上限：单元格根在整体树中深度为 `3`，因此可用相对深度为
      * `maxDepth - 2`；`0` 或负数交给 [CsvJsonCodec] 表示不限制。
      */
     private fun cellNestingLimit(): Int = if (maxDepth > 0) maxDepth - 2 else 0
-
-    private fun inferScalar(text: String): Node = when (text) {
-        "true" -> BooleanNode.of(true)
-        "false" -> BooleanNode.of(false)
-        else -> if (isNumber(text)) NumberNode.ofRaw(text) else StringNode.of(text)
-    }
-
-    private fun isNumber(text: String): Boolean = try {
-        BigDecimal(text)
-        true
-    } catch (_: NumberFormatException) {
-        false
-    }
 
     /** 表头列与其嵌套路径。 */
     private class CsvColumn(

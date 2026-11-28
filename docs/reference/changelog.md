@@ -57,7 +57,7 @@
   内部 `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级
   （`ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`
-- `format-json` 的 `Double` 写出改用 JDK `Double.toString`，移除 jackson-core 内部包依赖
+- `format-json` 的 `Double` 写出改用 JDK `Double.toString`，移除 JSON Token 底层库 内部包依赖
 - `alias-for` 1.0.5 / `mingli-exception` 1.1.2-Final 提供显式 module-info
 - 新增 `:format-json:jlinkImage`，`format-json` 依赖链可生成 JDK 17 jlink 镜像
 - native-image CI：`.github/workflows/native-image.yml`（GraalVM JDK 21 / Linux runner）

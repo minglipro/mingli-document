@@ -1,13 +1,13 @@
 ---
 title: TOML
-description: format-toml 模块：TomlMapper、表/数组读写、内联表写出、日期时间字符串化与 TOML 边界
+description: format-toml 模块：TomlMapper、表/数组读写、内联表写出、TomlConfig 配置对齐 参考实现 TOML、日期时间处理与 TOML 边界
 ---
 
 # TOML
 
 `format-toml` 提供 TOML 读写，核心类型是 `TomlMapper`。
 
-TOML 文档根必须是表（table），因此 TOML 的根节点固定为 `ObjectNode`；日期时间类型在 Node 模型中没有对应节点，统一映射为 ISO-8601 字符串。
+TOML 文档根必须是表（table），因此 TOML 的根节点固定为 `ObjectNode`；日期时间类型在 Node 模型中没有对应节点，默认读取为 TOML 源码原文，`TomlReadFeature.PARSE_JAVA_TIME` 开启后读取为 `java.time` 规范化 ISO-8601 字符串。
 
 ## Maven 坐标与依赖
 
@@ -30,37 +30,105 @@ implementation("com.mingliqiye.document.format:toml:2.5.1")
 - **标准 TOML 表与数组**：读取标准表、数组表、内联表、内联数组；
 - **嵌套表**：任意层级表结构映射为嵌套 `ObjectNode`；
 - **内联写出**：写出统一使用内联 table / 内联数组（`user = { name = "小于", age = 18 }`）；
-- **日期时间字符串化**：`OffsetDateTime` / `LocalDateTime` / `LocalDate` / `LocalTime` 读取为 ISO-8601 字符串；
+- **日期时间字符串化**：默认读取为 TOML 源码原文；`TomlReadFeature.PARSE_JAVA_TIME` 开启后读取为 `java.time` 规范化 ISO-8601 字符串；
 - **原生 Token 读取**：`parse(String)` 通过内部 `TomlTokenReader` 直接遍历 tomlj 结构生成 Token 流；
 - **错误定位**：解析错误信息包含行列号；
 - **文件/流读写**：文本 UTF-8（可改 `fileCharset`）；
-- **无专属配置类**：使用通用 `DocumentMapperConfig`。
+- **配置对齐 参考实现 TOML**：`TomlConfig` / `TomlReadFeature` / `TomlWriteFeature`，见下方配置矩阵。
 
-## 配置
+## 配置矩阵（对齐 TOML 底层库）
 
-TOML 模块没有专属 Config 类（源码中不存在 `TomlConfig`），直接使用 `DocumentMapperConfig`：
+TOML 模块提供专属 `TomlConfig`（继承 `DocumentMapperConfig`），配置项与默认值对齐
+TOML 底层库（2.15 / 3.x）。使用 `TomlConfig.builder()` 或
+`TomlMapper.builder()` 构建。
+
+### TOML 专属配置
+
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `maxDepth` | `512` | 解析最大嵌套深度（根表深度为 `1`）；`TomlMapper.builder().maxDepth(...)` 等价 |
+| `readFeatures` | 空（全部关闭） | 见下方 `TomlReadFeature` |
+| `writeFeatures` | 空（全部关闭） | 见下方 `TomlWriteFeature` |
+| `commentConfig` | `TomlCommentConfig()` | 注释保留写出配置（`orphanCommentPolicy` / `preserveBlankLines` / `trailingNewline`） |
+
+### TomlReadFeature
+
+| 特性 | 参考实现 默认 | 本模块默认 | 行为 |
+| --- | --- | --- | --- |
+| `PARSE_JAVA_TIME` | 关闭 | 关闭 | 关闭：日期时间读取为源码原文（空格分隔符归一化为 `T`、`z` 归一化为 `Z`）；开启：`java.time` 规范化 ISO-8601 字符串。参考实现 以 `VALUE_EMBEDDED_OBJECT` 返回 `java.time` 对象，Node/Token 模型无 embedded object 类型，属明确替代 |
+| `VALIDATE_DATE_TIME`（参考实现 3.2+） | 关闭 | 关闭 | 字符串模式下额外用 `java.time` 校验日期时间，非法值抛 `TomlParseException`；tomlj 本身已严格校验，正常输入结果一致 |
+
+### TomlWriteFeature
+
+| 特性 | 参考实现 默认 | 本模块默认 | 行为 |
+| --- | --- | --- | --- |
+| `FAIL_ON_NULL_WRITE` | 关闭 | 关闭 | 关闭：`null` 写成 `""`；开启：任何 `null` 写出抛 `TomlException` |
+
+参考实现 TOML 还受 `StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN`（本模块固定 plain 输出，
+等价开启）与 `StreamReadFeature.USE_FAST_BIG_NUMBER_PARSER`（由 tomlj 决定）影响，
+二者不是 TOML 专属特性，未提供开关。
+
+### 常用组合
 
 ```kotlin
-import com.mingliqiye.document.serialization.DocumentMapperConfig
-import com.mingliqiye.document.format.toml.TomlMapper
+import com.mingliqiye.document.format.toml.*
+import com.mingliqiye.document.serialization.MissingFieldPolicy
 
-val mapper = TomlMapper(
-    DocumentMapperConfig.builder()
-        .maxNodeDepth(64)
-        .fileCharset(Charsets.UTF_8)
-        .atomicFileWrite(true)
-        .build(),
-)
+val mapper = TomlMapper.builder()
+    .maxDepth(64)
+    .enable(TomlReadFeature.PARSE_JAVA_TIME)
+    .enable(TomlWriteFeature.FAIL_ON_NULL_WRITE)
+    .trailingNewline(false)
+    .preserveBlankLines(false)
+    .build()
+
+val config = TomlConfig.builder()
+    .missingFieldPolicy(MissingFieldPolicy.FAIL)
+    .maxNodeDepth(32)
+    .enable(TomlReadFeature.VALIDATE_DATE_TIME)
+    .disable(TomlReadFeature.PARSE_JAVA_TIME)
+    .build()
+val viaConfig = TomlMapper(config)
 ```
 
-通用配置项与其它格式一致：`missingFieldPolicy`、`failOnUnknownFields`、`writeNulls`、`namingStrategy`、`fileCharset`、`atomicFileWrite`、`createParentDirectories`、`maxInputSize`、`maxStringLength`、`maxNodeDepth`、`maxNodeCount`、`resolveReferences` / `writeReferences`、`remoteReferenceResolver`。
+`TomlConfigBuilder` 转发全部通用 `DocumentMapperConfig` 便捷方法：`field` /
+`missingFieldPolicy` / `failOnUnknownFields` / `writeNulls` / `namingStrategy` /
+`fileCharset` / `atomicFileWrite` / `createParentDirectories` / `maxInputSize` /
+`maxStringLength` / `maxNodeDepth` / `maxNodeCount` / `resolveReferences` /
+`writeReferences` / `remoteReferenceResolver` / `beanValidator` / `subtype` /
+`typeProperty` / `enable`/`disable`/`configure(DeserializationFeature)` /
+`failOnNullForPrimitives`。
+
+### 注释配置合并
+
+`TomlCommentConfigBuilder` 保留并可与主配置合并：
+
+```kotlin
+val config = TomlConfig.builder()
+    .orphanCommentPolicy(TomlOrphanCommentPolicy.PRESERVE_AT_END_OF_FILE)
+    .preserveBlankLines(false)
+    .build()
+val commentConfig = TomlCommentConfig.from(config)
+val merged = TomlCommentConfig.builder().base(commentConfig).trailingNewline(true).build()
+```
+
+`TomlMapper.formatCommented(document)` 默认使用 Mapper 的 `TomlConfig.commentConfig` 与
+`writeFeatures`。
+
+### null 行为
+
+- 默认：`null` 写成 `""`（对象字段、内联 table 字段、数组元素均适用）；
+- `FAIL_ON_NULL_WRITE` 开启：任何 `null` 写出抛 `TomlException`；
+- 需要省略 null 字段：通用配置 `writeNulls(false)`（等价 参考实现 `NON_NULL`）。
 
 ## Mapper 构造与 Builder
 
 | 构造器 | 说明 |
 |---|---|
-| `TomlMapper()` | 默认配置 |
-| `TomlMapper(config: DocumentMapperConfig)` | 通用配置 |
+| `TomlMapper()` | 默认配置（TOML 默认特性全部关闭、深度 512） |
+| `TomlMapper(config: TomlConfig)` | TOML 专属配置 |
+| `TomlMapper(config: DocumentMapperConfig)` | 通用配置（TOML 默认特性/深度/注释配置） |
+| `TomlMapper(config: DocumentMapperConfig, maxDepth: Int)` | 通用配置 + 显式解析深度 |
 
 ```kotlin
 import com.mingliqiye.document.serialization.MissingFieldPolicy
@@ -118,14 +186,14 @@ val node3 = "name = \"小于\"".toTomlNode()
 - `TomlTable` → `ObjectNode`（保持 key 顺序）；
 - `TomlArray` → `ArrayNode`；
 - `String` → `StringNode`、`Boolean` → `BooleanNode`、`Long` → `NumberNode`、`Double` → `NumberNode`（NaN/Infinity 抛 `TomlParseException`）；
-- `OffsetDateTime` / `LocalDateTime` / `LocalDate` / `LocalTime` → `StringNode`（ISO-8601 文本）。
+- `OffsetDateTime` / `LocalDateTime` / `LocalDate` / `LocalTime` → `StringNode`：默认是 TOML 源码原文（日期时间分隔符空格归一化为 `T`、小写 `z` 归一化为 `Z`）；开启 `TomlReadFeature.PARSE_JAVA_TIME` 后是 `java.time` 规范化 ISO-8601 字符串。
 
 ### Token 路径
 
 `TomlMapper.parse(String)` 使用内部 `TomlTokenReader`：
 
 - 直接遍历 tomlj 的 `TomlTable` / `TomlArray` 生成 Token 流，不构建完整 Node 树；
-- 日期时间同样输出为 `STRING` Token（`toString()`）；
+- 日期时间同样输出为 `STRING` Token：默认源码原文，`PARSE_JAVA_TIME` 开启时为 `java.time` 规范化字符串；
 - NaN / Infinity 抛 `TomlParseException`；
 - 配置了非零 `maxNodeDepth` / `maxNodeCount` / `maxStringLength` 时回退 `NodeTokenReader`，以保持 Node 树限制语义。
 
@@ -156,7 +224,9 @@ val node3 = "name = \"小于\"".toTomlNode()
 - 根节点必须是 `ObjectNode`，否则抛 `TomlException("TOML root must be an object but was ...")`；
 - 对象写成内联 table：`user = { name = "小于", age = 18 }`；空对象写成 `{}`；
 - 数组写成内联数组：`tags = [ "a", "b" ]`；空数组写成 `[]`；
-- 对象中值为 `NullNode` 的字段被省略；数组中不允许 `null`，出现即抛 `TomlException`；
+- `null`（`NullNode`）默认写成 `""`（含对象字段、内联 table 字段与数组元素）；
+  开启 `TomlWriteFeature.FAIL_ON_NULL_WRITE` 后任何 `null` 写出抛 `TomlException`；
+- 需要省略 null 字段时使用通用配置 `writeNulls(false)`（等价 参考实现 `NON_NULL`）；
 - 字符串按 TOML 规则转义（`\"`、`\\`、`\n` 等，控制字符 `\uXXXX`）；
 - key 只允许 `[A-Za-z0-9_-]+` 裸写，其余用双引号包裹；
 - 数字按 `NumberNode.raw` 写出：
@@ -182,10 +252,10 @@ println(node.toTomlString())
 |---|---|---|
 | `ObjectNode` | 表 / 内联表 / 数组表元素 | 内联 table |
 | `ArrayNode` | 数组 / 数组表 | 内联数组 |
-| `StringNode` | 字符串；日期时间也读成字符串 | 双引号字符串 |
+| `StringNode` | 字符串；日期时间默认源码原文（`PARSE_JAVA_TIME` 开启时为规范化 ISO 字符串） | 双引号字符串 |
 | `NumberNode` | `Long` → 整数；`Double` → 浮点（保留 tomlj 解码文本） | 按 `raw` 输出整数或浮点 |
 | `BooleanNode` | `true` / `false` | `true` / `false` |
-| `NullNode` | 不会从 TOML 读出（TOML 无 null 类型） | 对象中省略；数组中抛异常 |
+| `NullNode` | 不会从 TOML 读出（TOML 无 null 类型） | 默认写成 `""`；`FAIL_ON_NULL_WRITE` 开启时抛 `TomlException` |
 | `BinaryNode` | 不会从 TOML 读出 | Base64 字符串（不保型） |
 
 ## 示例
@@ -285,24 +355,36 @@ check(error is TomlParseException)
 println(error.message)   // Invalid TOML at line 1, column 8: ...
 ```
 
-### 7. null 行为
+### 7. null 行为与 FAIL_ON_NULL_WRITE
 
 ```kotlin
+import com.mingliqiye.document.core.ArrayNode
 import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
+import com.mingliqiye.document.format.toml.TomlWriteFeature
 import com.mingliqiye.document.format.toml.exception.TomlException
 
-// 对象字段 null：省略
+// 默认（FAIL_ON_NULL_WRITE 关闭）：null 写成 ""
 val node = ObjectNode.of("name" to StringNode.of("小于"), "nick" to NullNode.INSTANCE)
-println(mapper.format(node))    // name = "小于"
+println(node.toTomlString())
+// name = "小于"
+// nick = ""
 
-// 数组元素 null：报错
-val arrayNode = ObjectNode.of(
-    "tags" to com.mingliqiye.document.core.ArrayNode.of(NullNode.INSTANCE),
-)
-val error = runCatching { mapper.format(arrayNode) }.exceptionOrNull()
+// 数组元素 null：同样写成 ""
+val arrayNode = ObjectNode.of("tags" to ArrayNode.of(NullNode.INSTANCE))
+println(arrayNode.toTomlString())   // tags = [ "" ]
+
+// 开启 FAIL_ON_NULL_WRITE：任何 null 写出报错
+val error = runCatching {
+    node.toTomlString(setOf(TomlWriteFeature.FAIL_ON_NULL_WRITE))
+}.exceptionOrNull()
 check(error is TomlException)
+
+// Bean 场景需要省略 null 字段时：通用配置 writeNulls(false)
+val omitting = TomlMapper(
+    com.mingliqiye.document.serialization.DocumentMapperConfig.builder().writeNulls(false).build(),
+)
 ```
 
 ### 8. 二进制不保型
@@ -411,6 +493,8 @@ val mapper = TomlMapper.builder()
 ```
 
 默认 `512`，统计表/数组/内联 table 嵌套；超限抛 `TomlParseException`。
+`TomlConfig.maxDepth`、`TomlMapper.builder().maxDepth(...)`、
+`TomlMapper(config, maxDepth)` 三种入口等价；
 `TomlReader` / `TomlTokenReader` / `TomlCommentPreservingReader` 也支持 `maxDepth`。
 
 ## 注释保留
@@ -439,11 +523,13 @@ val text = mapper.formatCommented(document)
 |---|---|
 | 根不是表 | `TomlParseException`（读取）；`TomlException`（写出） |
 | TOML 语法错误 | `TomlParseException`，带 line/column |
-| 日期时间 | 统一映射为 ISO-8601 字符串，不保留 TOML 类型 |
-| TOML 没有 null | 读取永远不会产生 `NullNode`；写出时对象字段省略、数组元素报错 |
+| 日期时间 | 默认映射为源码原文；`PARSE_JAVA_TIME` 开启为 `java.time` 规范化 ISO-8601 字符串，均不保留 TOML 类型（Node 无 embedded object） |
+| TOML 没有 null | 读取永远不会产生 `NullNode`；写出默认 `null` → `""`，`FAIL_ON_NULL_WRITE` 开启时报错，`writeNulls(false)` 时省略 Bean 字段 |
+| 空字符串反序列化 | 参考实现 `TomlMapper` 默认开启 `ACCEPT_EMPTY_STRING_AS_NULL_OBJECT`（空串按目标类型转 null），本项目 `DocumentMapper` 暂无该反序列化特性，未对齐 |
 | NaN / Infinity | 读取抛 `TomlParseException`；`NumberNode` 也无法表示 |
 | 超出 64 位有符号整数范围的十进制整数 | 写出时转成十进制浮点（可能使用科学计数法），不再是整数 |
 | 嵌套空数组 | 可以写出（`[]` / `{ a = [] }`），但 tomlj 1.0.0 **无法读回**内联 table / 数组中的空数组 |
+| 数组中的日期时间 | tomlj 1.0.0 无法回读以逗号分隔的多个日期时间字面量（解析器限制，单个可以） |
 | `formatPretty` | 与 `format` 输出一致（TOML 写出只有内联一种风格） |
 | 二进制节点 | 写成 Base64 字符串，读回 `StringNode`（不保型） |
 | key 非法字符 | 写出时加双引号；读取按 TOML 规则还原 |
@@ -451,12 +537,13 @@ val text = mapper.formatCommented(document)
 
 ## 与通用 `DocumentMapper` 的差异
 
-- 没有格式专属 Config 类（源码中不存在 `TomlConfig`），直接构造 `TomlMapper(DocumentMapperConfig)`；
+- 提供格式专属 `TomlConfig`（对齐 参考实现 TOML 的读取/写出特性、解析深度与注释配置），同时保留 `TomlMapper(DocumentMapperConfig)` 构造器；
 - `parse(String)` 默认走内部 `TomlTokenReader`（不构建 Node 树），配置 Node 限制时回退；
 - `formatPretty` 与 `format` 相同；
 - 写出统一使用内联 table / 内联数组，不生成 `[table]` 段落形式；
 - 根节点固定为 `ObjectNode`；
-- TOML 专属：`TomlReader`、`String.toTomlNode()`、`Node.toTomlString()`。
+- TOML 专属：`TomlReader`、`String.toTomlNode()`、`Node.toTomlString()`、
+  `TomlReadFeature` / `TomlWriteFeature`。
 
 ## 相关链接
 

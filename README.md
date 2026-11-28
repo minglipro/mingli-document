@@ -134,7 +134,7 @@ Maven：
 
 `serialization` 依赖的 `alias-for` 自 1.0.4 起提供合法模块名
 （`Automatic-Module-Name: com.mingliqiye.utils.aliasfor`），不再是显式 `module-info` 的阻塞项。
-第三方依赖中，Jackson 2.15.3 与 SnakeYAML 2.6 自带显式 `module-info`；
+第三方依赖中，参考实现 2.15.3 与 SnakeYAML 2.6 自带显式 `module-info`；
 Avro / Ion / TOML / commons-csv / protobuf-java 仍是自动模块；`hibernate-core` 的自动模块名是
 `org.hibernate.orm.core`，也是自动模块；`codegen` 依赖的 KSP API 没有显式模块名，自动模块名为
 `symbol.processing.api`，在 module path 上使用 `codegen` 时需要同时提供。

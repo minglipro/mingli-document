@@ -1,6 +1,6 @@
 ---
 title: CSV
-description: format-csv 模块：CsvMapper、CsvConfig、CSV Schema、嵌套单元格与多级 Schema 读写
+description: format-csv 模块：CsvMapper、CsvConfig、CSV Schema、参考实现 读写特性、嵌套单元格与多级 Schema 读写
 ---
 
 # CSV
@@ -34,7 +34,13 @@ implementation("com.mingliqiye.document.format:csv:2.5.1")
 - **嵌套对象 / 数组**：`CsvNestedMode.JSON`（JSON 文本单元格）与 `CsvNestedMode.COLUMNS`（点分列名）；
 - **多级 Schema**：`objectField` 声明嵌套子 Schema（点分列名展开，任意层级），`arrayField` 声明元素 Schema（JSON 数组单元格 + 元素校验）；
 - **原生 Token 读取**：默认配置下 `parse(String)` 通过内部 `CsvTokenReader` 直接从 CSV 记录生成 Token；
-- **文件/流读写**：文本 UTF-8（可改 `fileCharset`）。
+- **文件/流读写**：文本 UTF-8（可改 `fileCharset`）；
+- **参考实现 配置对齐**：`CsvReadFeature`（对齐 `CsvParser.Feature` / `CsvReadFeature`）与
+  `CsvWriteFeature`（对齐 `CsvGenerator.Feature` / `CsvWriteFeature`）覆盖 参考实现 2.15～3.3
+  官方枚举，`CsvConfigBuilder` 提供 `enable` / `disable` / `configure`；
+- **参考实现 `CsvSchema` 对齐**：`quoteChar`、`escapeChar`、`lineSeparator`、`columnSeparator`、
+  `arrayElementSeparator`、`nullValue`、`skipFirstDataRow`、`allowComments`、`header`、
+  `sortedBy` 列重排均已支持。
 
 ## 配置：`CsvConfig`
 
@@ -44,6 +50,9 @@ implementation("com.mingliqiye.document.format:csv:2.5.1")
 | `header` | `Boolean` | `true` | 是否使用表头；配置了 `schema` 时由 `CsvSchema.header` 决定 |
 | `schema` | `CsvSchema?` | `null` | 非 null 时按 Schema 的列顺序与类型读写 |
 | `nestedMode` | `CsvNestedMode?` | `null` | 嵌套值读写方式；`null` 表示不支持嵌套（默认，保持旧行为） |
+| `maxDepth` | `Int` | `512` | 解析/写出最大嵌套深度，必须为正数 |
+| `readFeatures` | `Set<CsvReadFeature>` | `CsvConfig.DEFAULT_READ_FEATURES` | 参考实现 风格读取特性集合 |
+| `writeFeatures` | `Set<CsvWriteFeature>` | `CsvConfig.DEFAULT_WRITE_FEATURES` | 参考实现 风格写出特性集合 |
 
 `CsvNestedMode`：
 
@@ -62,6 +71,13 @@ implementation("com.mingliqiye.document.format:csv:2.5.1")
 | `header(Boolean)` | 是否使用表头（被 Schema 覆盖） |
 | `schema(CsvSchema?)` | 设置 CSV Schema |
 | `nestedMode(CsvNestedMode?)` | 启用嵌套单元格 |
+| `maxDepth(Int)` | 解析/写出最大嵌套深度（必须为正数） |
+| `enable/disable/configure(CsvReadFeature)` | 参考实现 风格读取特性 |
+| `enable/disable/configure(CsvWriteFeature)` | 参考实现 风格写出特性 |
+| `namingStrategy` / `fileCharset` / `atomicFileWrite` / `createParentDirectories` | 通用 Mapper 便捷选项 |
+| `maxInputSize` / `maxStringLength` / `maxNodeDepth` / `maxNodeCount` | Node/输入限制便捷选项 |
+| `remoteReferenceResolver` / `beanValidator` | 远程 `$ref` 解析器 / 根对象校验器 |
+| `enable/disable/configure(DeserializationFeature)` / `failOnNullForPrimitives` | 通用反序列化特性 |
 | `subtype(...)` / `typeProperty(...)` | 多态子类型 |
 | `resolveReferences` / `writeReferences` | 本地 `$ref` |
 | `build()` | 构建 `CsvConfig` |
@@ -76,6 +92,70 @@ val mapper = CsvMapper(
         .delimiter(';')
         .header(false)
         .nestedMode(CsvNestedMode.JSON)
+        .build(),
+)
+```
+
+### 参考实现 读写特性
+
+`CsvReadFeature` 与 参考实现 `CsvParser.Feature`（2.x）/ `CsvReadFeature`（3.x）同名同默认值；
+`CsvWriteFeature` 与 `CsvGenerator.Feature`（2.x）/ `CsvWriteFeature`（3.x）同名同默认值。
+本库覆盖 参考实现 2.15～3.3 的并集（条目 KDoc 标注引入版本）；默认值见“默认”列。
+
+读取特性（`CsvReadFeature`）：
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `TRIM_SPACES` | 关闭 | 裁剪无引号单元格两侧空白；引号内空白保留 |
+| `WRAP_AS_ARRAY` | 关闭 | 本库 Node 根固定数组，等价恒开启；条目仅用于配置对照 |
+| `IGNORE_TRAILING_UNMAPPABLE` | 关闭 | 开启后强制忽略 Schema 未映射的多余列（关闭时由 `failOnUnknownColumns` 决定） |
+| `SKIP_EMPTY_LINES` | 关闭 | 跳过完全空白行；关闭时空行解析为单空单元格记录 |
+| `ALLOW_TRAILING_COMMA` | **开启** | 允许行尾多出一个空列（尾逗号） |
+| `ALLOW_COMMENTS` | 关闭 | 允许 `#` 注释行 |
+| `FAIL_ON_MISSING_COLUMNS` | 关闭 | 数据行少于 Schema 列数时抛 `CsvParseException` |
+| `FAIL_ON_MISSING_HEADER_COLUMNS` | **开启** | 表头缺少 Schema 必填列时抛异常 |
+| `INSERT_NULLS_FOR_MISSING_COLUMNS` | 关闭 | 行缺失列插入 null（`FAIL_ON_MISSING_COLUMNS` 优先） |
+| `EMPTY_STRING_AS_NULL` | 关闭 | 空单元格读取为 null |
+| `TRIM_HEADER_SPACES` | **开启** | 裁剪表头列名两侧空白（参考实现 2.16+） |
+| `EMPTY_UNQUOTED_STRING_AS_NULL` | 关闭 | 无引号空单元格读取为 null（本库无法区分引号，等价 `EMPTY_STRING_AS_NULL`） |
+| `ONLY_UNQUOTED_NULL_VALUES_AS_NULL` | 关闭 | 只把无引号 nullValue 读取为 null（同上，按“内容等于 nullValue 即 null”处理） |
+| `EMPTY_UNQUOTED_STRING_AS_MISSING` | 关闭 | 无引号空单元格按缺失列处理（参考实现 3.2+） |
+| `SKIP_EMPTY_ROWS` | 关闭 | 跳过仅由分隔符组成的行（如 `,,`，参考实现 3.2+） |
+| `FAIL_ON_DUPLICATE_HEADER_COLUMNS` | **开启** | 表头重复列名抛异常；关闭后按最后一列取值（参考实现 3.2+） |
+| `CASE_INSENSITIVE_HEADERS` | 关闭 | 表头与 Schema 列名忽略大小写匹配（参考实现 3.2+） |
+
+写出特性（`CsvWriteFeature`）：
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `STRICT_CHECK_FOR_QUOTING` | 关闭 | 关闭时使用宽松引号检查（对齐 参考实现 默认）；开启后只在确实需要时加引号 |
+| `OMIT_MISSING_TAIL_COLUMNS` | 关闭 | 省略行尾缺失列 |
+| `ALWAYS_QUOTE_STRINGS` | 关闭 | 字符串值（含表头）强制加引号 |
+| `ALWAYS_QUOTE_EMPTY_STRINGS` | 关闭 | 空字符串强制加引号 |
+| `ESCAPE_QUOTE_CHAR_WITH_ESCAPE_CHAR` | 关闭 | 引号用转义字符转义，而不是双写 |
+| `ESCAPE_CONTROL_CHARS_WITH_ESCAPE_CHAR` | 关闭 | `\b`/`\t`/`\n`/`\f`/`\r` 用转义字符输出（Commons CSV 可读回） |
+| `ALWAYS_QUOTE_NUMBERS` | 关闭 | 数字值强制加引号（参考实现 2.16+） |
+| `WRITE_LINEFEED_AFTER_LAST_ROW` | **开启** | 最后一行后写出换行；关闭后输出不以行分隔符结尾（参考实现 2.17+） |
+| `QUOTE_STRINGS_WITH_LEADING_TRAILING_WHITESPACE` | 关闭 | 首/尾空白（≤0x20）字符串强制加引号（参考实现 3.2+） |
+
+> **默认引号行为**：对齐 参考实现 默认（`STRICT_CHECK_FOR_QUOTING` 关闭）时采用宽松检查，
+> 值中出现小于 `minSafeChar` 的字符（默认逗号分隔时包括空格、制表符、`!`、`#` 等）、
+> 引号或转义字符就会加引号；数字与布尔值默认不加引号（`ALWAYS_QUOTE_NUMBERS` 除外）。
+> 需要“最小必要引号”时开启 `STRICT_CHECK_FOR_QUOTING`。
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvConfig
+import com.mingliqiye.document.format.csv.CsvMapper
+import com.mingliqiye.document.format.csv.CsvReadFeature
+import com.mingliqiye.document.format.csv.CsvWriteFeature
+
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .enable(CsvReadFeature.SKIP_EMPTY_LINES)
+        .enable(CsvReadFeature.TRIM_SPACES)
+        .disable(CsvReadFeature.ALLOW_TRAILING_COMMA)
+        .enable(CsvWriteFeature.ALWAYS_QUOTE_STRINGS)
+        .configure(CsvWriteFeature.WRITE_LINEFEED_AFTER_LAST_ROW, false)
         .build(),
 )
 ```
@@ -108,6 +188,16 @@ val mapper = CsvMapper(
 | `nestedObjects: Map<String, CsvSchema>` | `OBJECT` 字段的子 Schema |
 | `nestedArrays: Map<String, CsvSchema>` | `ARRAY` 字段的元素 Schema |
 | `columnNames: List<String>` | 展开后的列名（嵌套对象展开为点分列名） |
+| `columnSeparator: Char?` | 列分隔符；null 表示沿用 `CsvConfig.delimiter` |
+| `quoteChar: Char?` | 引号字符；null 表示关闭引号，默认 `"` |
+| `escapeChar: Char?` | 转义字符；null 表示不使用，默认 null |
+| `lineSeparator: String` | 写出用行分隔符，默认 `\n` |
+| `arrayElementSeparator: String?` | 数组元素分隔符；null 表示数组使用 JSON 文本（本库扩展） |
+| `nullValue: String?` / `nullValueText` | null 写出文本；null 表示空串 |
+| `skipFirstDataRow: Boolean` | 是否跳过首条数据行（对齐 参考实现），默认 false |
+| `allowComments: Boolean` | 是否允许 `#` 注释行，默认 false |
+| `sortedBy(vararg String)` | 返回按指定列顺序重排的新 Schema |
+| `effectiveColumnSeparator(fallback)` | 计算实际列分隔符 |
 | `field(name)` / `nestedObject(name)` / `nestedArray(name)` | 查询 |
 
 `CsvSchemaBuilder` 方法：
@@ -121,7 +211,30 @@ val mapper = CsvMapper(
 | `arrayField(name, element: CsvSchema? = null, required = true, nullable = false, description = null)` | 数组字段；`element` 非空时按元素 Schema 校验/排序 |
 | `header(Boolean)` | 是否读写表头 |
 | `failOnUnknownColumns(Boolean)` | 未声明列是否报错 |
+| `addColumn(name, required = true, nullable = false)` / `addColumns(vararg names)` | 字符串列便捷方法（对齐 参考实现 `addColumn` / `addColumns`） |
+| `columnSeparator(Char)` / `quoteChar(Char?)` / `escapeChar(Char?)` | 列分隔符 / 引号 / 转义字符（传 null 关闭引号或转义） |
+| `lineSeparator(String)` / `arrayElementSeparator(String?)` / `nullValue(String?)` | 行分隔符 / 数组元素分隔符 / null 文本 |
+| `skipFirstDataRow(Boolean)` / `allowComments(Boolean)` | 跳过首条数据行 / 允许 `#` 注释行 |
+| `orderColumns(vararg names)` | 构建时重排顶层列顺序 |
 | `build()` | 构建 `CsvSchema`（校验列名非空、顶层不重复、展开后列名不冲突、嵌套字段类型匹配） |
+
+#### 与 参考实现 `CsvSchema.Builder` 对照
+
+| 参考实现 `CsvSchema.Builder` | 本库 `CsvSchemaBuilder` |
+|---|---|
+| `setColumnSeparator(char)` | `columnSeparator(Char)` |
+| `setQuoteChar(char)` / `withoutQuoteChar()` | `quoteChar(Char?)`（null 关闭） |
+| `setEscapeChar(char)` / `withoutEscapeChar()` | `escapeChar(Char?)`（null 关闭） |
+| `setLineSeparator(String)` | `lineSeparator(String)` |
+| `setArrayElementSeparator(String)` / `withoutArrayElementSeparator()` | `arrayElementSeparator(String?)`（默认 null 表示 JSON 数组，参考实现 默认 `;`） |
+| `setNullValue(String)` | `nullValue(String?)`（默认 null 等价空串） |
+| `setUseHeader` / `withHeader` / `withoutHeader` | `header(Boolean)` |
+| `setSkipFirstDataRow(boolean)` | `skipFirstDataRow(Boolean)` |
+| `setAllowComments` / `withComments` / `withoutComments` | `allowComments(Boolean)` |
+| `setColumnReordering` / `setStrictHeaders` | 不支持：本库按列名映射，表头列顺序任意；未提供严格列序校验 |
+| `addColumn` / `addColumns` | `addColumn` / `addColumns` |
+| `addNumberColumn` / `addBooleanColumn` / `addArrayColumn` | `int/long/double/decimal` / `boolean` / `arrayField` |
+| `sortedBy(String...)` | `CsvSchema.sortedBy(String...)` / `CsvSchemaBuilder.orderColumns(...)` |
 
 ```kotlin
 import com.mingliqiye.document.format.csv.CsvMapper
@@ -289,6 +402,7 @@ val csv = """
 
 - 直接产生 `START_ARRAY` → 每行 `START_OBJECT` / `FIELD_NAME` / 值 / `END_OBJECT` → `END_ARRAY` 的 Token 流；
 - 字段类型推断与 `CsvReader` 一致；
+- 同时应用 `CsvReadFeature` 的空单元格/null、跳过空行、重复表头、大小写不敏感等读取特性；
 - 有 Schema 或 `nestedMode` 时回退 `NodeTokenReader`（先构建 Node 树并执行 Node 限制）；
 - 默认 Token 路径不执行通用 Node 树限制（`maxNodeDepth` / `maxNodeCount` / `maxStringLength`）；需要这些限制时配置 Schema 或嵌套模式走 Node 路径，或用 `CsvReader` 手动构建 Node 后自行校验。
 
@@ -302,7 +416,8 @@ val csv = """
 | `format(value, file / path)` | 写文件 |
 | `format(value, output: OutputStream)` | 先编码为字节再写出（无流式 Token 写出器） |
 | `format(value, writer: Writer)` | 直接写字符流 |
-| `Node.toCsvString(delimiter = ',', header = true, nestedMode = null)` | 扩展函数：Node → CSV 文本 |
+| `Node.toCsvString(delimiter = ',', header = true, nestedMode = null, maxDepth = 512, writeFeatures = CsvConfig.DEFAULT_WRITE_FEATURES)` | 扩展函数：Node → CSV 文本 |
+| `Node.toCsvString(schema, delimiter = ',', nestedMode = null, maxDepth = 512, writeFeatures = ...)` | 按 Schema 写出 |
 
 流式支持：
 
@@ -316,16 +431,18 @@ val csv = """
 
 - 根节点可以是对象（单行）或数组（每行必须是对象）；其他类型抛 `CsvException`；
 - 表头取所有行字段名的并集，保持字段首次出现的顺序；
-- 单元格：`null` → 空串，字符串 / 数字 `raw` / 布尔 / Base64 二进制；对象/数组只有在 `JSON` 模式下写成 JSON 文本，否则抛 `CsvException`；
-- 使用 commons-csv 标准引号规则（含分隔符、引号、换行的字段自动加引号）；
-- 记录分隔符固定 `\n`。
+- 单元格：`null` → 空串（Schema 配置 `nullValue` 时用该文本），字符串 / 数字 `raw` / 布尔 / Base64 二进制；对象/数组只有在 `JSON` 模式下写成 JSON 文本，否则抛 `CsvException`；
+- 引号规则由 `CsvWriteFeature` 控制：默认对齐 参考实现 的宽松检查（可能需要引号之外的值也加引号），
+  开启 `STRICT_CHECK_FOR_QUOTING` 后使用最小必要引号；数字/布尔值默认不加引号；
+- 记录分隔符默认 `\n`，Schema 可用 `lineSeparator` 覆盖；`WRITE_LINEFEED_AFTER_LAST_ROW` 控制末尾换行。
 
 写出规则（有 Schema）：
 
 - 列顺序与表头由 Schema 决定；行中未声明顶层字段默认忽略，是否报错由 `failOnUnknownColumns` 控制；
 - 缺少 `required` 列抛 `CsvException`；可选嵌套对象缺席时其列写成空单元格；
 - 嵌套对象按子 Schema 展开，嵌套对象上的额外字段忽略；
-- 带元素 Schema 的数组始终按元素 Schema 规范化后写成 JSON 数组。
+- 带元素 Schema 的数组按元素 Schema 规范化后写成 JSON 数组；配置 `arrayElementSeparator`
+  后改为分隔文本数组（元素 Schema 必须是单标量字段）。
 
 ```kotlin
 import com.mingliqiye.document.format.csv.toCsvString
@@ -613,6 +730,54 @@ val restored = mapper.parse(text, DocumentTypeReference.listType(User::class.jav
 check(restored[0].name == "小于")
 ```
 
+### 16. 参考实现 读写特性
+
+```kotlin
+import com.mingliqiye.document.core.Node
+import com.mingliqiye.document.format.csv.CsvConfig
+import com.mingliqiye.document.format.csv.CsvMapper
+import com.mingliqiye.document.format.csv.CsvReadFeature
+import com.mingliqiye.document.format.csv.CsvWriteFeature
+
+val mapper = CsvMapper(
+    CsvConfig.builder()
+        .enable(CsvReadFeature.SKIP_EMPTY_LINES)
+        .enable(CsvReadFeature.EMPTY_STRING_AS_NULL)
+        .enable(CsvWriteFeature.STRICT_CHECK_FOR_QUOTING)
+        .disable(CsvWriteFeature.WRITE_LINEFEED_AFTER_LAST_ROW)
+        .build(),
+)
+
+val node = mapper.parse("name,note\n\n小于,\n", Node::class.java)
+// SKIP_EMPTY_LINES：空行被跳过；EMPTY_STRING_AS_NULL：note 空单元格读取为 null
+check(node.asArray().size == 1)
+check(node.asArray()[0].asObject()["note"]!!.isNull)
+```
+
+### 17. CsvSchema 格式选项
+
+```kotlin
+import com.mingliqiye.document.format.csv.CsvSchema
+import com.mingliqiye.document.format.csv.CsvSchemaReader
+
+val schema = CsvSchema.builder("event")
+    .string("name")
+    .string("note", required = false, nullable = true)
+    .columnSeparator(';')
+    .quoteChar('\'')
+    .nullValue("NULL")
+    .allowComments(true)
+    .orderColumns("note", "name")
+    .build()
+
+val node = CsvSchemaReader.parse(
+    "# comment\nnote;name\nNULL;小于\n",
+    schema,
+).asArray()[0].asObject()
+check(node["note"]!!.isNull)
+check(node["name"]?.asString() == "小于")
+```
+
 ## 深度限制
 
 ```kotlin
@@ -632,8 +797,16 @@ val mapper = CsvMapper(
 |---|---|
 | 根节点类型 | 读取固定 `ArrayNode`；写出接受对象（单行）或数组（多行） |
 | 无表头 | 列名 `column1`、`column2`…… |
-| 表头重复 | `CsvParseException` |
-| 行字段数不一致 | 短行缺失单元格按空串；长行多余单元格忽略（无 Schema） |
+| 表头重复 | 默认抛 `CsvParseException`（`FAIL_ON_DUPLICATE_HEADER_COLUMNS` 默认开启）；关闭后按最后一列取值 |
+| 默认不跳过空行 | `SKIP_EMPTY_LINES` 默认关闭（对齐 参考实现），空行读成单空单元格记录；需要跳过时显式开启 |
+| 默认引号规则（宽松） | 对齐 参考实现 默认：部分无需引号的值（含空格、`#`、反斜杠等）也会加引号；需要最小必要引号时开启 `STRICT_CHECK_FOR_QUOTING` |
+| `WRAP_AS_ARRAY` | 本库 Node 根固定数组，等价恒开启，不提供“根对象序列”表示 |
+| 引号 / 无引号区分 | Commons CSV 不暴露单元格是否带引号；`EMPTY_UNQUOTED_STRING_AS_NULL`、`ONLY_UNQUOTED_NULL_VALUES_AS_NULL`、`EMPTY_UNQUOTED_STRING_AS_MISSING` 按“全部视为无引号”近似 |
+| 自定义 `lineSeparator` | 仅写出生效；读取按 `\r` / `\n` / `\r\n` 标准换行解析（与 参考实现 一致） |
+| `arrayElementSeparator` | 默认 null 表示 JSON 文本数组（本库扩展）；显式设置后为 参考实现 风格分隔文本，元素必须是单标量字段且元素内不能包含分隔符 |
+| `ESCAPE_CONTROL_CHARS_WITH_ESCAPE_CHAR` | 仅转义 Commons CSV 可读回的 `\b` / `\t` / `\n` / `\f` / `\r`；其余控制字符原样输出 |
+| `columnReordering` / `strictHeaders` | 未提供：本库始终按列名映射，表头列顺序任意 |
+| 行字段数不一致 | 短行缺失单元格按空串；长行多余单元格忽略（无 Schema）；Schema 模式可配 `FAIL_ON_MISSING_COLUMNS` / `INSERT_NULLS_FOR_MISSING_COLUMNS` |
 | 默认不支持嵌套 | 对象/数组单元格写出抛 `CsvException` |
 | `JSON` 模式的非 JSON 单元格 | 只有 `{` / `[` 开头的单元格会尝试解析；非法 JSON 抛 `CsvParseException` |
 | `JSON` 模式裸标量 | 不支持（`123` 等按普通文本处理） |
@@ -653,7 +826,8 @@ val mapper = CsvMapper(
 - 根节点固定为数组（读取）/ 对象或数组（写出）；
 - `parse(String)` 默认走内部 `CsvTokenReader`，有 Schema/嵌套配置时回退 Node 路径；
 - `formatPretty` 与 `format` 相同；
-- CSV 专属：`CsvReader`、`CsvWriter`（内部）、`CsvSchemaReader` / `CsvSchemaWriter`、`CsvSchema` / `CsvSchemaBuilder`、`CsvNestedMode`、`String.toCsvNode()` / `Node.toCsvString()`。
+- CSV 专属：`CsvReader`、`CsvWriter`（内部）、`CsvSchemaReader` / `CsvSchemaWriter`、`CsvSchema` / `CsvSchemaBuilder`、`CsvNestedMode`、`String.toCsvNode()` / `Node.toCsvString()`；
+- 额外提供 参考实现 对齐配置：`CsvReadFeature` / `CsvWriteFeature` 的 `enable/disable/configure`，以及 `CsvSchema` 的引号/转义/行分隔符/列分隔符/数组元素分隔符/null 文本/跳过首行/注释/列重排选项。
 
 ## 相关链接
 

@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.json
 
 import com.mingliqiye.document.core.Node
+import com.mingliqiye.document.core.NullNode
 import com.mingliqiye.document.format.json.exception.JsonParseException
 import java.io.BufferedReader
 import java.io.Reader
@@ -17,6 +18,7 @@ private const val NO_CHAR = -2
  * 语法规则与 [JsonParser] 保持一致：
  * - 允许任意 JSON 值作为元素（对象/数组/字符串/数字/布尔/null）；
  * - [allowComments] 为 `true` 时支持 JSONC 行注释与块注释（元素之间、元素内部均可）；
+ * - [readFeatures] 中的读取特性对分隔符与元素文本生效；
  * - 元素文本仍由 [JsonParser] 做严格语法、重复 key 与深度校验；
  * - 支持扩展空白与 UTF-8 BOM（与 [JsonParser] 的空白集合一致）。
  *
@@ -24,14 +26,18 @@ private const val NO_CHAR = -2
  * @param allowComments 是否允许 JSONC 注释
  * @param duplicateKeyPolicy 对象内重复 key 策略
  * @param maxDepth 对象/数组最大嵌套深度
+ * @param readFeatures 显式开启的 JSON 读取特性
  */
 internal class JsonArrayStreamParser(
     reader: Reader,
     private val allowComments: Boolean,
     private val duplicateKeyPolicy: DuplicateKeyPolicy,
     private val maxDepth: Int,
+    readFeatures: Set<JsonReadFeature> = JsonConfig.DEFAULT_READ_FEATURES,
 ) {
 
+    private val features = JsonReadOptions(readFeatures)
+    private val commentsEnabled = allowComments || features.allowJavaComments
     private val reader: BufferedReader = bufferedReader(reader)
     private var current: Int = NO_CHAR
     private var line: Long = 1L
@@ -59,7 +65,8 @@ internal class JsonArrayStreamParser(
             throw error("Expected '[' at top level")
         }
         take()
-        var count = 0L
+        var firstSlot = true
+        var expectValue = true
         while (true) {
             skipWhitespaceAndComments()
             checkSize(sizeProbe())
@@ -67,29 +74,53 @@ internal class JsonArrayStreamParser(
             if (next < 0) {
                 throw error("Unexpected end of input")
             }
-            if (next == ']'.code) {
-                take()
-                break
-            }
-            if (count > 0) {
+            if (expectValue) {
+                if (firstSlot && next == ']'.code) {
+                    take()
+                    break
+                }
+                if (features.allowMissingValues && next == ','.code) {
+                    consumer(NullNode.INSTANCE)
+                    take()
+                    firstSlot = false
+                    continue
+                }
+                if (features.allowMissingValues && next == ']'.code) {
+                    consumer(NullNode.INSTANCE)
+                    take()
+                    break
+                }
+                val elementLine = line
+                val text = readValueText()
+                val node = try {
+                    JsonParser(text, commentsEnabled, duplicateKeyPolicy, maxDepth, 0, features.featureSet).parse()
+                } catch (e: JsonParseException) {
+                    throw JsonParseException("Invalid JSON array element at line $elementLine: ${e.message}", e)
+                }
+                consumer(node)
+                firstSlot = false
+                expectValue = false
+            } else {
+                if (next == ']'.code) {
+                    take()
+                    break
+                }
                 if (next != ','.code) {
                     throw error("Expected ',' or ']' in array")
                 }
                 take()
                 skipWhitespaceAndComments()
                 if (peek() == ']'.code) {
-                    throw error("Trailing comma in array")
+                    if (features.allowTrailingComma) {
+                        take()
+                        break
+                    }
+                    if (!features.allowMissingValues) {
+                        throw error("Trailing comma in array")
+                    }
                 }
+                expectValue = true
             }
-            val elementLine = line
-            val text = readValueText()
-            val node = try {
-                JsonParser(text, allowComments, duplicateKeyPolicy, maxDepth).parse()
-            } catch (e: JsonParseException) {
-                throw JsonParseException("Invalid JSON array element at line $elementLine: ${e.message}", e)
-            }
-            consumer(node)
-            count++
         }
         skipWhitespaceAndComments()
         if (peek() >= 0) {
@@ -102,19 +133,24 @@ internal class JsonArrayStreamParser(
         val ch = peek()
         return when {
             ch < 0 -> throw error("Unexpected end of input")
-            ch == '"'.code -> readStringValue()
+            ch == '"'.code -> readStringValue('"'.code)
+            ch == '\''.code && features.allowSingleQuotes -> readStringValue('\''.code)
             ch == '{'.code || ch == '['.code -> readContainerValue()
             ch == 't'.code || ch == 'f'.code || ch == 'n'.code -> readLiteralValue()
-            ch == '-'.code || ch in '0'.code..'9'.code -> readNumberValue()
+            ch == '+'.code && (features.allowLeadingPlusSignForNumbers || features.allowNonNumericNumbers) -> readNumberLikeValue()
+            ch == '-'.code && features.allowNonNumericNumbers -> readNumberLikeValue()
+            ch == '-'.code -> readNumberValue()
+            ch == '.'.code && features.allowLeadingDecimalPointForNumbers -> readNumberLikeValue()
+            ch in '0'.code..'9'.code -> readNumberValue()
+            (ch == 'N'.code || ch == 'I'.code) && features.allowNonNumericNumbers -> readNumberLikeValue()
             else -> throw error("Unexpected character '${ch.toChar()}'")
         }
     }
 
     /** 读取一个字符串元素，处理转义并复制原始文本。 */
-    private fun readStringValue(): String {
+    private fun readStringValue(quote: Int): String {
         val builder = StringBuilder()
-        val open = take()
-        builder.append(open.toChar())
+        builder.append(take().toChar())
         while (true) {
             val ch = peek()
             if (ch < 0) {
@@ -132,8 +168,8 @@ internal class JsonArrayStreamParser(
                     builder.append(escaped.toChar())
                 }
 
-                ch == '"'.code -> return builder.toString()
-                ch < ' '.code -> throw error("Unescaped control character in string")
+                ch == quote -> return builder.toString()
+                ch < ' '.code && !features.allowUnescapedControlChars -> throw error("Unescaped control character in string")
             }
         }
     }
@@ -144,7 +180,7 @@ internal class JsonArrayStreamParser(
         val open = take()
         builder.append(open.toChar())
         var depth = 1
-        var inString = false
+        var quote = 0
         var escaped = false
         while (true) {
             val ch = peek()
@@ -153,16 +189,20 @@ internal class JsonArrayStreamParser(
             }
             take()
             builder.append(ch.toChar())
-            if (inString) {
+            if (quote != 0) {
                 when {
                     escaped -> escaped = false
                     ch == '\\'.code -> escaped = true
-                    ch == '"'.code -> inString = false
+                    ch == quote -> quote = 0
                 }
                 continue
             }
             when (ch) {
-                '"'.code -> inString = true
+                '"'.code -> quote = ch
+                '\''.code -> if (features.allowSingleQuotes) {
+                    quote = ch
+                }
+
                 '{'.code, '['.code -> depth++
                 '}'.code, ']'.code -> {
                     depth--
@@ -171,8 +211,12 @@ internal class JsonArrayStreamParser(
                     }
                 }
 
-                '/'.code -> if (allowComments) {
+                '/'.code -> if (commentsEnabled) {
                     copyCommentInto(builder)
+                }
+
+                '#'.code -> if (features.allowYamlComments) {
+                    copyYamlCommentInto(builder)
                 }
             }
         }
@@ -223,6 +267,22 @@ internal class JsonArrayStreamParser(
         }
     }
 
+    /** 把已消费的 `#` 之后的 YAML 行注释文本复制到元素文本中。 */
+    private fun copyYamlCommentInto(builder: StringBuilder) {
+        builder.append('#')
+        while (true) {
+            val ch = peek()
+            if (ch < 0) {
+                return
+            }
+            take()
+            builder.append(ch.toChar())
+            if (ch == '\n'.code || ch == '\r'.code) {
+                return
+            }
+        }
+    }
+
     /** 读取 `true` / `false` / `null` 字面量元素（由 [JsonParser] 严格校验）。 */
     private fun readLiteralValue(): String {
         val builder = StringBuilder()
@@ -236,7 +296,20 @@ internal class JsonArrayStreamParser(
         }
     }
 
-    /** 读取数字元素（由 [JsonParser] 严格校验语法）。 */
+    /** 读取数字/非数字混合字面量元素（由 [JsonParser] 按读取特性校验）。 */
+    private fun readNumberLikeValue(): String {
+        val builder = StringBuilder()
+        while (true) {
+            val ch = peek()
+            if (ch < 0 || isValueDelimiter(ch)) {
+                return builder.toString()
+            }
+            take()
+            builder.append(ch.toChar())
+        }
+    }
+
+    /** 读取数字元素（由 [JsonParser] 按读取特性校验语法）。 */
     private fun readNumberValue(): String {
         val builder = StringBuilder()
         while (true) {
@@ -256,7 +329,7 @@ internal class JsonArrayStreamParser(
             when {
                 ch < 0 -> return
                 isJsonWhitespace(ch) -> take()
-                allowComments && ch == '/'.code -> {
+                commentsEnabled && ch == '/'.code -> {
                     take()
                     when (peek()) {
                         '/'.code -> {
@@ -290,12 +363,23 @@ internal class JsonArrayStreamParser(
                     }
                 }
 
+                features.allowYamlComments && ch == '#'.code -> {
+                    take()
+                    while (true) {
+                        val next = peek()
+                        if (next < 0 || next == '\n'.code || next == '\r'.code) {
+                            break
+                        }
+                        take()
+                    }
+                }
+
                 else -> return
             }
         }
     }
 
-    /** 预读下一个字符；不消费，遇到 EOF 返回 `-1`。 */
+    /** 判断是否为可忽略空白，集合与 [JsonParser] 保持一致。 */
     private fun peek(): Int {
         if (current == NO_CHAR) {
             current = reader.read()
@@ -335,6 +419,14 @@ internal class JsonArrayStreamParser(
             else -> value in '\u2000'..'\u200A'
         }
     }
+
+    /** 判断是否为元素值分隔字符。 */
+    private fun isValueDelimiter(ch: Int): Boolean = ch < 0 ||
+        ch == ','.code ||
+        ch == ']'.code ||
+        ch == '}'.code ||
+        ch == ':'.code ||
+        isJsonWhitespace(ch)
 
     private fun isAsciiLetter(ch: Int): Boolean = ch in 'a'.code..'z'.code || ch in 'A'.code..'Z'.code
 

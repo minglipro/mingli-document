@@ -14,6 +14,11 @@ implementation("com.mingliqiye.document.format:protobuf:2.5.1")
 
 ```text
 ProtobufMapper
+ProtobufMapperFactory
+ProtobufConfig
+ProtobufConfigBuilder
+ProtobufReadFeature
+ProtobufWriteFeature
 ProtobufSchema
 ProtobufSchemaBuilder
 ProtobufSchemaField
@@ -33,6 +38,50 @@ import com.mingliqiye.document.format.protobuf.ProtobufMapper
 val mapper = ProtobufMapper(descriptor)
 val bytes = mapper.formatBytes(value)
 val restored = mapper.parse(bytes, Node::class.java)
+```
+
+## 配置
+
+`ProtobufConfig` 继承通用 `DocumentMapperConfig`，在通用配置基础上增加 Protobuf 专属选项；
+通过 `ProtobufConfigBuilder` 配置并传给 `ProtobufMapper` / `ProtobufMapperFactory`。
+
+### 参考实现 对齐
+
+参考实现 `Protobuf 底层库`（2.15.3 / 2.23.0 官方源码核对）**没有格式专属的
+Parser/Generator Feature 枚举**：`ProtobufFactory.getFormatReadFeatureType()` /
+`getFormatWriteFeatureType()` 均被注释并标注 "No format-specific configuration, yet"。
+参考实现 protobuf 的行为由核心 参考实现 特性控制，本模块以同名常量封装其中真正影响 wire 语义的两项，
+默认值对齐 参考实现（关闭）：
+
+| 特性 | 参考实现 对应（`legacyName`） | 默认 | 行为 |
+|---|---|---|---|
+| `ProtobufReadFeature.IGNORE_UNDEFINED` | `StreamReadFeature.IGNORE_UNDEFINED` | 关闭 | 未知 wire 字段：关闭抛 `ProtobufParseException`，开启丢弃 |
+| `ProtobufWriteFeature.IGNORE_UNKNOWN` | `JsonGenerator.Feature.IGNORE_UNKNOWN` | 关闭 | 写出未声明字段名：关闭抛 `ProtobufException`，开启跳过 |
+
+Protobuf 专属字段：`unknownFieldPolicy`（`FAIL` / `IGNORE` / `PRESERVE`，默认 `FAIL`）、
+`maxDepth`（默认 `0` 不限制）、`extensions`（默认空）。`ProtobufConfigBuilder` 同时转发全部
+通用 `DocumentMapperConfig` 便捷方法（命名策略、字符集、Node 限制、`$ref`、多态子类型、
+`DeserializationFeature` 等）。参考实现 的流生命周期特性（`AUTO_CLOSE_SOURCE` /
+`AUTO_CLOSE_TARGET` / `FLUSH_PASSED_TO_STREAM` / `AUTO_CLOSE_JSON_CONTENT`）由通用 Mapper 层
+统一处理，`USE_FAST_BIG_NUMBER_PARSER` 对二进制 wire 不适用，均不提供空开关；详见
+[docs/formats/protobuf.md](../../docs/formats/protobuf.md) 配置矩阵。
+
+```kotlin
+import com.mingliqiye.document.format.protobuf.ProtobufConfig
+import com.mingliqiye.document.format.protobuf.ProtobufMapper
+import com.mingliqiye.document.format.protobuf.ProtobufReadFeature
+import com.mingliqiye.document.format.protobuf.ProtobufUnknownFieldPolicy
+import com.mingliqiye.document.format.protobuf.ProtobufWriteFeature
+
+val config = ProtobufConfig.builder()
+    .unknownFieldPolicy(ProtobufUnknownFieldPolicy.IGNORE)
+    .maxDepth(64)
+    .enable(ProtobufReadFeature.IGNORE_UNDEFINED)
+    .enable(ProtobufWriteFeature.IGNORE_UNKNOWN)
+    .build()
+
+val mapper = ProtobufMapper(descriptor, config)
+// 或：val factory = ProtobufMapperFactory(config)
 ```
 
 ## Schema -> Descriptor
@@ -131,6 +180,7 @@ ProtobufUnknownFieldPolicy.PRESERVE // 保留为 "$unknownFields" 字段并支�
 - extension（含嵌套作用域 / repeated / message 类型）
 - MessageSet wire format
 - 未知字段策略 `FAIL` / `IGNORE` / `PRESERVE`
+- 参考实现 对齐配置 `ProtobufConfig`（读取/写出特性、未知字段策略、解析深度、extension 注册表）
 - 解析深度限制
 - 文件/流读写
 
@@ -142,6 +192,8 @@ val mapper = ProtobufMapper(
     ProtobufUnknownFieldPolicy.FAIL,
     maxDepth = 64,
 )
+// 或通过配置：
+val configured = ProtobufMapper(descriptor, ProtobufConfig.builder().maxDepth(64).build())
 ```
 
 超过限制抛出 `ProtobufParseException`。
@@ -163,6 +215,10 @@ val mapper = ProtobufMapper(
 - `$unknownFields` 中的数值按无符号十进制表达，重写时依赖 wire 类型键；不是普通业务字段。
 - Node 数字模型不支持 NaN / Infinity；proto3 `optional` 等 presence 语义不改变 Node 表示。
 - 扩展字段没有 required 语义（proto2 规范不允许 required extension）。
+- 参考实现 `Protobuf 底层库` 没有格式专属 Feature 枚举；本模块只提供其在解析/生成器中
+  真正查询的两项核心特性（`IGNORE_UNDEFINED` / `IGNORE_UNKNOWN`），其余生命周期/数字解析特性由
+  通用 Mapper 层处理或对二进制 wire 不适用，不提供空开关。
+- `ProtobufConfigBuilder.base(DocumentMapperConfig)` 与其它通用配置便捷方法互斥。
 
 ## 构建
 
@@ -185,6 +241,8 @@ val factory = ProtobufMapperFactory(
 val userMapper = factory.mapper(userDescriptor)
 val orderMapper = factory.mapper(orderDescriptor)
 ```
+
+也可以传入完整 `ProtobufConfig`：`val factory = ProtobufMapperFactory(config)`。
 
 Mapper 是线程安全的读对象，建议按 Descriptor 复用，而不是每次调用都新建。
 Descriptor / FileDescriptor / extension 注册表也应只构建一次。

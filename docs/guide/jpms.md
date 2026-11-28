@@ -134,8 +134,8 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
    - `--module-path`：由 `compileClasspath` 用 `artifactView` 重新选择 `LibraryElements=jar`
      变体得到——同构建内的依赖模块使用打好的 Multi-Release jar（各自已带显式描述）；第三方
      依赖使用普通 jar：`kotlin.stdlib`、`jakarta.validation`、`jakarta.persistence`、
-     `jackson-core` / `jackson-databind` / `jackson-dataformat-cbor` /
-     `jackson-dataformat-smile`、`snakeyaml`、`jakarta.xml.bind` 等是显式模块；
+     `JSON Token 底层库` / `数据绑定底层库` / `CBOR 底层库` /
+     `Smile 底层库`、`snakeyaml`、`jakarta.xml.bind` 等是显式模块；
      `org.apache.avro`、`com.amazon.ion`、`tomlj`、
      `org.apache.commons.csv`、`com.google.protobuf`、`org.hibernate.orm.core` 等是自动模块；
    - `-encoding UTF-8`、`-proc:none`。
@@ -163,13 +163,13 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
 | `com.mingliqiye.document.validation` | `com.mingliqiye.document.validation` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.serialization`、`transitive jakarta.validation` |
 | `com.mingliqiye.document.jpa` | `com.mingliqiye.document.jpa`、`com.mingliqiye.document.jpa.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.serialization`、`com.mingliqiye.document.exception`、`transitive jakarta.persistence`、`java.desktop`、`java.sql` |
 | `com.mingliqiye.document.format.avro` | `.format.avro`、`.format.avro.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.schema`、`transitive com.mingliqiye.document.serialization`、`org.apache.avro`（自动模块） |
-| `com.mingliqiye.document.format.cbor` | `.format.cbor`、`.format.cbor.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.fasterxml.jackson.core`、`com.fasterxml.jackson.databind`、`com.fasterxml.jackson.dataformat.cbor` |
+| `com.mingliqiye.document.format.cbor` | `.format.cbor`、`.format.cbor.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`第三方底层库坐标.core`、`第三方底层库坐标.databind`、`第三方底层库坐标.dataformat.cbor` |
 | `com.mingliqiye.document.format.csv` | `.format.csv`、`.format.csv.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.schema`、`transitive com.mingliqiye.document.serialization`、`org.apache.commons.csv`（自动模块） |
 | `com.mingliqiye.document.format.ion` | `.format.ion`、`.format.ion.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.amazon.ion`（自动模块） |
 | `com.mingliqiye.document.format.json` | `.format.json`、`.format.json.exception`、`.format.json.schema` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`（无第三方依赖） |
 | `com.mingliqiye.document.format.properties` | `.format.properties`、`.format.properties.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`（无第三方依赖） |
 | `com.mingliqiye.document.format.protobuf` | `.format.protobuf`、`.format.protobuf.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.schema`、`transitive com.mingliqiye.document.serialization`、`com.google.protobuf`（自动模块） |
-| `com.mingliqiye.document.format.smile` | `.format.smile`、`.format.smile.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.fasterxml.jackson.core`、`com.fasterxml.jackson.dataformat.smile` |
+| `com.mingliqiye.document.format.smile` | `.format.smile`、`.format.smile.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`第三方底层库坐标.core`、`第三方底层库坐标.dataformat.smile` |
 | `com.mingliqiye.document.format.toml` | `.format.toml`、`.format.toml.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`tomlj`（自动模块） |
 | `com.mingliqiye.document.format.xml` | `.format.xml`、`.format.xml.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.mingliqiye.document.annotation`、`java.xml` |
 | `com.mingliqiye.document.format.yaml` | `.format.yaml`、`.format.yaml.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`org.yaml.snakeyaml` |
@@ -218,18 +218,18 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
   `api(project(...))` 的同构建模块（`core` / `exception` / `schema` / `serialization` /
   `annotation` / `jpa`）用 `requires transitive`，消费方 `requires` 一个格式模块即可直接使用
   公开 API 里的 `Node`、`DocumentMapper`、`DocumentSchema` 等类型；第三方依赖按模块形态区分：
-  `jackson-core` / `jackson-databind` / `jackson-dataformat-cbor` /
-  `jackson-dataformat-smile` / `snakeyaml` 自带显式 `module-info`（Multi-Release），
+  `JSON Token 底层库` / `数据绑定底层库` / `CBOR 底层库` /
+  `Smile 底层库` / `snakeyaml` 自带显式 `module-info`（Multi-Release），
   其余 `org.apache.avro`、`com.amazon.ion`、`tomlj`、`org.apache.commons.csv`、
   `com.google.protobuf`、`org.hibernate.orm.core` 是自动模块，按本库约定只用普通
   `requires`（自动模块导出全部包，但没有 `requires transitive` 语义，消费方直接使用这些
   第三方类型时建议自行 `requires`）。
 - 第三方模块名均经 `jar --describe-module` 实测核对：
-  `jackson-core` → `com.fasterxml.jackson.core`，`jackson-dataformat-cbor` →
-  `com.fasterxml.jackson.dataformat.cbor`（`module-info` 还 requires
-  `com.fasterxml.jackson.databind`，运行时 module path 上必须提供 databind 与
-  `com.fasterxml.jackson.annotation`），`jackson-dataformat-smile` →
-  `com.fasterxml.jackson.dataformat.smile`（同理需要 databind），`snakeyaml` →
+  `JSON Token 底层库` → `第三方底层库坐标.core`，`CBOR 底层库` →
+  `第三方底层库坐标.dataformat.cbor`（`module-info` 还 requires
+  `第三方底层库坐标.databind`，运行时 module path 上必须提供 databind 与
+  `第三方底层库坐标.annotation`），`Smile 底层库` →
+  `第三方底层库坐标.dataformat.smile`（同理需要 databind），`snakeyaml` →
   `org.yaml.snakeyaml`，`avro` → `org.apache.avro`（自动模块），`ion-java` →
   `com.amazon.ion`（自动模块），`tomlj` → `tomlj`（自动模块，其 antlr4-runtime 依赖也是
   自动模块），`commons-csv` → `org.apache.commons.csv`（自动模块），`protobuf-java` →
@@ -502,7 +502,7 @@ JPMS yaml smoke OK
 `lib/` 需要：对应格式模块 jar + `core` / `exception` / `serialization` / `annotation`
 jar + `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.2-Final.jar`、
 `alias-for-1.0.5.jar`，以及该格式的第三方依赖（JSON 是
-`jackson-core-2.15.3.jar`；YAML 是 `snakeyaml-2.6.jar`）。
+`JSON Token 底层库-2.15.3.jar`；YAML 是 `snakeyaml-2.6.jar`）。
 `--show-module-resolution` 中可以看到格式模块的 `requires` 逐条解析（节选）：
 
 ```text
@@ -639,7 +639,7 @@ smoke.codegen binds com.mingliqiye.document.codegen file:///.../lib/codegen-2.5.
 `lib/` 需要本批 5 个模块 jar + `annotation` / `exception` / `core` / `schema` /
 `serialization` / `format-json` jar，以及 `kotlin-stdlib-2.0.0.jar`、
 `kotlin-reflect-2.0.0.jar`（`serialization-kotlin`）、`alias-for-1.0.5.jar`、
-`mingli-exception-1.1.2-Final.jar`、`jackson-core-2.15.3.jar`（record smoke 的 `JsonMapper`）、
+`mingli-exception-1.1.2-Final.jar`、`JSON Token 底层库-2.15.3.jar`（record smoke 的 `JsonMapper`）、
 `symbol-processing-api-2.0.0-1.0.21.jar`（`codegen` 的 KSP 依赖）。
 
 ### 显式模块与自动模块的解析差异
@@ -652,8 +652,8 @@ smoke.codegen binds com.mingliqiye.document.codegen file:///.../lib/codegen-2.5.
   `com.mingliqiye.utils.aliasfor`（`serialization` 需要）、
   `mingli.exception`（`exception` / `serialization` 需要）、`kotlin.stdlib`（全部需要）、
   `kotlin.reflect`（`serialization-kotlin` 需要）、`jakarta.validation`（`validation` 需要）、
-  `jakarta.persistence`（`jpa` / `jpa-hibernate` 需要）、`jackson-core` / `jackson-databind` /
-  `jackson-dataformat-cbor` / `jackson-dataformat-smile`（`format-cbor` / `format-smile` /
+  `jakarta.persistence`（`jpa` / `jpa-hibernate` 需要）、`JSON Token 底层库` / `数据绑定底层库` /
+  `CBOR 底层库` / `Smile 底层库`（`format-cbor` / `format-smile` /
   `format-json` 需要）、`org.yaml.snakeyaml`（`format-yaml` 需要）、
   `symbol.processing.api`（`codegen` 需要，自动模块）、`org.hibernate.orm.core`
   （`jpa-hibernate` 需要）。缺任何一个都会在编译或启动解析阶段失败。其余格式的第三方依赖
@@ -1167,7 +1167,7 @@ codegen
     Kotlin 库的支持仍在演进。
 11. **依赖必须同时放在 module path 上**：显式模块不会自动带上兄弟模块，`kotlin-stdlib`、
     `kotlin-reflect`、`mingli-exception`、`alias-for`、`jakarta.validation`、
-    `jakarta.persistence`、`jackson-*`、`snakeyaml`、`symbol.processing.api`、
+    `jakarta.persistence`、`参考实现-*`、`snakeyaml`、`symbol.processing.api`、
     `hibernate-core` 以及格式模块的第三方依赖都必须提供；命名模块
     默认读不到 classpath（unnamed module）里的类。
 12. **split package 仍需注意**：本库 26 个模块已全部改为显式 `exports`，但第三方自动模块

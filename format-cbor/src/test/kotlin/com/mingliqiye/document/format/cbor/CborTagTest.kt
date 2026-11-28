@@ -202,14 +202,14 @@ class CborTagTest {
 
     @Test
     fun specialTagsAreNormalizedByJacksonDecoding() {
-        // tag 2 bignum 2^64：Jackson 已解码为整数，保真模式下不单独包装；
+        // tag 2 bignum 2^64：上游实现 已解码为整数，保真模式下不单独包装；
         // 写出时整数策略会重新编码为等价 bignum（tag 2）。
         val bignumBytes = "c249010000000000000000"
         val bignum = CborReader(hex(bignumBytes), preserveTags = true).read()
         assertEquals(NumberNode.ofRaw("18446744073709551616"), bignum)
         assertEquals(bignumBytes, bignum.toCborBytes(preserveTags = true).toHex())
 
-        // tag 4 十进制分数：Jackson 已解码为小数；写出时重新编码为 tag 4，字节一致。
+        // tag 4 十进制分数：上游实现 已解码为小数；写出时重新编码为 tag 4，字节一致。
         val decimalBytes = "c4822119013a"
         val decimal = CborReader(hex(decimalBytes), preserveTags = true).read()
         assertEquals(NumberNode.ofRaw("3.14"), decimal)

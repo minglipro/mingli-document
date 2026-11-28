@@ -1,11 +1,21 @@
 package com.mingliqiye.document.format.yaml
 
+import com.mingliqiye.document.serialization.DeserializationFeature
 import com.mingliqiye.document.serialization.DocumentBaseConverter
+import com.mingliqiye.document.serialization.DocumentBeanValidator
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.MissingFieldPolicy
+import com.mingliqiye.document.serialization.PropertyNamingStrategy
+import com.mingliqiye.document.serialization.RemoteReferenceResolver
+import java.nio.charset.Charset
 
 /**
  * [YamlConfig] 构建器。
+ *
+ * 除 YAML 专属选项外，这里同时转发 [DocumentMapperConfig] 的公共便捷方法
+ * （命名策略、字符集、文件写入、输入/Node 限制、引用、Bean 校验与通用
+ * [DeserializationFeature]），避免使用 YAML 配置时还要手工拼装
+ * `DocumentMapperConfig`。
  */
 public class YamlConfigBuilder {
 
@@ -13,6 +23,15 @@ public class YamlConfigBuilder {
     private var pretty = false
     private var maxAliases = 0
     private var allowCustomTags = false
+    private val readFeatures = YamlConfig.DEFAULT_READ_FEATURES.toMutableSet()
+    private val writeFeatures = YamlConfig.DEFAULT_WRITE_FEATURES.toMutableSet()
+    private var allowDuplicateKeys = false
+    private var codePointLimit = 0
+    private var indent = 2
+    private var lineWidth = 0
+    private var allowUnicode = true
+    private var explicitEnd = false
+    private var defaultFlowStyle: YamlFlowStyle? = null
 
     /**
      * 为指定字段绑定转换器。
@@ -56,6 +75,112 @@ public class YamlConfigBuilder {
     }
 
     /**
+     * 设置未标注 `@DocumentName` 的字段命名策略。
+     */
+    public fun namingStrategy(strategy: PropertyNamingStrategy): YamlConfigBuilder {
+        base.namingStrategy(strategy)
+        return this
+    }
+
+    /**
+     * 设置文本文件/流读写字符集，默认 UTF-8。
+     */
+    public fun fileCharset(charset: Charset): YamlConfigBuilder {
+        base.fileCharset(charset)
+        return this
+    }
+
+    /**
+     * 设置写文件时是否使用临时文件 + 原子替换。
+     */
+    public fun atomicFileWrite(atomic: Boolean): YamlConfigBuilder {
+        base.atomicFileWrite(atomic)
+        return this
+    }
+
+    /**
+     * 设置写文件时是否自动创建父目录。
+     */
+    public fun createParentDirectories(create: Boolean): YamlConfigBuilder {
+        base.createParentDirectories(create)
+        return this
+    }
+
+    /**
+     * 设置单次输入最大字节数，0 表示不限制。
+     */
+    public fun maxInputSize(max: Long): YamlConfigBuilder {
+        base.maxInputSize(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树中单个字符串最大长度，0 表示不限制。
+     */
+    public fun maxStringLength(max: Int): YamlConfigBuilder {
+        base.maxStringLength(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大深度，0 表示不限制（同时作为 SnakeYAML 解析深度上限）。
+     */
+    public fun maxNodeDepth(max: Int): YamlConfigBuilder {
+        base.maxNodeDepth(max)
+        return this
+    }
+
+    /**
+     * 设置 Node 树最大节点数，0 表示不限制。
+     */
+    public fun maxNodeCount(max: Long): YamlConfigBuilder {
+        base.maxNodeCount(max)
+        return this
+    }
+
+    /**
+     * 设置远程 `$ref` 解析器。
+     */
+    public fun remoteReferenceResolver(resolver: RemoteReferenceResolver?): YamlConfigBuilder {
+        base.remoteReferenceResolver(resolver)
+        return this
+    }
+
+    /**
+     * 设置 Bean 校验器（根对象序列化入口/反序列化出口各执行一次）。
+     */
+    public fun beanValidator(validator: DocumentBeanValidator?): YamlConfigBuilder {
+        base.beanValidator(validator)
+        return this
+    }
+
+    /**
+     * 开启通用反序列化特性。
+     */
+    public fun enable(feature: DeserializationFeature): YamlConfigBuilder {
+        base.enable(feature)
+        return this
+    }
+
+    /**
+     * 关闭通用反序列化特性。
+     */
+    public fun disable(feature: DeserializationFeature): YamlConfigBuilder {
+        base.disable(feature)
+        return this
+    }
+
+    /**
+     * 设置通用反序列化特性开关。
+     */
+    public fun configure(feature: DeserializationFeature, enabled: Boolean): YamlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 设置 `DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES`。
+     */
+    public fun failOnNullForPrimitives(fail: Boolean): YamlConfigBuilder = configure(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES, fail)
+
+    /**
      * `format()` 是否默认输出块格式 YAML。
      */
     public fun pretty(pretty: Boolean): YamlConfigBuilder {
@@ -90,6 +215,165 @@ public class YamlConfigBuilder {
      */
     public fun allowCustomTags(allow: Boolean): YamlConfigBuilder {
         this.allowCustomTags = allow
+        return this
+    }
+
+    /**
+     * 开启 YAML 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: YamlReadFeature): YamlConfigBuilder {
+        readFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 开启多个 YAML 读取特性。
+     */
+    public fun enable(first: YamlReadFeature, vararg others: YamlReadFeature): YamlConfigBuilder {
+        enable(first)
+        for (feature in others) {
+            enable(feature)
+        }
+        return this
+    }
+
+    /**
+     * 关闭 YAML 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: YamlReadFeature): YamlConfigBuilder {
+        readFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 关闭多个 YAML 读取特性。
+     */
+    public fun disable(first: YamlReadFeature, vararg others: YamlReadFeature): YamlConfigBuilder {
+        disable(first)
+        for (feature in others) {
+            disable(feature)
+        }
+        return this
+    }
+
+    /**
+     * 设置 YAML 读取特性开关。
+     */
+    public fun configure(feature: YamlReadFeature, enabled: Boolean): YamlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 开启 YAML 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: YamlWriteFeature): YamlConfigBuilder {
+        writeFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 开启多个 YAML 写出特性。
+     */
+    public fun enable(first: YamlWriteFeature, vararg others: YamlWriteFeature): YamlConfigBuilder {
+        enable(first)
+        for (feature in others) {
+            enable(feature)
+        }
+        return this
+    }
+
+    /**
+     * 关闭 YAML 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: YamlWriteFeature): YamlConfigBuilder {
+        writeFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 关闭多个 YAML 写出特性。
+     */
+    public fun disable(first: YamlWriteFeature, vararg others: YamlWriteFeature): YamlConfigBuilder {
+        disable(first)
+        for (feature in others) {
+            disable(feature)
+        }
+        return this
+    }
+
+    /**
+     * 设置 YAML 写出特性开关。
+     */
+    public fun configure(feature: YamlWriteFeature, enabled: Boolean): YamlConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 设置是否允许重复 mapping key，默认 `false`。
+     */
+    public fun allowDuplicateKeys(allow: Boolean): YamlConfigBuilder {
+        this.allowDuplicateKeys = allow
+        return this
+    }
+
+    /**
+     * 设置单次输入最大 code point 数量，0 表示使用 SnakeYAML 默认值。
+     */
+    public fun codePointLimit(limit: Int): YamlConfigBuilder {
+        require(limit >= 0) { "codePointLimit must be >= 0" }
+        this.codePointLimit = limit
+        return this
+    }
+
+    /**
+     * 设置块式输出缩进空格数（2..9），默认 2。
+     */
+    public fun indent(indent: Int): YamlConfigBuilder {
+        require(indent >= YamlConfig.MIN_INDENT && indent <= YamlConfig.MAX_INDENT) {
+            "indent must be in ${YamlConfig.MIN_INDENT}..${YamlConfig.MAX_INDENT}, but was $indent"
+        }
+        this.indent = indent
+        return this
+    }
+
+    /**
+     * 设置输出行宽，0 表示使用 SnakeYAML 默认值（80）。
+     */
+    public fun lineWidth(width: Int): YamlConfigBuilder {
+        require(width >= 0) { "lineWidth must be >= 0" }
+        this.lineWidth = width
+        return this
+    }
+
+    /**
+     * 设置是否直接输出 Unicode 字符（`false` 时转义），默认 `true`。
+     */
+    public fun allowUnicode(allow: Boolean): YamlConfigBuilder {
+        this.allowUnicode = allow
+        return this
+    }
+
+    /**
+     * 设置是否在文档末尾输出显式结束标记 `...`，默认 `false`。
+     */
+    public fun explicitEnd(explicit: Boolean): YamlConfigBuilder {
+        this.explicitEnd = explicit
+        return this
+    }
+
+    /**
+     * 设置块式/流式布局；不设置时由 [pretty] 推导。
+     */
+    public fun defaultFlowStyle(style: YamlFlowStyle?): YamlConfigBuilder {
+        this.defaultFlowStyle = style
         return this
     }
 
@@ -157,5 +441,19 @@ public class YamlConfigBuilder {
     /**
      * 构建配置。
      */
-    public fun build(): YamlConfig = YamlConfig(base.build(), pretty, maxAliases, allowCustomTags)
+    public fun build(): YamlConfig = YamlConfig(
+        base.build(),
+        pretty,
+        maxAliases,
+        allowCustomTags,
+        readFeatures.toSet(),
+        writeFeatures.toSet(),
+        allowDuplicateKeys,
+        codePointLimit,
+        indent,
+        lineWidth,
+        allowUnicode,
+        explicitEnd,
+        defaultFlowStyle,
+    )
 }

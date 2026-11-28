@@ -7,18 +7,21 @@ import com.mingliqiye.document.format.json.exception.JsonParseException
  * JSON 读取入口。
  *
  * 默认接受标准 JSON、额外空白、`//` 行注释和块注释（即 JSONC 风格）；
- * 传入 `allowComments = false` 可恢复严格 JSON 模式。
+ * 传入 `allowComments = false` 可恢复严格 JSON 模式。更细的语法放宽通过
+ * [readFeatures] 逐项开启（语义对齐 上游实现 2.15.3）。
  *
  * @param source JSON 文本
  * @param allowComments 是否允许注释，默认 `true`
  * @param duplicateKeyPolicy 对象内重复 key 的处理策略，默认 [DuplicateKeyPolicy.LAST_WINS]
  * @param maxDepth 对象/数组最大嵌套深度，必须为正数，默认 [JsonConfig.DEFAULT_MAX_DEPTH]
+ * @param readFeatures 显式开启的 JSON 读取特性，默认全部关闭
  */
 public class JsonReader(
     private val source: String,
     private val allowComments: Boolean = true,
     private val duplicateKeyPolicy: DuplicateKeyPolicy = DuplicateKeyPolicy.LAST_WINS,
     private val maxDepth: Int = JsonConfig.DEFAULT_MAX_DEPTH,
+    private val readFeatures: Set<JsonReadFeature> = JsonConfig.DEFAULT_READ_FEATURES,
 ) {
 
     /**
@@ -33,7 +36,7 @@ public class JsonReader(
      * @throws JsonParseException JSON 格式非法、重复 key 策略为
      * [DuplicateKeyPolicy.FAIL] 且存在重复 key、或嵌套深度超过 [maxDepth] 时抛出
      */
-    public fun read(): Node = JsonParser(source, allowComments, duplicateKeyPolicy, maxDepth).parse()
+    public fun read(): Node = JsonParser(source, allowComments, duplicateKeyPolicy, maxDepth, 0, readFeatures).parse()
 
     public companion object {
 

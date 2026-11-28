@@ -1,6 +1,6 @@
 ---
 title: XML
-description: format-xml 模块：XmlMapper、XmlConfig、type/nil 协议、属性映射、PREFIX/CLARK 命名空间、混合内容策略与 XXE 防护
+description: format-xml 模块：XmlMapper、XmlConfig、type/nil 协议、参考实现 XML 读/写特性（声明/xsi:type/unwrap）、属性映射、PREFIX/CLARK 命名空间、名称处理、混合内容策略与 XXE 防护
 ---
 
 # XML
@@ -8,7 +8,8 @@ description: format-xml 模块：XmlMapper、XmlConfig、type/nil 协议、属�
 `format-xml` 提供 XML 读写，核心类型是 `XmlMapper`。
 
 XML 没有原生类型信息，模块可选择用 `type` / `nil` 协议保存节点类型；`type` 默认不输出，
-属性、命名空间与混合内容通过 `XmlConfig` 按需启用。
+属性、命名空间与混合内容通过 `XmlConfig` 按需启用。读/写特性（`XmlReadFeature` /
+`XmlWriteFeature`）与 Builder 选项对齐 参考实现 XML，默认值对齐 参考实现 XML 3.x。
 
 ## Maven 坐标与依赖
 
@@ -30,6 +31,11 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 
 - **`type` / `nil` 协议**：null 默认输出 `xsi:nil="true"`；用 `typeAttributes(true)` 开启后元素上额外输出
   `type="object|array|string|number|boolean|binary"`，保证非字符串标量严格无损往返；
+- **参考实现 XML 读/写特性**：`XmlReadFeature`（`AUTO_DETECT_XSI_TYPE`、`EMPTY_ELEMENT_AS_NULL`、
+  `PROCESS_XSI_NIL`）与 `XmlWriteFeature`（XML 声明、XML 1.1、standalone、xsi:nil、根对象展开、
+  xsi:type、Schema 浮点），默认值对齐 参考实现 XML 3.x，可用 `legacy2Defaults()` 切 2.x 默认；
+- **Builder 选项**：`defaultUseWrapper`、`nameForTextElement`、`rootName`、`nameProcessor`；
+- **XML 名称处理**：`XmlNameProcessor` / `XmlNameProcessors`（passthrough / replacement / base64 / alwaysOnBase64）；
 - **属性映射**：启用后 XML attribute 映射为对象字段 `attributePrefix + localName`（默认 `@id`），写出时把带前缀的标量字段写成属性；
 - **命名空间**：`PREFIX`（`prefix:local` + `xmlns` 属性字段）与 `CLARK`（`{uri}local`，写出自动分配前缀）两种模式；
 - **混合内容策略**：`PRESERVE`（默认，文本进 `#text`）/ `PRESERVE_ORDERED`（额外 `#content` 有序数组）/ `REJECT`；
@@ -53,8 +59,19 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 | `itemsKey` | `String` | `"#items"` | 带属性数组元素的数组内容字段名 |
 | `contentKey` | `String` | `"#content"` | 有序混合内容数组字段名 |
 | `mixedContentPolicy` | `XmlMixedContentPolicy` | `PRESERVE` | 混合内容策略 |
+| `maxDepth` | `Int` | `512` | 解析最大元素嵌套深度（与通用 `maxNodeDepth` 取较小值） |
+| `typeAttributes` | `Boolean` | `false` | 是否输出 `type="..."` 协议属性 |
+| `readFeatures` | `Set<XmlReadFeature>` | `{AUTO_DETECT_XSI_TYPE, PROCESS_XSI_NIL}` | 读取特性（对齐 参考实现 XML 3.x） |
+| `writeFeatures` | `Set<XmlWriteFeature>` | `{WRITE_NULLS_AS_XSI_NIL, UNWRAP_ROOT_OBJECT_NODE, AUTO_DETECT_XSI_TYPE, WRITE_XML_SCHEMA_CONFORMING_FLOATS}` | 写出特性（对齐 参考实现 XML 3.x） |
+| `defaultUseWrapper` | `Boolean` | `true` | 数组字段是否默认使用同名包装元素 |
+| `nameProcessor` | `XmlNameProcessor` | `passthrough` | 元素/属性名处理器 |
 
-常量：`XmlConfig.DEFAULT_ATTRIBUTE_PREFIX = "@"`、`DEFAULT_TEXT_KEY = "#text"`、`DEFAULT_ITEMS_KEY = "#items"`、`DEFAULT_CONTENT_KEY = "#content"`。
+派生只读属性：`attributeMode`、`clarkNames`、`emptyElementAsNull`、`processXsiNil`、
+`autoDetectXsiType`、`writeNullsAsXsiNil`、`writeXmlDeclaration`、`writeXml11`、
+`writeStandaloneYesToXmlDeclaration`、`unwrapRootObjectNode`、`writeAutoDetectXsiType`、
+`writeSchemaConformingFloats`。
+
+常量：`XmlConfig.DEFAULT_ATTRIBUTE_PREFIX = "@"`、`DEFAULT_TEXT_KEY = "#text"`、`DEFAULT_ITEMS_KEY = "#items"`、`DEFAULT_CONTENT_KEY = "#content"`、`DEFAULT_ROOT_NAME = "root"`、`DEFAULT_MAX_DEPTH = 512`、`XSI_NAMESPACE`、`XSD_NAMESPACE`、`DEFAULT_READ_FEATURES`、`DEFAULT_WRITE_FEATURES`。
 
 `XmlConfigBuilder` 方法：
 
@@ -62,6 +79,10 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 |---|---|
 | `field(Class, String, DocumentBaseConverter)` | 字段转换器 |
 | `missingFieldPolicy` / `failOnUnknownFields` / `writeNulls` | 通用 Bean 映射选项 |
+| `namingStrategy` / `fileCharset` / `atomicFileWrite` / `createParentDirectories` | 通用字段命名与文件读写选项 |
+| `maxInputSize` / `maxStringLength` / `maxNodeDepth` / `maxNodeCount` | 通用输入/Node 限制 |
+| `beanValidator` / `remoteReferenceResolver` | 根对象校验与远程 `$ref` |
+| `enable/disable/configure(DeserializationFeature)` / `failOnNullForPrimitives` | 通用反序列化特性 |
 | `rootName(String)` | 根元素名 |
 | `attributePrefix(String)` | 启用属性映射并指定前缀（不能为空） |
 | `attributeMode(Boolean)` | 开关属性映射；开启时默认前缀 `@` |
@@ -69,9 +90,13 @@ implementation("com.mingliqiye.document.format:xml:2.5.1")
 | `namespaceMode(XmlNamespaceMode)` | `PREFIX` / `CLARK` |
 | `textKey(String)` / `itemsKey(String)` / `contentKey(String)` | 自定义保留字段名（不能为空） |
 | `mixedContentPolicy(XmlMixedContentPolicy)` | 混合内容策略 |
+| `defaultUseWrapper(Boolean)` | 数组字段是否默认使用包装元素，默认 `true` |
+| `nameForTextElement(String)` | 参考实现 Builder 同名选项，本库等价 `textKey` |
+| `nameProcessor(XmlNameProcessor)` | XML 名称处理器 |
 | `typeAttributes(Boolean)` | 是否输出 `type="..."` 协议属性，默认 `false` |
-| `enable/disable/configure(XmlReadFeature)` | Jackson 风格读取特性：`EMPTY_ELEMENT_AS_NULL`、`PROCESS_XSI_NIL` |
-| `enable/disable/configure(XmlWriteFeature)` | Jackson 风格写出特性：`WRITE_NULLS_AS_XSI_NIL` |
+| `enable/disable/configure(XmlReadFeature)` | 参考实现 风格读取特性，默认见上表 |
+| `enable/disable/configure(XmlWriteFeature)` | 参考实现 风格写出特性，默认见上表 |
+| `legacy2Defaults()` / `modernDefaults()` | 切换 参考实现 2.x / 3.x 默认特性 |
 | `subtype(...)` / `typeProperty(...)` | 多态子类型 |
 | `resolveReferences` / `writeReferences` | 本地 `$ref` |
 | `build()` | 构建 `XmlConfig` |
@@ -111,6 +136,129 @@ val mapper = XmlMapper(
 val mapper = XmlMapper.builder()
     .config(XmlConfig.builder().rootName("user").build())
     .build()
+```
+
+## 参考实现 XML 读/写特性
+
+读/写特性枚举与 参考实现 XML 3.x 一一对应，默认值也采用 3.x 默认；`XmlConfigBuilder.legacy2Defaults()`
+关闭 3.x 相比 2.x 默认开启的 5 个特性，`modernDefaults()` 恢复。
+
+### `XmlReadFeature`
+
+| 特性 | 3.x 默认 | 2.x 默认 | 本库行为 |
+|---|---|---|---|
+| `AUTO_DETECT_XSI_TYPE` | 开 | 关 | 识别 `xsi:type` 的 XSD 内建标量类型（`xs:string`/`xs:boolean`/整数族/`xs:decimal`/`xs:double`/`xs:base64Binary`/`xs:hexBinary` 等），映射为对应 Node 类型；未知类型回退结构推断。Node 模型无 Java 类信息，不做多态子类解析 |
+| `EMPTY_ELEMENT_AS_NULL` | 关 | 关 | `<age/>` 读为 `NullNode`（关闭时为空字符串） |
+| `PROCESS_XSI_NIL` | 开 | 开 | 识别 `xsi:nil="true"`（以及无前缀 `nil="true"` 协议属性） |
+
+### `XmlWriteFeature`
+
+| 特性 | 3.x 默认 | 2.x 默认 | 本库行为 |
+|---|---|---|---|
+| `WRITE_XML_DECLARATION` | 关 | 关 | 输出 `<?xml version="1.0" encoding="{fileCharset}"?>` |
+| `WRITE_XML_1_1` | 关 | 关 | 声明 `version="1.1"`（隐含写出声明）；文本/属性控制字符写成 `&#x..;` 字符引用 |
+| `WRITE_STANDALONE_YES_TO_XML_DECLARATION` | 关 | 关 | 已写出声明时追加 `standalone="yes"`（未写声明时不生效，与 参考实现 一致） |
+| `WRITE_NULLS_AS_XSI_NIL` | 开 | 关 | null 写 `xsi:nil="true"`；关闭时写空元素 |
+| `UNWRAP_ROOT_OBJECT_NODE` | 开 | — | 仅对“以 Node 树显式写出”生效：单字段 `ObjectNode` 用字段名作根元素名；Bean 序列化、显式 `rootName`/`@DocumentRootName` 时不展开；单字段是属性/保留键时保持 `<root>` |
+| `AUTO_DETECT_XSI_TYPE` | 开 | 关 | 按需写 `xsi:type`：看起来像数字/布尔的字符串写 `xs:string`、二进制写 `xs:base64Binary`、特殊浮点写 `xs:double`，保证读取可还原；`typeAttributes(true)` 时不再写 |
+| `WRITE_XML_SCHEMA_CONFORMING_FLOATS` | 开 | 关 | `Infinity`/`+Infinity` → `INF`、`-Infinity` → `-INF`、`NaN` 保持 |
+
+```kotlin
+import com.mingliqiye.document.format.xml.XmlConfig
+import com.mingliqiye.document.format.xml.XmlReadFeature
+import com.mingliqiye.document.format.xml.XmlWriteFeature
+
+// 参考实现 2.x 默认
+val 参考实现2 = XmlConfig.builder().legacy2Defaults().build()
+check(XmlReadFeature.AUTO_DETECT_XSI_TYPE !in 参考实现2.readFeatures)
+check(XmlWriteFeature.WRITE_NULLS_AS_XSI_NIL !in 参考实现2.writeFeatures)
+
+// 按需开启声明与 1.1
+val declared = XmlConfig.builder()
+    .enable(XmlWriteFeature.WRITE_XML_DECLARATION)
+    .enable(XmlWriteFeature.WRITE_XML_1_1)
+    .enable(XmlWriteFeature.WRITE_STANDALONE_YES_TO_XML_DECLARATION)
+    .build()
+```
+
+`xsi:type` 往返示例：
+
+```kotlin
+import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
+import com.mingliqiye.document.format.xml.XmlConfig
+import com.mingliqiye.document.format.xml.XmlReader
+import com.mingliqiye.document.format.xml.XmlWriteFeature
+
+// 默认写出：StringNode("123") 需要 xs:string 才能与数字区分
+val node = ObjectNode.of("value" to StringNode.of("123"))
+val xml = node.toXmlString(
+    writeFeatures = XmlConfig.DEFAULT_WRITE_FEATURES - XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE,
+)
+// <root type="object" xmlns:xsi="..." xmlns:xs="..."><value xsi:type="xs:string">123</value></root>
+val restored = XmlReader(xml).read()
+check(restored.asObject()["value"] is StringNode)
+```
+
+## Builder 选项
+
+### `defaultUseWrapper(boolean)`
+
+对齐 参考实现 `XmlMapper.Builder.defaultUseWrapper`，默认 `true`：
+
+```xml
+<!-- true（默认）：集合使用同名包装元素 -->
+<tags><item>a</item><item>b</item></tags>
+
+<!-- false：无包装，重复元素 -->
+<tags>a</tags><tags>b</tags>
+```
+
+- 只影响普通数组字段的写出；带属性的数组包装（`#items`）与根数组保持包装；
+- 读取端两种形式都接受（同名重复元素合并为 `ArrayNode`），Bean 的 `List` 字段可正常还原；
+- 无包装时空数组不写出；单元素数组与标量在 XML 上不可区分（需要严格往返时保持默认 `true`）。
+
+### `nameForTextElement(String)`
+
+对齐 参考实现 `XmlMapper.Builder.nameForTextElement`。本库 Node 模型需要具体字段名承载元素文本，
+因此该选项等价于 `textKey`：
+
+```kotlin
+val config = XmlConfig.builder()
+    .attributePrefix("@")
+    .nameForTextElement("value")   // 等价 textKey("value")
+    .build()
+// <price currency="CNY">100</price> ↔ { "@currency": "CNY", "value": 100 }
+```
+
+差异：参考实现 默认伪属性名为空字符串，本库默认保留既有 `#text`。
+
+### `rootName` 与 `@DocumentRootName`
+
+根元素名优先级：类上 `@DocumentRootName` > `XmlConfig.rootName` > `"root"`。
+开启 `UNWRAP_ROOT_OBJECT_NODE` 时，Node 树单字段根对象会忽略该根名、改用字段名。
+
+### XML 名称处理 `XmlNameProcessor`
+
+对齐 参考实现 `XmlNameProcessor`，写出时对元素/属性本地名调用 `encode`，读取时调用 `decode`，
+之后仍会应用本库 `_xHHHH_` 非法字符转义。
+
+| 处理器 | 行为 | 可逆 |
+|---|---|---|
+| `XmlNameProcessors.passthrough()` | 默认，原样透传 | 是 |
+| `XmlNameProcessors.replacement(replacement = "_")` | 非法 XML 名称字符替换为 `_` | 否（decode 原样返回） |
+| `XmlNameProcessors.base64()` | 仅非法名称编码为 `base64_<url-safe-base64>` | 是 |
+| `XmlNameProcessors.alwaysOnBase64()` | 所有名称都编码为 `base64_<...>` | 是 |
+
+```kotlin
+import com.mingliqiye.document.format.xml.XmlNameProcessors
+
+val mapper = XmlMapper(
+    XmlConfig.builder()
+        .nameProcessor(XmlNameProcessors.base64())
+        .build(),
+)
+// 字段 "user name" ↔ 元素 <base64_dXNlciBuYW1l>
 ```
 
 ## 读取 API
@@ -382,10 +530,14 @@ val xml = XmlMapper().format(Account().apply { name = "小于" })
 
 - 属性字段值按标量推断（`true`/`false`/数字/字符串）；
 - 默认输出没有 `type` 属性；读取侧按结构/文本推断，二进制和“看起来像数字的字符串”无法严格保真，需要无损往返时开启 `typeAttributes(true)`；
+- 默认关闭 `typeAttributes` 时，写出侧 `AUTO_DETECT_XSI_TYPE` 会为“推断会失真”的标量写 `xsi:type`
+  （如 `StringNode("123")` → `xs:string`、`BinaryNode` → `xs:base64Binary`、`INF` → `xs:double`），
+  读取侧据此还原；`typeAttributes(true)` 时类型由 `type` 协议保存，不再写 `xsi:type`；
 - `<age/>` 默认读取为字符串空值；显式 `xsi:nil="true"` 始终为 null；
 - 关闭 `WRITE_NULLS_AS_XSI_NIL` 让 NullNode 写成空元素，配合 `EMPTY_ELEMENT_AS_NULL` 可保持 null 往返；
-- 数字使用 `BigDecimal` 校验，写出时原样使用 `raw`；
-- 元素/属性的非法名称字符编码为 `_xHHHH_`。
+- 数字使用 `BigDecimal` 校验，写出时原样使用 `raw`；开启 `WRITE_XML_SCHEMA_CONFORMING_FLOATS` 时
+  `Infinity`/`-Infinity` 规范为 `INF`/`-INF`；
+- 元素/属性的非法名称字符编码为 `_xHHHH_`；配置 `nameProcessor` 时先做名称处理再转义。
 
 ## 示例
 
@@ -608,15 +760,26 @@ val mapper = XmlMapper(
 | `textKey` 等保留键冲突或前缀冲突 | `IllegalArgumentException`（Builder 校验） |
 | `CLARK` 但 `namespaceAware=false` | `IllegalArgumentException`（`XmlReader` 构造校验） |
 | 写 pretty 与混合内容 | `PRESERVE` 时文本固定在子元素之前；需要顺序请用 `PRESERVE_ORDERED` + `#content` |
+| `UNWRAP_ROOT_OBJECT_NODE`（默认开） | 直接写单字段 `ObjectNode` 时根元素名变为字段名（Bean 序列化不展开）；显式 `rootName`/`@DocumentRootName` 时保留根元素 |
+| `defaultUseWrapper(false)` | 无包装重复元素；空数组不写出；单元素数组读回可能按标量处理 |
+| `xsi:type` 多态 | 只做 XSD 内建标量类型映射；不支持 Java 多态子类解析（Node 无类信息） |
+| `WRITE_XML_1_1` 控制字符引用 | JDK 默认 XML 1.0 解析器不能回读 `&#x1;` 等 1.1 字符引用（写出可用，回读需 XML 1.1 解析器） |
+| `xsi:type="xs:custom"` | 未知 XSD 类型回退结构推断，不报错 |
+| `xs:int` / `xs:boolean` 等非法文本 | `XmlParseException` |
 
 ## 与通用 `DocumentMapper` 的差异
 
 - 构造：`XmlConfig` 专属配置类与 `XmlMapper.builder()`；
 - `parse(String)`：默认配置下走内部 `XmlTokenReader`（不构建 Node 树），非默认读取配置回退 Node 路径；
 - `format(value, OutputStream)` / `formatPretty(value, OutputStream)`：覆写为直接写字符流；
-- 根元素名：`@DocumentRootName` > `XmlConfig.rootName` > `"root"`；
-- XML 专属：`type` / `nil` 协议、属性映射、`XmlNamespaceMode`、`XmlMixedContentPolicy`、`XmlReader`；
-- 文本格式语义：`parse(ByteArray)` / `formatBytes` 按 `fileCharset` 编解码。
+- 根元素名：`@DocumentRootName` > `XmlConfig.rootName` > `"root"`（`UNWRAP_ROOT_OBJECT_NODE` 开启时
+  单字段 Node 树根对象改用字段名）；
+- 读/写特性：`XmlReadFeature` / `XmlWriteFeature` 对齐 参考实现 XML 3.x，`legacy2Defaults()` 切 2.x 默认；
+- Builder 选项：`defaultUseWrapper`、`nameForTextElement`、`nameProcessor` 对齐 参考实现 XML；
+- XML 专属：`type` / `nil` 协议、属性映射、`XmlNamespaceMode`、`XmlMixedContentPolicy`、
+  `XmlNameProcessor`、`XmlReader`；
+- 文本格式语义：`parse(ByteArray)` / `formatBytes` 按 `fileCharset` 编解码，XML 声明中的
+  `encoding` 同样取自 `fileCharset`。
 
 ## 相关链接
 

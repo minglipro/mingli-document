@@ -65,7 +65,10 @@ class XmlCodecTest {
     @Test
     fun namesWithInvalidXmlCharactersRoundTrip() {
         val node = ObjectNode.from(mapOf("user name" to StringNode.of("value")))
-        val xml = node.toXmlString(typeAttributes = true)
+        val xml = node.toXmlString(
+            typeAttributes = true,
+            writeFeatures = XmlConfig.DEFAULT_WRITE_FEATURES - XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE,
+        )
         val restored = XmlReader(xml).read()
 
         assertEquals("value", restored.asObject()["user name"]?.asString())

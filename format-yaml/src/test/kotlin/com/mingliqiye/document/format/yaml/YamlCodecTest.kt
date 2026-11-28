@@ -12,7 +12,6 @@ import java.math.BigDecimal
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class YamlCodecTest {
@@ -142,13 +141,14 @@ class YamlCodecTest {
     }
 
     @Test
-    fun formatterIsReadable() {
+    fun formatterQuotesStringValuesByDefault() {
         val node = ObjectNode.of(
             "name" to StringNode.of("小于"),
             "values" to ArrayNode.of(NumberNode.of(1), NumberNode.of(2)),
         )
         val pretty = YamlCodec.write(node, pretty = true)
-        assertTrue(pretty.contains("name: 小于"))
-        assertFalse(pretty.contains("\"小于\""))
+        // 默认对齐 上游实现 YAML：字符串值双引号，数字保持 plain。
+        assertTrue(pretty.contains("name: \"小于\""))
+        assertTrue(pretty.contains("values:"))
     }
 }

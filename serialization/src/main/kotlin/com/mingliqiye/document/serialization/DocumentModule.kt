@@ -4,7 +4,7 @@ package com.mingliqiye.document.serialization
  * 文档 Mapper 模块。
  *
  * 模块通过 [setupModule] 向 Mapper 注册序列化器、反序列化器或对象实例化策略。
- * 类似 Jackson 的 `Module`。
+ * 类似 上游实现 的 `Module`。
  */
 public interface DocumentModule {
 

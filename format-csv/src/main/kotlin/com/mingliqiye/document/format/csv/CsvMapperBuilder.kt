@@ -66,6 +66,15 @@ public class CsvMapperBuilder internal constructor() : DocumentMapperBuilder<Csv
                 .writeNulls(config.writeNulls)
                 .build()
         }
-        return CsvConfig(csvConfig, csvConfig.delimiter, csvConfig.header, schema, csvConfig.nestedMode, csvConfig.maxDepth)
+        return CsvConfig(
+            csvConfig,
+            csvConfig.delimiter,
+            csvConfig.header,
+            schema,
+            csvConfig.nestedMode,
+            csvConfig.maxDepth,
+            csvConfig.readFeatures,
+            csvConfig.writeFeatures,
+        )
     }
 }

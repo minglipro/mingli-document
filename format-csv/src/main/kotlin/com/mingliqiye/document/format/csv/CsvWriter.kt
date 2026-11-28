@@ -9,9 +9,6 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.csv.exception.CsvException
-import org.apache.commons.csv.CSVFormat
-import org.apache.commons.csv.CSVPrinter
-import java.io.StringWriter
 import java.util.Base64
 
 /**
@@ -25,17 +22,32 @@ import java.util.Base64
  * - [CsvNestedMode.COLUMNS]：嵌套对象展开为点分列名，数组没有列形式会抛出 [CsvException]；
  * - `null`（默认）不支持嵌套，保持原有行为。
  *
- * @param delimiter 字段分隔符
+ * 写出特性（[CsvWriteFeature]）与引号/转义/行分隔符/null 文本由本类统一交给
+ * [CsvEncoder] 处理，默认值对齐 上游实现。
+ *
+ * @param delimiter 字段分隔符（无 Schema 时使用）
  * @param header 是否写出表头
  * @param nestedMode 嵌套值读写方式
  * @param maxDepth 解析/写出最大嵌套深度（用于限制 JSON 文本单元格内部嵌套）；
  *   `0` 或负数表示不限制
+ * @param writeFeatures 写出特性集合
+ * @param quoteChar 引号字符；null 表示关闭引号
+ * @param escapeChar 转义字符；null 表示不使用转义字符
+ * @param lineSeparator 行分隔符
+ * @param nullValue null 值写出文本；null 表示空串
+ * @param allowComments 是否允许注释（首列 `#` 开头时加引号）
  */
 internal class CsvWriter(
     private val delimiter: Char = DEFAULT_CSV_DELIMITER,
     private val header: Boolean = DEFAULT_CSV_HEADER,
     private val nestedMode: CsvNestedMode? = null,
     private val maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+    private val writeFeatures: Set<CsvWriteFeature> = CsvConfig.DEFAULT_WRITE_FEATURES,
+    private val quoteChar: Char? = CsvSchema.DEFAULT_QUOTE_CHAR,
+    private val escapeChar: Char? = null,
+    private val lineSeparator: String = CsvSchema.DEFAULT_LINE_SEPARATOR,
+    private val nullValue: String? = null,
+    private val allowComments: Boolean = false,
 ) {
 
     /**
@@ -46,13 +58,16 @@ internal class CsvWriter(
      * @throws CsvException 根节点类型错误、嵌套列冲突或单元格不是标量时抛出
      */
     fun write(node: Node): String {
-        val text = StringWriter()
-        write(node, text)
-        return text.toString()
+        val out = StringBuilder()
+        write(node, out)
+        return out.toString()
     }
 
     /**
      * 直接写出到字符流，不先构造完整 String。
+     *
+     * @param node 文档树
+     * @param out 输出目标
      */
     fun write(node: Node, out: Appendable) {
         val rows = rowsOf(node)
@@ -65,34 +80,30 @@ internal class CsvWriter(
         if (columns.isEmpty()) {
             return
         }
-        try {
-            val format = CSVFormat.DEFAULT.builder()
-                .setDelimiter(delimiter)
-                .setRecordSeparator("\n")
-                .build()
-            val printer = CSVPrinter(out, format)
-            if (header) {
-                printer.printRecord(columns)
-            }
-            for (index in rows.indices) {
-                val values = ArrayList<String>(columns.size)
-                if (flatRows == null) {
-                    for (column in columns) {
-                        values.add(cell(rows[index][column]))
-                    }
-                } else {
-                    for (column in columns) {
-                        values.add(cell(flatRows[index][column]))
-                    }
+        val encoder = CsvEncoder(
+            delimiter,
+            quoteChar,
+            escapeChar,
+            lineSeparator,
+            nullValue,
+            allowComments,
+            writeFeatures,
+        )
+        val dataRows = ArrayList<List<CsvCell>>(rows.size)
+        for (index in rows.indices) {
+            val cells = ArrayList<CsvCell>(columns.size)
+            if (flatRows == null) {
+                for (column in columns) {
+                    cells.add(cell(rows[index][column]))
                 }
-                printer.printRecord(values)
+            } else {
+                for (column in columns) {
+                    cells.add(cell(flatRows[index][column]))
+                }
             }
-            printer.flush()
-        } catch (e: CsvException) {
-            throw e
-        } catch (e: Exception) {
-            throw CsvException("Cannot write CSV: ${e.message}", e)
+            dataRows.add(cells)
         }
+        out.append(encoder.write(if (header) columns else null, dataRows))
     }
 
     private fun rowsOf(node: Node): List<ObjectNode> = when (node) {
@@ -161,15 +172,15 @@ internal class CsvWriter(
         }
     }
 
-    private fun cell(node: Node?): String = when (node) {
-        null -> ""
-        is NullNode -> ""
-        is StringNode -> node.value
-        is NumberNode -> node.raw
-        is BooleanNode -> node.value.toString()
-        is BinaryNode -> Base64.getEncoder().encodeToString(node.value)
+    private fun cell(node: Node?): CsvCell = when (node) {
+        null -> CsvCell(null, CsvCellKind.MISSING)
+        is NullNode -> CsvCell(null, CsvCellKind.NULL)
+        is StringNode -> CsvCell(node.value, CsvCellKind.STRING)
+        is NumberNode -> CsvCell(node.raw, CsvCellKind.NUMBER)
+        is BooleanNode -> CsvCell(node.value.toString(), CsvCellKind.BOOLEAN)
+        is BinaryNode -> CsvCell(Base64.getEncoder().encodeToString(node.value), CsvCellKind.BINARY)
         is ObjectNode, is ArrayNode -> if (nestedMode == CsvNestedMode.JSON) {
-            CsvJsonCodec.write(node, cellNestingLimit())
+            CsvCell(CsvJsonCodec.write(node, cellNestingLimit()), CsvCellKind.STRING)
         } else {
             throw CsvException("Nested CSV cell values are not supported: ${node.type}")
         }
@@ -190,6 +201,7 @@ internal class CsvWriter(
  * @param nestedMode 嵌套值读写方式
  * @param maxDepth 写出时 JSON 文本单元格内允许的最大嵌套深度，默认
  *   [CsvConfig.DEFAULT_MAX_DEPTH]
+ * @param writeFeatures 写出特性集合，默认 [CsvConfig.DEFAULT_WRITE_FEATURES]
  * @return CSV 文本
  * @throws CsvException 根节点类型错误、嵌套列冲突或单元格不是标量时抛出
  */
@@ -198,4 +210,5 @@ public fun Node.toCsvString(
     header: Boolean = DEFAULT_CSV_HEADER,
     nestedMode: CsvNestedMode? = null,
     maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
-): String = CsvWriter(delimiter, header, nestedMode, maxDepth).write(this)
+    writeFeatures: Set<CsvWriteFeature> = CsvConfig.DEFAULT_WRITE_FEATURES,
+): String = CsvWriter(delimiter, header, nestedMode, maxDepth, writeFeatures).write(this)

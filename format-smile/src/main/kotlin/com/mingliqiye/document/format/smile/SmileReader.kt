@@ -17,8 +17,11 @@ import java.io.IOException
 /**
  * Smile 二进制读取入口。
  *
- * 基于 Jackson Smile 解析器，把 Smile 字节流还原为通用 [Node] 树。支持单文档
+ * 基于 上游实现 Smile 解析器，把 Smile 字节流还原为通用 [Node] 树。支持单文档
  * 单根：输入必须且只能包含一个顶层 Smile 值。
+ *
+ * 读取特性（例如关闭 `REQUIRE_HEADER` 读取无头部内容、开启严格重复字段名检查）
+ * 由 [config] 提供，默认与 上游实现 一致。
  *
  * 类型映射：
  * - `null` → [NullNode]
@@ -27,14 +30,19 @@ import java.io.IOException
  * - 文本 → [StringNode]
  * - Smile 二进制值 → [BinaryNode]（见 [SmileWriter] 中关于二进制扩展的说明）
  * - 数组 → [ArrayNode]
- * - 对象 → [ObjectNode]（重复字段名以后出现的值为准）
+ * - 对象 → [ObjectNode]（重复字段名以后出现的值为准，或按配置抛异常）
  *
  * @param source Smile 二进制内容
+ * @param maxDepth Node 树最大深度；0 表示不限制
+ * @param config Smile 配置；`null` 表示使用 上游实现 默认读取特性
  */
 public class SmileReader @JvmOverloads constructor(
     private val source: ByteArray,
     private val maxDepth: Int = 0,
+    private val config: SmileConfig? = null,
 ) {
+
+    private val parserFactory: SmileFactory = createSmileParserFactory(config)
 
     /**
      * 解析并返回文档树。
@@ -43,7 +51,7 @@ public class SmileReader @JvmOverloads constructor(
      */
     public fun read(): Node {
         val parser = try {
-            SMILE_FACTORY.createParser(source)
+            parserFactory.createParser(source)
         } catch (e: IOException) {
             throw SmileParseException("Invalid Smile: ${e.message}", e)
         }
@@ -69,7 +77,7 @@ public class SmileReader @JvmOverloads constructor(
      */
     internal fun readAll(maxItems: Int): List<Node> {
         val parser = try {
-            SMILE_FACTORY.createParser(source)
+            parserFactory.createParser(source)
         } catch (e: IOException) {
             throw SmileParseException("Invalid Smile: ${e.message}", e)
         }
@@ -177,10 +185,8 @@ public class SmileReader @JvmOverloads constructor(
 
     public companion object {
 
-        private val SMILE_FACTORY: SmileFactory = SmileFactory()
-
         /**
-         * 解析 Smile 字节数组。
+         * 解析 Smile 字节数组（默认 上游实现 读取特性）。
          *
          * @param source Smile 二进制内容
          * @return 文档树

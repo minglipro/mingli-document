@@ -17,5 +17,14 @@ public class TomlCommentConfig @JvmOverloads constructor(
         /** 创建写出配置构建器。 */
         @JvmStatic
         public fun builder(): TomlCommentConfigBuilder = TomlCommentConfigBuilder()
+
+        /**
+         * 从 TOML 主配置提取注释写出配置。
+         *
+         * @param config TOML 主配置
+         * @return 注释写出配置
+         */
+        @JvmStatic
+        public fun from(config: TomlConfig): TomlCommentConfig = config.commentConfig
     }
 }

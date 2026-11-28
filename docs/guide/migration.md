@@ -4,7 +4,7 @@ title: 迁移指南
 
 # 迁移指南
 
-> 本页覆盖两条常见迁移路线：**1.x -> 2.0.0** 与 **从 Jackson 迁移**。
+> 本页覆盖两条常见迁移路线：**1.x -> 2.0.0** 与 **从 参考实现 迁移**。
 > 所有结论都基于仓库内的 `MIGRATION.md`、`CHANGELOG.md` 与源码，不承诺与第三方库
 > 完全等价。
 
@@ -17,7 +17,7 @@ title: 迁移指南
 - [注解泛型收紧](#注解泛型收紧)
 - [默认行为兼容性](#默认行为兼容性)
 - [1.x 各版本新增能力](#_1-x-各版本新增能力)
-- [从 Jackson 迁移](#从-jackson-迁移)
+- [从 参考实现 迁移](#从-参考实现-迁移)
 - [概念对照表](#概念对照表)
 - [代码对照示例](#代码对照示例)
 - [行为差异与常见注意](#行为差异与常见注意)
@@ -284,9 +284,9 @@ Security baseline、OpenAPI 模块、Maven Central 发布
 YAML 自定义 tag、JQF fuzz、全格式原生 Token Reader
 ```
 
-## 从 Jackson 迁移
+## 从 参考实现 迁移
 
-`mingli-document` 的 `serialization` 模块在设计上对标 Jackson 的 `ObjectMapper`：
+`mingli-document` 的 `serialization` 模块在设计上对标 参考实现 的 `ObjectMapper`：
 实体 ↔ 树 ↔ 格式。区别在于：
 
 1. **树模型格式无关**：`Node` 是所有格式共享的树，而不是 JSON 专用；
@@ -297,7 +297,7 @@ YAML 自定义 tag、JQF fuzz、全格式原生 Token Reader
 
 ### 概念对照表
 
-| Jackson | mingli-document |
+| 参考实现 | mingli-document |
 |---|---|
 | `ObjectMapper` / `JsonMapper` | `JsonMapper` / `YamlMapper` / `XmlMapper` …（都实现 `DocumentMapperApi`） |
 | `JsonNode` | `Node` |
@@ -328,28 +328,28 @@ YAML 自定义 tag、JQF fuzz、全格式原生 Token Reader
 | `JsonSchema`（第三方模块） | `format-json` 内置轻量 `JsonSchema`（仅 JSON 文本校验） |
 
 ::: warning 不是 1:1 兼容
-上表是「概念对应」，不是 API 兼容承诺。例如 Jackson 的 `JsonNode` 有 `path()`、
+上表是「概念对应」，不是 API 兼容承诺。例如 参考实现 的 `JsonNode` 有 `path()`、
 `at()`、`deepCopy()` 等大量方法，本库的 `Node` 只保留类型断言与容器读取；
-Jackson 的 `ObjectMapper` 配置项远多于 `DocumentMapperConfig`。
+参考实现 的 `ObjectMapper` 配置项远多于 `DocumentMapperConfig`。
 :::
 
 ## 代码对照示例
 
-Jackson 版本：
+参考实现 版本：
 
 ```kotlin
-import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
+import 第三方底层库坐标.annotation.JsonProperty
+import 第三方底层库坐标.module.kotlin.参考实现ObjectMapper
+import 第三方底层库坐标.module.kotlin.readValue
 
 data class User(
     @JsonProperty("display_name") val name: String,
     val age: Int?,
 )
 
-val jackson = jacksonObjectMapper()
-val user = jackson.readValue<User>("""{"display_name":"小于","age":18}""")
-val json = jackson.writerWithDefaultPrettyPrinter().writeValueAsString(user)
+val 参考实现 = 参考实现ObjectMapper()
+val user = 参考实现.readValue<User>("""{"display_name":"小于","age":18}""")
+val json = 参考实现.writerWithDefaultPrettyPrinter().writeValueAsString(user)
 ```
 
 mingli-document 版本：
@@ -372,10 +372,10 @@ val user = mapper.parse("""{"display_name":"小于","age":18}""", User::class.ja
 val json = mapper.formatPretty(user)
 ```
 
-Jackson 树操作：
+参考实现 树操作：
 
 ```kotlin
-val node = jackson.readTree("""{"a":{"b":1}}""")
+val node = 参考实现.readTree("""{"a":{"b":1}}""")
 val b = node["a"]["b"].asInt()
 ```
 
@@ -390,28 +390,28 @@ val b = node.asObject()["a"]!!.asObject()["b"]!!.asNumber().toInt()
 
 ## 行为差异与常见注意
 
-1. **未知字段默认忽略**：Jackson 默认 `FAIL_ON_UNKNOWN_PROPERTIES=true`，本库默认
+1. **未知字段默认忽略**：参考实现 默认 `FAIL_ON_UNKNOWN_PROPERTIES=true`，本库默认
    忽略。需要严格校验时显式 `failOnUnknownFields(true)`。
-2. **Java 私有字段**：Jackson 可以通过配置让私有字段直接映射；本库依赖 JavaBeans
+2. **Java 私有字段**：参考实现 可以通过配置让私有字段直接映射；本库依赖 JavaBeans
    Introspector 或 `public` 字段，**没有 getter/setter 的私有字段不会映射**。
    请补 getter/setter、改成 public 字段，或使用 `@DocumentCreator` / record。
-3. **Kotlin data class 需要模块**：对应 Jackson 的 `jackson-module-kotlin`，
+3. **Kotlin data class 需要模块**：对应 参考实现 的 `Kotlin 支持库`，
    本库需要 `addModule(kotlinModule())`。
 4. **Java record 需要 JDK 17+ 运行时并引入 `record-support` 模块**：库的其它模块编译目标仍为 JDK 8。
-5. **多态必须显式注册**：Jackson 的 `@JsonSubTypes` 自动注册；本库需要
+5. **多态必须显式注册**：参考实现 的 `@JsonSubTypes` 自动注册；本库需要
    `config.subtype(...)` 或 Kotlin `kotlinSealedSubtypes(...)`，不扫描 classpath。
-6. **日期需要注解**：Jackson 有内置日期序列化器；本库需要
+6. **日期需要注解**：参考实现 有内置日期序列化器；本库需要
    `@DocumentDateTimeFormat(pattern, timezone)` 或自定义转换器。
 7. **枚举按 `name()` 精确匹配**：不支持下划线/大小写宽松匹配，未知枚举值抛异常
    （除非使用生成的枚举转换器，其非法值返回 `null`）。
 8. **Kotlin 注解 use-site target**：字段注解常需要 `@field:DocumentName(...)`；
    注解定义同时支持 `FIELD` / `PROPERTY` / getter，但默认落点取决于注解定义。
-9. **null 行为**：`writeNulls` 默认 `true`（与 Jackson 默认一致）；关闭后 null 字段
+9. **null 行为**：`writeNulls` 默认 `true`（与 参考实现 默认一致）；关闭后 null 字段
    直接省略，读取端按 `MissingFieldPolicy` 处理。
-10. **流式写出不等于 Jackson 的 `JsonGenerator`**：Token 路径是内部 API 的开放形式，
+10. **流式写出不等于 参考实现 的 `JsonGenerator`**：Token 路径是内部 API 的开放形式，
     但 `writeReferences`、merge 等 Node 能力在流式路径不可用。
 11. **Map key**：写出一律 `toString()`；读出按声明 key 类型解析，复杂对象 key 不支持。
-12. **JSON 字节 API 固定 UTF-8**：Jackson 可用 `JsonEncoding` 配置，本库 JSON 走严格
+12. **JSON 字节 API 固定 UTF-8**：参考实现 可用 `JsonEncoding` 配置，本库 JSON 走严格
     UTF-8 字节语义。
 13. **没有 `@JsonPropertyOrder`**：字段顺序由 JavaBeans 属性顺序/字段顺序决定，
     不提供显式排序注解。
@@ -429,7 +429,7 @@ val b = node.asObject()["a"]!!.asObject()["b"]!!.asNumber().toInt()
 - [ ] 若旧代码依赖未知 YAML tag 自动解析，开启 `allowCustomTags(true)`；
 - [ ] 跑一遍 `gradle :fuzz:test` 与业务回归测试。
 
-从 Jackson：
+从 参考实现：
 
 - [ ] 建立实体对照：字段注解换成 `@DocumentXxx`；
 - [ ] 泛型目标类型换成 `DocumentTypeReference`；

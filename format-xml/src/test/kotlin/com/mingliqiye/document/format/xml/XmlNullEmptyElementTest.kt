@@ -52,7 +52,9 @@ class XmlNullEmptyElementTest {
 
     @Test
     fun nullDefaultsToXsiNil() {
-        val xml = ObjectNode.of("age" to NullNode.INSTANCE).toXmlString()
+        val xml = ObjectNode.of("age" to NullNode.INSTANCE).toXmlString(
+            writeFeatures = XmlConfig.DEFAULT_WRITE_FEATURES - XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE,
+        )
 
         assertTrue(xml.contains("xmlns:xsi=\"${XmlConfig.XSI_NAMESPACE}\""))
         assertTrue(xml.contains("<age xsi:nil=\"true\"/>"))
@@ -71,7 +73,7 @@ class XmlNullEmptyElementTest {
         val mapper = XmlMapper(
             XmlConfig.builder()
                 .disable(XmlWriteFeature.WRITE_NULLS_AS_XSI_NIL)
-                .enable(XmlReadFeature.EMPTY_ELEMENT_AS_NULL)
+                .enable(XmlReadFeature.EMPTY_ELEMENT_AS_NULL).disable(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE)
                 .build(),
         )
         val restored = mapper.parse(

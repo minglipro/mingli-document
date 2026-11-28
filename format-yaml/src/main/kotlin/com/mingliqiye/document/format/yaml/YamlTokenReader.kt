@@ -26,8 +26,10 @@ import org.yaml.snakeyaml.nodes.Node as YamlNode
  * [ScalarNode]），遍历生成 Token 流，不构建 core `Node` 树。Scalar tag 到 Token
  * 的映射与 [YamlNodeMapping] 对齐：
  *
- * - `!!null` -> [DocumentTokenType.NULL]
- * - `!!bool` -> [DocumentTokenType.BOOLEAN]
+ * - `!!null` -> [DocumentTokenType.NULL]；[YamlReadFeature.EMPTY_STRING_AS_NULL]
+ *   关闭时空 plain 标量输出 STRING `""`
+ * - `!!bool` -> [DocumentTokenType.BOOLEAN]；[YamlReadFeature.PARSE_BOOLEAN_LIKE_WORDS_AS_STRINGS]
+ *   开启时 `yes`/`no`/`on`/`off` 等输出 STRING，显式 `!!bool` 无法匹配的值按 STRING
  * - `!!int` / `!!float` -> [DocumentTokenType.NUMBER]，数字文本经 SafeConstructor
  *   归一化（`0x1F`、`1_000` 等输出十进制 raw；NaN/Infinity 拒绝）
  * - `!!binary` -> [DocumentTokenType.BINARY]，Base64 解码为原始字节
@@ -47,14 +49,16 @@ import org.yaml.snakeyaml.nodes.Node as YamlNode
  * Token 层无法等价实现的语义：
  * - 递归节点（如 `&a {self: *a}`）抛出 [YamlParseException]，不构建环；
  * - 显式 `!!set` / `!!omap` / `!!pairs` 集合 tag 按底层 mapping/sequence 结构输出
- *   （Node 路径会构造 Set/List 后得到 ArrayNode）；
- * - 显式 `!!bool` 非法值时与 Node 路径一致，返回 NULL。
+ *   （Node 路径会构造 Set/List 后得到 ArrayNode）。
  *
  * @param source YAML 文本（单文档，多文档输入抛异常）
  * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
  * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
  * @param maxStringLength 单个字符串最大长度；`0` 表示不限制
  * @param allowCustomTags 是否允许未知自定义 tag，默认 `false`；开启后与 Node 路径一致
+ * @param readFeatures 读取特性集合，默认 [YamlConfig.DEFAULT_READ_FEATURES]
+ * @param allowDuplicateKeys 是否允许重复 mapping key，默认 `false`
+ * @param codePointLimit 单次输入最大 code point 数量；`0` 使用 SnakeYAML 默认值
  */
 internal class YamlTokenReader(
     source: String,
@@ -62,9 +66,21 @@ internal class YamlTokenReader(
     maxAliases: Int = 0,
     maxStringLength: Int = 0,
     allowCustomTags: Boolean = false,
+    readFeatures: Set<YamlReadFeature> = YamlConfig.DEFAULT_READ_FEATURES,
+    allowDuplicateKeys: Boolean = false,
+    codePointLimit: Int = 0,
 ) : DocumentTokenReader {
 
-    private val tokens: List<DocumentToken> = buildTokens(source, maxDepth, maxAliases, maxStringLength, allowCustomTags)
+    private val tokens: List<DocumentToken> = buildTokens(
+        source,
+        maxDepth,
+        maxAliases,
+        maxStringLength,
+        allowCustomTags,
+        readFeatures,
+        allowDuplicateKeys,
+        codePointLimit,
+    )
     private var index = -1
     private var current: DocumentToken? = null
 
@@ -99,8 +115,18 @@ internal class YamlTokenReader(
             maxAliases: Int,
             maxStringLength: Int,
             allowCustomTags: Boolean,
+            readFeatures: Set<YamlReadFeature>,
+            allowDuplicateKeys: Boolean,
+            codePointLimit: Int,
         ): List<DocumentToken> = try {
-            val constructor = YamlConstructors.create(maxDepth, maxAliases, allowCustomTags)
+            val constructor = YamlConstructors.create(
+                maxDepth,
+                maxAliases,
+                allowCustomTags,
+                readFeatures,
+                allowDuplicateKeys,
+                codePointLimit,
+            )
             val root = Yaml(constructor).compose(StringReader(source))
             val tokens = ArrayList<DocumentToken>()
             if (root == null) {
@@ -173,7 +199,7 @@ private class YamlTokenTraversal(
 
     private fun appendScalar(node: ScalarNode, tokens: MutableList<DocumentToken>) {
         when {
-            node.tag == Tag.NULL -> tokens.add(DocumentToken.nullValue())
+            node.tag == Tag.NULL -> appendNull(node, tokens)
             node.tag == Tag.BOOL -> appendBoolean(node, tokens)
             node.tag == Tag.INT || node.tag == Tag.FLOAT -> appendNumber(node, tokens)
             node.tag == Tag.BINARY -> appendBinary(node, tokens)
@@ -182,13 +208,23 @@ private class YamlTokenTraversal(
         }
     }
 
-    private fun appendBoolean(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+    /**
+     * 上游实现 `EMPTY_STRING_AS_NULL`：关闭时空 plain 标量构造为空字符串。
+     */
+    private fun appendNull(node: ScalarNode, tokens: MutableList<DocumentToken>) {
         val value = constructor.constructNodeValue(node)
-        if (value is Boolean) {
-            tokens.add(DocumentToken.boolean(value))
+        if (value is String) {
+            appendString(value, tokens)
         } else {
-            // 显式 !!bool 非法值时 SnakeYAML 构造为 null，与 Node 路径一致。
             tokens.add(DocumentToken.nullValue())
+        }
+    }
+
+    private fun appendBoolean(node: ScalarNode, tokens: MutableList<DocumentToken>) {
+        when (val value = constructor.constructNodeValue(node)) {
+            is Boolean -> tokens.add(DocumentToken.boolean(value))
+            is String -> appendString(value, tokens)
+            else -> tokens.add(DocumentToken.nullValue())
         }
     }
 

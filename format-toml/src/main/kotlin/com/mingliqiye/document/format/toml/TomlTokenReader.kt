@@ -10,11 +10,16 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.OffsetDateTime
+import java.time.format.DateTimeParseException
+import java.time.temporal.Temporal
 
 /**
  * TOML 原生 Token 读取器。
  *
  * 直接遍历 tomlj 的 [TomlTable] / [TomlArray] 生成 Token 流，不构建 Node 树。
+ *
+ * 日期时间 Token 的文本规则与 [TomlReader] 一致：[TomlReadFeature.PARSE_JAVA_TIME]
+ * 关闭（默认）时使用源码原文，开启时使用 `java.time` 规范化 ISO-8601 字符串。
  *
  * 解析深度复用 [TomlParser]：默认 [TomlMapper.DEFAULT_MAX_DEPTH]（512），超限抛
  * [TomlParseException]；[TomlParser] 已保证结果树深度不超过 [maxDepth]，因此这里的
@@ -22,12 +27,17 @@ import java.time.OffsetDateTime
  *
  * @param source TOML 文本
  * @param maxDepth 最大嵌套深度；`0` 或负数表示不限制
+ * @param readFeatures TOML 读取特性集合
  */
 internal class TomlTokenReader(
     source: String,
     private val maxDepth: Int = TomlMapper.DEFAULT_MAX_DEPTH,
+    private val readFeatures: Set<TomlReadFeature> = TomlConfig.DEFAULT_READ_FEATURES,
 ) : DocumentTokenReader {
 
+    private val parseJavaTime: Boolean = TomlReadFeature.PARSE_JAVA_TIME in readFeatures
+    private val validateDateTime: Boolean = TomlReadFeature.VALIDATE_DATE_TIME in readFeatures
+    private val temporalSourceText: TomlTemporalText by lazy(LazyThreadSafetyMode.NONE) { TomlTemporalText.scan(source) }
     private val tokens: List<Token> = buildTokens(source, maxDepth)
     private var index = -1
     private var current: Token? = null
@@ -86,12 +96,29 @@ internal class TomlTokenReader(
             is Boolean -> tokens.add(Token(DocumentTokenType.BOOLEAN, null, value))
             is Long -> tokens.add(Token(DocumentTokenType.NUMBER, value.toString()))
             is Double -> tokens.add(Token(DocumentTokenType.NUMBER, doubleRaw(value)))
-            is OffsetDateTime -> tokens.add(Token(DocumentTokenType.STRING, value.toString()))
-            is LocalDateTime -> tokens.add(Token(DocumentTokenType.STRING, value.toString()))
-            is LocalDate -> tokens.add(Token(DocumentTokenType.STRING, value.toString()))
-            is LocalTime -> tokens.add(Token(DocumentTokenType.STRING, value.toString()))
+            is OffsetDateTime -> tokens.add(Token(DocumentTokenType.STRING, toTemporalText(value)))
+            is LocalDateTime -> tokens.add(Token(DocumentTokenType.STRING, toTemporalText(value)))
+            is LocalDate -> tokens.add(Token(DocumentTokenType.STRING, toTemporalText(value)))
+            is LocalTime -> tokens.add(Token(DocumentTokenType.STRING, toTemporalText(value)))
             else -> throw TomlParseException("Unsupported TOML value type: ${value?.javaClass?.name ?: "null"}")
         }
+    }
+
+    private fun toTemporalText(value: Temporal): String {
+        val text = if (parseJavaTime) value.toString() else temporalSourceText.rawFor(value) ?: value.toString()
+        if (parseJavaTime || validateDateTime) {
+            try {
+                when (value) {
+                    is OffsetDateTime -> OffsetDateTime.parse(text)
+                    is LocalDateTime -> LocalDateTime.parse(text)
+                    is LocalDate -> LocalDate.parse(text)
+                    else -> LocalTime.parse(text)
+                }
+            } catch (e: DateTimeParseException) {
+                throw TomlParseException("Invalid TOML date/time value '$text': ${e.message}", e)
+            }
+        }
+        return text
     }
 
     private fun doubleRaw(value: Double): String {

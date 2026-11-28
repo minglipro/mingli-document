@@ -16,6 +16,9 @@ YamlReader
 YamlMultiDocumentReader
 YamlConfig
 YamlConfigBuilder
+YamlReadFeature
+YamlWriteFeature
+YamlFlowStyle
 ```
 
 ## 示例
@@ -40,36 +43,83 @@ val nodes = YamlMapper().parseAllToNodes(text)
 val result = YamlMapper().formatAll(nodes)
 ```
 
-## 自定义 tag
+## 配置对齐 参考实现 YAML（2.15）
 
-默认使用 SnakeYAML `SafeConstructor`，未知 tag（如 `!foo`、`!env`）会抛出
-`YamlParseException`。通过 `YamlConfig.builder().allowCustomTags(true)` 可以按节点
-种类还原未知 tag：
-
-- 标量 -> `StringNode`（保留原始标量文本，不做 `!!int` / `!!bool` 隐式解析）
-- 序列 -> `ArrayNode`
-- 映射 -> `ObjectNode`（与普通 YAML 映射一致，先执行重复 key 校验与 merge key 展开）
+`YamlConfig` 的读写特性与默认值对齐 参考实现 YAML 2.15 的
+`YAMLGenerator.Feature` / `YAMLParser.Feature`，`YamlConfigBuilder` 提供与 参考实现
+同名的 `enable` / `disable` / `configure`。
 
 ```kotlin
 import com.mingliqiye.document.format.yaml.YamlConfig
 import com.mingliqiye.document.format.yaml.YamlMapper
-import com.mingliqiye.document.format.yaml.YamlMultiDocumentReader
-import com.mingliqiye.document.format.yaml.YamlReader
+import com.mingliqiye.document.format.yaml.YamlReadFeature
+import com.mingliqiye.document.format.yaml.YamlWriteFeature
 
-// 单文档 / 多文档 reader 直接传参
-val node = YamlReader("value: !env HOME\n", allowCustomTags = true).read()
-val documents = YamlMultiDocumentReader("a: !env HOME\n---\nb: !list [1, 2]\n", allowCustomTags = true).readAll()
-
-// Mapper 通过 YamlConfig 同时作用于 Token 路径与 Node 回退路径
-val mapper = YamlMapper(YamlConfig.builder().allowCustomTags(true).build())
-val bean = mapper.parse("name: !env APP_NAME\n", User::class.java)
-val all = mapper.parseAllToNodes("a: !env HOME\n---\nb: !list [1]\n")
+val mapper = YamlMapper(
+    YamlConfig.builder()
+        .pretty(true)
+        .enable(YamlWriteFeature.MINIMIZE_QUOTES)
+        .enable(YamlWriteFeature.LITERAL_BLOCK_STYLE)
+        .enable(YamlWriteFeature.INDENT_ARRAYS)
+        .disable(YamlWriteFeature.WRITE_DOC_START_MARKER)
+        .disable(YamlReadFeature.EMPTY_STRING_AS_NULL)
+        .build(),
+)
 ```
 
-支持本地 tag（`!foo`）与全局自定义 tag（`!!foo`、`!<tag:example.com,2024:foo>`）；
-构造阶段只还原基础类型，不会实例化任意 Java 类型。anchor/alias/merge/深度限制
-仍然生效，但以自定义 tag 节点为目标的递归 alias 会被拒绝（抛
-`YamlParseException`）。
+### 读取特性（`YamlReadFeature`）
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `EMPTY_STRING_AS_NULL` | `true` | 空 plain 标量（`key:`）读取为 `null`；关闭后读取为空字符串 `""`（`''` 始终是空字符串） |
+| `PARSE_BOOLEAN_LIKE_WORDS_AS_STRINGS` | `false` | 开启后 `yes`/`no`/`on`/`off` 按字符串读取，只有 `true`/`false` 是布尔；显式 `!!bool` 无法匹配的值按字符串 |
+
+读取特性同时作用于 Node 路径（`YamlReader` / `YamlMultiDocumentReader`）、原生 Token
+路径（`YamlMapper.parse`）与 Node 回退路径。
+
+### 写出特性（`YamlWriteFeature`）
+
+| 特性 | 默认 | 行为 |
+|---|---|---|
+| `WRITE_DOC_START_MARKER` | `true` | 每个文档输出起始 `---` |
+| `SPLIT_LINES` | `true` | 过长文本自动折行（SnakeYAML `splitLines`） |
+| `MINIMIZE_QUOTES` | `false` | 关闭时字符串值一律双引号；开启后按 参考实现 quoting 规则输出 plain/双引号/字面量块 |
+| `ALWAYS_QUOTE_NUMBERS_AS_STRINGS` | `false` | 与 `MINIMIZE_QUOTES` 配合：数字样字符串仍加引号 |
+| `LITERAL_BLOCK_STYLE` | `false` | 含换行的字符串使用字面量块（开启 `MINIMIZE_QUOTES` 时自动对多行字符串生效） |
+| `INDENT_ARRAYS` | `false` | 数组元素额外缩进（SnakeYAML `indicatorIndent=1`） |
+| `INDENT_ARRAYS_WITH_INDICATOR` | `false` | 数组元素缩进且 `-` 指示符缩进 |
+| `USE_PLATFORM_LINE_BREAKS` | `false` | 使用平台换行符（Windows `\r\n`）；关闭时统一 `\n` |
+| `ALLOW_LONG_KEYS` | `false` | 简单 key 长度上限由 128 提升到 1024 |
+| `CANONICAL_OUTPUT` | `false` | SnakeYAML canonical 输出（显式 tag + flow 布局） |
+| `USE_NATIVE_OBJECT_ID` | `true` | **未支持**：本库 Node 模型不携带 参考实现 object id，对象引用使用通用 `$ref` |
+| `USE_NATIVE_TYPE_ID` | `true` | **未支持**：本库多态类型使用通用 type 属性，Node 模型不携带 type id |
+
+### SnakeYAML 选项
+
+| 配置 | 默认 | 说明 |
+|---|---|---|
+| `pretty` | `false` | 布局开关：`false` 流式紧凑、`true` 块格式（本库历史行为） |
+| `defaultFlowStyle` | `null` | `YamlFlowStyle.FLOW` / `BLOCK`；未设置时由 `pretty` 推导 |
+| `indent` | `2` | 块式缩进（2..9） |
+| `lineWidth` | `0` | 输出行宽；`0` 使用 SnakeYAML 默认值（80） |
+| `allowUnicode` | `true` | `false` 时转义非 ASCII 字符 |
+| `explicitEnd` | `false` | 文档末尾输出 `...` |
+| `maxAliases` | `0` | 非标量 alias 上限；`0` 使用 SnakeYAML 默认值 |
+| `allowCustomTags` | `false` | 是否允许未知自定义 tag |
+| `allowDuplicateKeys` | `false` | 是否允许重复 mapping key |
+| `codePointLimit` | `0` | 单次输入最大 code point；`0` 使用 SnakeYAML 默认值（3 MiB） |
+
+### 公共 `DocumentMapperConfig` 便捷方法
+
+`YamlConfigBuilder` 同时转发通用配置，避免为了组合 YAML 选项手工拼装
+`DocumentMapperConfig`：
+
+`field`、`missingFieldPolicy`、`failOnUnknownFields`、`writeNulls`、
+`namingStrategy`、`fileCharset`、`atomicFileWrite`、`createParentDirectories`、
+`maxInputSize`、`maxStringLength`、`maxNodeDepth`、`maxNodeCount`、
+`remoteReferenceResolver`、`beanValidator`、`enable`/`disable`/`configure`
+（`DeserializationFeature`）、`failOnNullForPrimitives`、`subtype`/`typeProperty`、
+`resolveReferences`、`writeReferences`。
 
 ## 特性
 
@@ -78,10 +128,25 @@ val all = mapper.parseAllToNodes("a: !env HOME\n---\nb: !list [1]\n")
 - Token 直读 Bean
 - SnakeYAML SafeConstructor
 - 可选自定义 tag（`allowCustomTags`，默认关闭）
+- 参考实现 YAML 2.15 读写特性对齐（`YamlReadFeature` / `YamlWriteFeature`）
 - 解析深度限制
 - alias 扩张限制
 - 原生 YAML Token Reader
 - 文件/流读写
+
+## 与 参考实现 YAML 的行为差异
+
+- **布局**：参考实现 YAML 固定 block 布局；本库默认 `pretty=false` 为流式紧凑布局，
+  可通过 `pretty(true)` 或 `defaultFlowStyle(BLOCK)` 得到块格式。
+- **type id / object id**：参考实现 的原生 type id（YAML tag）与 object id（anchor/alias）
+  依赖 databind 类型/身份信息；本库 Node 模型不携带这些信息，
+  `USE_NATIVE_OBJECT_ID` / `USE_NATIVE_TYPE_ID` 仅为配置兼容保留，不改变输出。
+  本库等价能力为通用 type 属性与 `writeReferences` 的 `$ref`。
+- **空文档**：参考实现 2.21+ 的 `YAMLParser.Feature.EMPTY_DOCUMENT_AS_EMPTY_OBJECT`
+  不在 2.15 基线内，本库空文档固定为 `NullNode`。
+- **自定义 tag**：只在读取侧生效；写出只根据 Node 类型输出标准 YAML，tag 信息不保留。
+- **显式 `!!bool` 非法值**：按 参考实现 规则退回字符串；显式 `!!null` 空值仍按 null 处理
+  （参考实现 该边缘场景返回空字符串）。
 
 ## 限制
 

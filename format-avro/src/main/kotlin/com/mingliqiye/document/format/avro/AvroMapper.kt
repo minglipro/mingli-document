@@ -12,6 +12,16 @@ import org.apache.avro.Schema
 import java.io.File
 import java.nio.file.Path
 
+private val EMPTY_AVRO_CONFIG: AvroConfig = AvroConfig.from(DocumentMapperConfig.empty())
+
+private fun avroConfigOf(config: DocumentMapperConfig): AvroConfig = config as? AvroConfig ?: AvroConfig.from(config)
+
+private fun avroWriterSchemaOf(config: AvroConfig): Schema = requireNotNull(config.schema) {
+    "AvroConfig.schema is required to create AvroMapper; use AvroMapper(schema) or AvroConfig.builder().schema(...)"
+}
+
+private fun avroReaderSchemaOf(config: AvroConfig): Schema = config.readerSchema ?: avroWriterSchemaOf(config)
+
 /**
  * Avro 二进制文档映射器。
  *
@@ -24,7 +34,8 @@ import java.nio.file.Path
  *
  * 除裸单根 API 外还支持 Avro Object Container File（OCF）：
  * - [formatContainerBytes] 用 `DataFileWriter` 把多条记录写成内嵌 Schema 的容器，
- *   可选 [AvroCodec]（[AvroCodec.NULL] / [AvroCodec.DEFLATE] / [AvroCodec.SNAPPY]）
+ *   默认 codec 取 [AvroConfig.codec]，也可显式传 [AvroCodec]
+ *   （[AvroCodec.NULL] / [AvroCodec.DEFLATE] / [AvroCodec.SNAPPY]）
  * - [parseContainerToNodes] / [parseContainer] 用 `DataFileReader` 读取容器全部记录，
  *   codec 由容器头部自动识别
  * - [appendContainer] / [appendContainerBytes] 向已有容器追加记录，保留已有记录与
@@ -35,6 +46,12 @@ import java.nio.file.Path
  * Schema，交由 `GenericDatumReader(writer, reader)` 解析；支持新增带默认值字段、
  * 删除字段与类型提升（如 int→long/double），不兼容时抛
  * [com.mingliqiye.document.format.avro.exception.AvroParseException]。
+ *
+ * 配置对齐 上游实现 Avro：通过 [AvroConfig] / [AvroConfigBuilder] 配置
+ * [AvroReadFeature] 与 [AvroWriteFeature]（`AVRO_BUFFERING`、`AVRO_FILE_OUTPUT`、
+ * `ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA`），默认值见 [AvroConfig]；也可以直接传普通
+ * [DocumentMapperConfig]，此时 Avro 专属选项回退默认值。查询生效配置使用
+ * [avroConfig]。
  *
  * 支持的字段类型：null、boolean、int、long、float、double、string、bytes、fixed、
  * enum、array、map、record 以及 union（含 null union）。由于通用
@@ -63,8 +80,15 @@ public open class AvroMapper internal constructor(
     config: DocumentMapperConfig,
 ) : BinaryDocumentMapper(
     FORMAT_NAME,
-    { source -> AvroWireReader(writerSchema, readerSchema, config.maxNodeDepth).read(source) },
-    { node, _ -> AvroWireWriter(writerSchema).write(node) },
+    { source ->
+        AvroFeatureSupport.wireReader(
+            writerSchema,
+            readerSchema,
+            config.maxNodeDepth,
+            avroConfigOf(config),
+        ).read(source)
+    },
+    { node, _ -> AvroFeatureSupport.wireWriter(writerSchema, avroConfigOf(config)).write(node) },
     serializers,
     deserializers,
     objectInstantiator,
@@ -74,6 +98,14 @@ public open class AvroMapper internal constructor(
 
     /** Avro record Schema 别名，等同 [writerSchema]。 */
     public val schema: Schema get() = writerSchema
+
+    /**
+     * 生效的 Avro 配置。
+     *
+     * 以普通 [DocumentMapperConfig] 构造时，返回带默认 Avro 选项的配置视图；
+     * 以 [AvroConfig] 构造时原样返回。
+     */
+    public val avroConfig: AvroConfig = avroConfigOf(config)
 
     /** 容器记录转换时使用的最大嵌套深度，来自通用配置。 */
     private val maxNodeDepth: Int = config.maxNodeDepth
@@ -100,19 +132,36 @@ public open class AvroMapper internal constructor(
         emptyMap(),
         null,
         null,
-        DocumentMapperConfig.empty(),
+        EMPTY_AVRO_CONFIG,
     )
 
     /**
-     * 使用 Apache Avro record Schema 与通用配置创建映射器（writer 与 reader 相同）。
+     * 使用 Apache Avro record Schema 与通用配置创建映射器。
      *
-     * @param schema Avro record Schema
-     * @param config 通用 Mapper 配置
+     * @param schema Avro record Schema（writer）
+     * @param config 通用配置；传入 [AvroConfig] 时生效其 reader Schema 与格式特性
      * @throws IllegalArgumentException Schema 不是 record 类型时抛出
      */
     public constructor(schema: Schema, config: DocumentMapperConfig) : this(
         schema,
+        avroConfigOf(config).readerSchema ?: schema,
+        emptyMap(),
+        emptyMap(),
+        null,
+        null,
+        avroConfigOf(config),
+    )
+
+    /**
+     * 使用 Apache Avro record Schema 与 [AvroConfig] 创建映射器。
+     *
+     * @param schema Avro record Schema（writer）
+     * @param config Avro 配置；配置中的 reader Schema 生效
+     * @throws IllegalArgumentException Schema 不是 record 类型时抛出
+     */
+    public constructor(schema: Schema, config: AvroConfig) : this(
         schema,
+        config.readerSchema ?: schema,
         emptyMap(),
         emptyMap(),
         null,
@@ -125,15 +174,32 @@ public open class AvroMapper internal constructor(
      *
      * @param schema Avro Schema 视图，内部通过 [AvroSchema.toAvroSchema] 转换
      */
-    public constructor(schema: AvroSchema) : this(schema.toAvroSchema(), DocumentMapperConfig.empty())
+    public constructor(schema: AvroSchema) : this(schema.toAvroSchema(), EMPTY_AVRO_CONFIG)
 
     /**
-     * 使用 [AvroSchema] 与通用配置创建映射器（writer 与 reader 相同）。
+     * 使用 [AvroSchema] 与通用配置创建映射器。
      *
-     * @param schema Avro Schema 视图，内部通过 [AvroSchema.toAvroSchema] 转换
-     * @param config 通用 Mapper 配置
+     * 转换时按配置的 [AvroWriteFeature.ADD_NULL_AS_DEFAULT_VALUE_IN_SCHEMA] 决定
+     * 是否给可空/非必填字段补 `null` 默认值。
+     *
+     * @param schema Avro Schema 视图
+     * @param config 通用配置
      */
-    public constructor(schema: AvroSchema, config: DocumentMapperConfig) : this(schema.toAvroSchema(), config)
+    public constructor(schema: AvroSchema, config: DocumentMapperConfig) : this(
+        schema.toAvroSchema(avroConfigOf(config).addNullAsDefaultValueInSchema),
+        config,
+    )
+
+    /**
+     * 使用 [AvroSchema] 与 [AvroConfig] 创建映射器。
+     *
+     * @param schema Avro Schema 视图（writer）
+     * @param config Avro 配置；配置中的 reader Schema 与 Schema 生成选项生效
+     */
+    public constructor(schema: AvroSchema, config: AvroConfig) : this(
+        schema.toAvroSchema(config.addNullAsDefaultValueInSchema),
+        config,
+    )
 
     /**
      * 使用 writer / reader 双 Schema 创建映射器以支持 Schema 演进。
@@ -149,7 +215,7 @@ public open class AvroMapper internal constructor(
         emptyMap(),
         null,
         null,
-        DocumentMapperConfig.empty(),
+        EMPTY_AVRO_CONFIG,
     )
 
     /**
@@ -157,10 +223,28 @@ public open class AvroMapper internal constructor(
      *
      * @param writerSchema 数据写出使用并内嵌到 OCF 的 Schema
      * @param readerSchema 读取时使用的期望 Schema
-     * @param config 通用 Mapper 配置
+     * @param config 通用配置
      * @throws IllegalArgumentException 任一 Schema 不是 record 类型时抛出
      */
     public constructor(writerSchema: Schema, readerSchema: Schema, config: DocumentMapperConfig) : this(
+        writerSchema,
+        readerSchema,
+        emptyMap(),
+        emptyMap(),
+        null,
+        null,
+        avroConfigOf(config),
+    )
+
+    /**
+     * 使用 writer / reader 双 Schema 与 [AvroConfig] 创建映射器。
+     *
+     * @param writerSchema 数据写出使用并内嵌到 OCF 的 Schema
+     * @param readerSchema 读取时使用的期望 Schema
+     * @param config Avro 配置
+     * @throws IllegalArgumentException 任一 Schema 不是 record 类型时抛出
+     */
+    public constructor(writerSchema: Schema, readerSchema: Schema, config: AvroConfig) : this(
         writerSchema,
         readerSchema,
         emptyMap(),
@@ -182,12 +266,61 @@ public open class AvroMapper internal constructor(
     )
 
     /**
-     * 将多个值写成 Avro Object Container File（OCF），使用 [AvroCodec.NULL] 不压缩。
+     * 使用 writer / reader 双 [AvroSchema] 与 [AvroConfig] 创建映射器。
+     *
+     * @param writerSchema 数据写出使用的 Schema 视图
+     * @param readerSchema 读取时使用的期望 Schema 视图
+     * @param config Avro 配置；Schema 生成选项生效
+     */
+    public constructor(writerSchema: AvroSchema, readerSchema: AvroSchema, config: AvroConfig) : this(
+        writerSchema.toAvroSchema(config.addNullAsDefaultValueInSchema),
+        readerSchema.toAvroSchema(config.addNullAsDefaultValueInSchema),
+        config,
+    )
+
+    /**
+     * 使用 [AvroConfig] 创建映射器。
+     *
+     * writer / reader Schema 来自 [AvroConfig.schema] / [AvroConfig.readerSchema]。
+     *
+     * @param config Avro 配置，必须包含 [AvroConfig.schema]
+     * @throws IllegalArgumentException 配置未提供 writer Schema 时抛出
+     */
+    public constructor(config: AvroConfig) : this(
+        avroWriterSchemaOf(config),
+        avroReaderSchemaOf(config),
+        emptyMap(),
+        emptyMap(),
+        null,
+        null,
+        config,
+    )
+
+    /**
+     * 将实体写成 Avro 二进制字节。
+     *
+     * 默认写裸单根 datum；开启 [AvroWriteFeature.AVRO_FILE_OUTPUT] 时改为写单条
+     * 记录的 OCF 容器（内嵌 Schema，codec 取 [AvroConfig.codec]），与 上游实现
+     * `AVRO_FILE_OUTPUT` 行为一致。
+     *
+     * @param value Java 实体、集合、Map 或 [com.mingliqiye.document.core.Node]
+     * @return Avro 二进制字节
+     */
+    override fun formatBytes(value: Any?): ByteArray {
+        if (avroConfig.avroFileOutput) {
+            val writer = AvroContainerWriter(writerSchema, avroConfig.codec)
+            return writer.write(listOf(value)) { item -> toNode(item) }
+        }
+        return super.formatBytes(value)
+    }
+
+    /**
+     * 将多个值写成 Avro Object Container File（OCF），使用 [AvroConfig.codec]。
      *
      * @param values 记录值集合
      * @return OCF 字节
      */
-    public fun formatContainerBytes(values: Iterable<Any?>): ByteArray = formatContainerBytes(values, AvroCodec.NULL)
+    public fun formatContainerBytes(values: Iterable<Any?>): ByteArray = formatContainerBytes(values, avroConfig.codec)
 
     /**
      * 将多个值写成 Avro Object Container File（OCF）。
@@ -216,7 +349,8 @@ public open class AvroMapper internal constructor(
      *
      * @param file OCF 文件
      * @param values 待追加值
-     * @param codec 期望 codec；`null` 表示沿用已有容器 codec（新建时为 [AvroCodec.NULL]）
+     * @param codec 期望 codec；`null` 表示沿用已有容器 codec（新建时为
+     *   [AvroConfig.codec]）
      * @throws com.mingliqiye.document.format.avro.exception.AvroException Schema 与
      *   已有容器不一致、codec 不一致或写出失败时抛出
      */
@@ -225,7 +359,7 @@ public open class AvroMapper internal constructor(
             val effectiveCodec = codec ?: AvroContainerReader.readHeader(file).codec
             AvroContainerWriter(writerSchema, effectiveCodec).appendTo(file, values) { value -> toNode(value) }
         } else {
-            AvroContainerWriter(writerSchema, codec ?: AvroCodec.NULL)
+            AvroContainerWriter(writerSchema, codec ?: avroConfig.codec)
                 .writeToFile(file, values) { value -> toNode(value) }
         }
     }
@@ -247,7 +381,8 @@ public open class AvroMapper internal constructor(
      * 向已有 OCF 字节追加记录，返回追加后的完整容器字节。
      *
      * 输出以原容器字节开头，新记录使用原 sync 标记写入后续数据块，等价于面向
-     * `OutputStream` 的追加语义；[existing] 为空时按新建容器处理。
+     * `OutputStream` 的追加语义；[existing] 为空时按新建容器处理（codec 取
+     * [AvroConfig.codec]）。
      *
      * @param existing 已有 OCF 字节
      * @param values 待追加值
@@ -262,7 +397,7 @@ public open class AvroMapper internal constructor(
         codec: AvroCodec? = null,
     ): ByteArray {
         if (existing.isEmpty()) {
-            return formatContainerBytes(values, codec ?: AvroCodec.NULL)
+            return formatContainerBytes(values, codec ?: avroConfig.codec)
         }
         val effectiveCodec = codec ?: AvroContainerReader.readHeader(existing).codec
         return AvroContainerWriter(writerSchema, effectiveCodec).appendTo(existing, values) { value -> toNode(value) }
@@ -308,13 +443,23 @@ public open class AvroMapper internal constructor(
         public const val FORMAT_NAME: String = "avro"
 
         /**
+         * 创建不带 Schema 的 Avro Mapper 构建器；Schema 可通过
+         * [AvroMapperBuilder.schema] / [AvroMapperBuilder.readerSchema] 或
+         * [AvroConfig.schema] 提供。
+         *
+         * @return 构建器
+         */
+        @JvmStatic
+        public fun builder(): AvroMapperBuilder = AvroMapperBuilder(null, null, null, null, null)
+
+        /**
          * 创建 Avro Mapper 构建器（writer 与 reader 相同）。
          *
          * @param schema Avro record Schema
          * @return 构建器
          */
         @JvmStatic
-        public fun builder(schema: Schema): AvroMapperBuilder = AvroMapperBuilder(schema, schema)
+        public fun builder(schema: Schema): AvroMapperBuilder = AvroMapperBuilder(schema, schema, null, null, null)
 
         /**
          * 使用 [AvroSchema] 创建 Avro Mapper 构建器（writer 与 reader 相同）。
@@ -323,7 +468,7 @@ public open class AvroMapper internal constructor(
          * @return 构建器
          */
         @JvmStatic
-        public fun builder(schema: AvroSchema): AvroMapperBuilder = AvroMapperBuilder(schema.toAvroSchema(), schema.toAvroSchema())
+        public fun builder(schema: AvroSchema): AvroMapperBuilder = AvroMapperBuilder(null, null, schema, schema, null)
 
         /**
          * 创建 Avro Mapper 构建器（writer / reader 双 Schema）。
@@ -333,6 +478,28 @@ public open class AvroMapper internal constructor(
          * @return 构建器
          */
         @JvmStatic
-        public fun builder(writerSchema: Schema, readerSchema: Schema): AvroMapperBuilder = AvroMapperBuilder(writerSchema, readerSchema)
+        public fun builder(writerSchema: Schema, readerSchema: Schema): AvroMapperBuilder = AvroMapperBuilder(writerSchema, readerSchema, null, null, null)
+
+        /**
+         * 使用双 [AvroSchema] 创建 Avro Mapper 构建器（writer / reader）。
+         *
+         * @param writerSchema writer Schema 视图
+         * @param readerSchema reader Schema 视图
+         * @return 构建器
+         */
+        @JvmStatic
+        public fun builder(writerSchema: AvroSchema, readerSchema: AvroSchema): AvroMapperBuilder = AvroMapperBuilder(null, null, writerSchema, readerSchema, null)
+
+        /**
+         * 使用 [AvroConfig] 创建 Avro Mapper 构建器。
+         *
+         * Schema 取 [AvroConfig.schema] / [AvroConfig.readerSchema]；也可后续用
+         * [AvroMapperBuilder.schema] 覆盖。
+         *
+         * @param config Avro 配置
+         * @return 构建器
+         */
+        @JvmStatic
+        public fun builder(config: AvroConfig): AvroMapperBuilder = AvroMapperBuilder(config.schema, config.readerSchema, null, null, config)
     }
 }

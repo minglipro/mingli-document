@@ -89,7 +89,7 @@ class XmlEdgeTest {
 
     @Test
     fun nilElementWithAttributesKeepsAttributes() {
-        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").disable(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE).build())
         val node = mapper.parse("<root><gone id=\"2\" nil=\"true\"/></root>", Node::class.java).asObject()
         val gone = node["gone"]?.asObject()
 
@@ -106,7 +106,7 @@ class XmlEdgeTest {
 
     @Test
     fun arrayElementAttributesUseWrapperAndRoundTrip() {
-        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").disable(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE).build())
         val xml = """<root><list id="1"><item>a</item><item>b</item></list></root>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -139,7 +139,7 @@ class XmlEdgeTest {
 
     @Test
     fun arrayElementMixedTextIsPreserved() {
-        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).attributePrefix("@").disable(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE).build())
         val xml = """<root><list id="1">prefix<item>a</item></list></root>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -221,7 +221,7 @@ class XmlEdgeTest {
 
     @Test
     fun clarkScalarAttributeWrapperRoundTrips() {
-        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).build())
+        val mapper = XmlMapper(XmlConfig.builder().typeAttributes(true).namespaceMode(XmlNamespaceMode.CLARK).disable(XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE).build())
         val xml = """<root><price xmlns:p="urn:p" p:currency="CNY">100</price></root>"""
 
         val node = mapper.parse(xml, Node::class.java).asObject()
@@ -322,7 +322,7 @@ class XmlEdgeTest {
     fun mixedContentRejectAllowsFormattingWhitespace() {
         val config = XmlConfig.builder().typeAttributes(true).mixedContentPolicy(XmlMixedContentPolicy.REJECT).build()
         val mapper = XmlMapper(config)
-        val pretty = ObjectNode.of("b" to StringNode.of("world")).toXmlString(pretty = true)
+        val pretty = ObjectNode.of("b" to StringNode.of("world")).toXmlString(pretty = true, writeFeatures = XmlConfig.DEFAULT_WRITE_FEATURES - XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE)
 
         val node = mapper.parse(pretty, Node::class.java).asObject()
         assertEquals("world", node["b"]?.asString())

@@ -1,6 +1,6 @@
 ---
 title: JSON / JSONC
-description: format-json 模块：JsonMapper、JsonConfig、JsonReader、重复 key 策略、深度限制与 JSON Schema 校验
+description: format-json 模块：JsonMapper、JsonConfig、参考实现 2.15.3 读/写特性、重复 key 策略、深度限制与 JSON Schema 校验
 ---
 
 # JSON / JSONC
@@ -19,7 +19,7 @@ implementation("com.mingliqiye.document.format:json:2.5.1")
 | artifactId | `json` |
 | 版本 | `2.5.1`（由根 `gradle.properties` 的 `projectVersion` 决定） |
 | 传递依赖 | `core`、`exception`、`serialization` |
-| 第三方依赖 | `com.fasterxml.jackson.core:jackson-core:2.15.3` |
+| 第三方依赖 | `第三方底层库坐标.core:JSON Token 底层库:2.15.3` |
 | 字节码 | JDK 8 |
 | 包名 | `com.mingliqiye.document.format.json` |
 
@@ -34,7 +34,8 @@ implementation("com.mingliqiye.document.format:json:2.5.1")
 - **Double 最短表示**：紧凑/格式化写出使用 JDK `Double.toString` 输出最短可往返的十进制文本；
 - **JSON Schema**：内置常用 draft-07 子集校验器；
 - **文件/流读写**：`File`、`Path`、`InputStream`、`Reader`、`OutputStream`、`Writer` 全覆盖；
-- **流式写出到 `OutputStream`**：`format(value, outputStream)` 直接边遍历边写。
+- **流式写出到 `OutputStream`**：`format(value, outputStream)` 直接边遍历边写；
+- **参考实现 2.15.3 配置对齐**：`JsonReadFeature` / `JsonWriteFeature` 全量实现，名称、默认值与 legacy 映射见下文「参考实现 2.15.3 配置对齐」。
 
 ## 配置：`JsonConfig`
 
@@ -48,6 +49,16 @@ implementation("com.mingliqiye.document.format:json:2.5.1")
 | `pretty` | `Boolean` | `false` | `format()` 是否默认输出格式化 JSON |
 | `duplicateKeyPolicy` | `DuplicateKeyPolicy` | `LAST_WINS` | 同一对象内重复 key 的处理策略 |
 | `maxDepth` | `Int` | `512`（`JsonConfig.DEFAULT_MAX_DEPTH`） | 对象/数组最大嵌套深度，必须为正数 |
+| `readFeatures` | `Set<JsonReadFeature>` | 空集合（`JsonConfig.DEFAULT_READ_FEATURES`） | 显式开启的 JSON 读取特性 |
+| `writeFeatures` | `Set<JsonWriteFeature>` | `QUOTE_FIELD_NAMES`、`WRITE_NAN_AS_STRINGS`、`WRITE_HEX_UPPER_CASE`（`JsonConfig.DEFAULT_WRITE_FEATURES`） | 显式开启的 JSON 写出特性 |
+
+`readFeatures` / `writeFeatures` 是「显式开启」集合，默认值与 参考实现 2.15.3 一致：
+读取特性全部关闭，写出特性中 `QUOTE_FIELD_NAMES`、`WRITE_NAN_AS_STRINGS`、
+`WRITE_HEX_UPPER_CASE` 默认开启。唯一默认值差异是 `ALLOW_JAVA_COMMENTS`：本项目为兼容
+JSONC 历史行为默认开启（参考实现 默认关闭），可用 `allowComments(false)` 或
+`disable(JsonReadFeature.ALLOW_JAVA_COMMENTS)` 恢复严格 JSON。`allowComments` 与
+`ALLOW_JAVA_COMMENTS`、`duplicateKeyPolicy(FAIL)` 与 `STRICT_DUPLICATE_DETECTION`
+分别是同一个开关（最后一次配置生效）。
 
 `DuplicateKeyPolicy` 取值：
 
@@ -66,22 +77,36 @@ implementation("com.mingliqiye.document.format:json:2.5.1")
 | `field(Class, String, DocumentBaseConverter)` | 为指定字段绑定转换器 |
 | `missingFieldPolicy(MissingFieldPolicy)` | 缺字段策略 |
 | `failOnUnknownFields(Boolean)` | 未知字段是否报错 |
-| `writeNulls(Boolean)` | null 字段是否写出 |
-| `allowComments(Boolean)` | 是否允许注释 |
-| `pretty(Boolean)` | 默认 pretty 输出 |
-| `duplicateKeyPolicy(DuplicateKeyPolicy)` | 重复 key 策略 |
+| `writeNulls(Boolean)` | null 字段是否写出（对应 `JsonInclude.ALWAYS/NON_NULL` 全局开关） |
+| `allowComments(Boolean)` | 是否允许注释（等价 `ALLOW_JAVA_COMMENTS`） |
+| `pretty(Boolean)` | 默认 pretty 输出（对应 `INDENT_OUTPUT`） |
+| `duplicateKeyPolicy(DuplicateKeyPolicy)` | 重复 key 策略（`FAIL` 等价 `STRICT_DUPLICATE_DETECTION`） |
 | `maxDepth(Int)` | 最大嵌套深度（必须 > 0） |
+| `enable(JsonReadFeature)` / `disable(...)` / `configure(feature, enabled)` | JSON 读取特性开关 |
+| `enable(JsonWriteFeature)` / `disable(...)` / `configure(feature, enabled)` | JSON 写出特性开关 |
+| `enable(DeserializationFeature)` / `disable(...)` / `configure(feature, enabled)` | 通用反序列化特性开关 |
+| `failOnNullForPrimitives(Boolean)` | 便捷设置 `FAIL_ON_NULL_FOR_PRIMITIVES` |
 | `subtype(base, typeName, subClass)` / `subtype(base, typeName, subClass, typeProperty)` | 注册多态子类型 |
 | `typeProperty(base, typeProperty)` | 覆盖多态类型属性名 |
 | `resolveReferences(Boolean)` / `writeReferences(Boolean)` | 本地 `$ref` 解析/写出 |
+| `remoteReferenceResolver(RemoteReferenceResolver?)` | 远程 `$ref` 解析器 |
+| `namingStrategy(PropertyNamingStrategy)` | 字段命名策略 |
+| `fileCharset(Charset)` | 文本文件/流读写字符集 |
+| `atomicFileWrite(Boolean)` / `createParentDirectories(Boolean)` | 文件写出选项 |
+| `maxInputSize(Long)` / `maxStringLength(Int)` / `maxNodeDepth(Int)` / `maxNodeCount(Long)` | 输入与 Node 树限制（0 表示不限制） |
+| `beanValidator(DocumentBeanValidator?)` | 根对象校验器 |
 | `build()` | 构建 `JsonConfig` |
 
-> 注意：`JsonConfigBuilder` 只暴露上述通用选项的一部分。需要 `namingStrategy`、`fileCharset`、`atomicFileWrite`、`createParentDirectories`、`maxInputSize` 等其它通用配置时，直接构造通用的 `DocumentMapperConfig` 传给 `JsonMapper`；此时 `allowComments` 回退为 `true`、`duplicateKeyPolicy` 回退为 `LAST_WINS`、`maxDepth` 回退为 512、`pretty` 回退为 `false`。
+> `JsonConfigBuilder` 转发全部通用 `DocumentMapperConfig` 选项，始终使用它也不会丢失
+> `namingStrategy`、`fileCharset`、`maxInputSize` 等配置；也可以直接把
+> `DocumentMapperConfig` 传给 `JsonMapper`，此时 JSON 专属选项回退默认值。
 
 ```kotlin
 import com.mingliqiye.document.format.json.DuplicateKeyPolicy
 import com.mingliqiye.document.format.json.JsonConfig
 import com.mingliqiye.document.format.json.JsonMapper
+import com.mingliqiye.document.format.json.JsonReadFeature
+import com.mingliqiye.document.format.json.JsonWriteFeature
 
 val mapper = JsonMapper(
     JsonConfig.builder()
@@ -89,9 +114,133 @@ val mapper = JsonMapper(
         .pretty(true)                         // format() 默认 pretty
         .duplicateKeyPolicy(DuplicateKeyPolicy.FAIL)
         .maxDepth(256)
+        .enable(JsonReadFeature.ALLOW_TRAILING_COMMA)
+        .enable(JsonReadFeature.ALLOW_SINGLE_QUOTES)
+        .enable(JsonWriteFeature.ESCAPE_NON_ASCII)
+        .disable(JsonWriteFeature.WRITE_HEX_UPPER_CASE)
         .build(),
 )
 ```
+
+独立读取器 `JsonReader` 同样支持读取特性：
+
+```kotlin
+import com.mingliqiye.document.format.json.JsonReadFeature
+import com.mingliqiye.document.format.json.JsonReader
+
+val node = JsonReader(
+    source = "{'a':1,}",
+    readFeatures = setOf(JsonReadFeature.ALLOW_SINGLE_QUOTES, JsonReadFeature.ALLOW_TRAILING_COMMA),
+).read()
+```
+
+## 参考实现 2.15.3 配置对齐
+
+格式级配置以 参考实现 2.15.3（`JSON Token 底层库` 2.15.3）为准：读取特性对应
+`第三方底层库坐标.core.json.JsonReadFeature` 与
+`第三方底层库坐标.core.StreamReadFeature` 中与 JSON 语法相关的项；写出特性对应
+`JsonWriteFeature`、`JsonGenerator.Feature` 与 `StreamWriteFeature`。每个枚举常量通过
+`legacyName` 属性暴露对应的 参考实现 旧版特性名称，便于从 参考实现 配置迁移。
+
+### 读取特性（`JsonReadFeature`）
+
+| 本项目特性 | 参考实现 旧名 | 默认 | 行为 |
+|---|---|---|---|
+| `ALLOW_JAVA_COMMENTS` | `JsonParser.Feature.ALLOW_COMMENTS` | **开启**（本项目 JSONC 兼容） | `//` 行注释与块注释 |
+| `ALLOW_YAML_COMMENTS` | `ALLOW_YAML_COMMENTS` | 关闭 | `#` 行注释 |
+| `ALLOW_SINGLE_QUOTES` | `ALLOW_SINGLE_QUOTES` | 关闭 | 字符串/字段名可用单引号 |
+| `ALLOW_UNQUOTED_FIELD_NAMES` | `ALLOW_UNQUOTED_FIELD_NAMES` | 关闭 | 字段名可不加引号 |
+| `ALLOW_UNESCAPED_CONTROL_CHARS` | `ALLOW_UNQUOTED_CONTROL_CHARS` | 关闭 | 字符串允许未转义控制字符 |
+| `ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER` | `ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER` | 关闭 | 未知转义按字面字符处理 |
+| `ALLOW_LEADING_ZEROS_FOR_NUMBERS` | `ALLOW_NUMERIC_LEADING_ZEROS` | 关闭 | 允许 `0123` |
+| `ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS` | `ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS` | 关闭 | 允许 `+1` |
+| `ALLOW_LEADING_DECIMAL_POINT_FOR_NUMBERS` | `ALLOW_LEADING_DECIMAL_POINT_FOR_NUMBERS` | 关闭 | 允许 `.5` |
+| `ALLOW_TRAILING_DECIMAL_POINT_FOR_NUMBERS` | `ALLOW_TRAILING_DECIMAL_POINT_FOR_NUMBERS` | 关闭 | 允许 `1.` |
+| `ALLOW_NON_NUMERIC_NUMBERS` | `ALLOW_NON_NUMERIC_NUMBERS` | 关闭 | 允许 `NaN` / `Infinity` / `-Infinity`（含 `+INF` / `-INF` / `+Infinity` 写法） |
+| `ALLOW_MISSING_VALUES` | `ALLOW_MISSING_VALUES` | 关闭 | 允许 `[1,,2]`、`[,1]`、`[1,]`，缺失槽读作 `null` |
+| `ALLOW_TRAILING_COMMA` | `ALLOW_TRAILING_COMMA` | 关闭 | 允许 `[1,]`、`{"a":1,}` |
+| `STRICT_DUPLICATE_DETECTION` | `StreamReadFeature.STRICT_DUPLICATE_DETECTION` | 关闭 | 重复 key 抛 `JsonParseException`，等价 `duplicateKeyPolicy(FAIL)` |
+
+补充语义（与 参考实现 探针结果一致）：
+
+- `ALLOW_MISSING_VALUES`：`[1,,2]` → `[1,null,2]`，`[,1]` → `[null,1]`，`[1,]` → `[1,null]`，
+  `[,]` → `[null,null]`，`[,,]` → `[null,null,null]`；同时开启 `ALLOW_TRAILING_COMMA`
+  时尾逗号优先，`[1,]` → `[1]`；
+- `ALLOW_NON_NUMERIC_NUMBERS`：Node 树中保留规范化 `raw`（`NaN` / `Infinity` /
+  `-Infinity`），`NumberNode.value`（`BigDecimal`）无法表示非有限值，需要数值时使用
+  `asNumber().toDouble()`；写出时由 `WRITE_NAN_AS_STRINGS` 决定是否加引号。
+
+### 写出特性（`JsonWriteFeature`）
+
+| 本项目特性 | 参考实现 旧名 | 默认 | 行为 |
+|---|---|---|---|
+| `QUOTE_FIELD_NAMES` | `JsonGenerator.Feature.QUOTE_FIELD_NAMES` | 开启 | 关闭后字段名原样输出（非标准 JSON，与 参考实现 一致） |
+| `WRITE_NAN_AS_STRINGS` | `QUOTE_NON_NUMERIC_NUMBERS` | 开启 | `NaN` / `Infinity` / `-Infinity` 写成 JSON 字符串；关闭后写裸文本 |
+| `WRITE_NUMBERS_AS_STRINGS` | `WRITE_NUMBERS_AS_STRINGS` | 关闭 | 所有数字写成 JSON 字符串 |
+| `WRITE_BIGDECIMAL_AS_PLAIN` | `WRITE_BIGDECIMAL_AS_PLAIN`（`StreamWriteFeature`） | 关闭 | Node 中带指数写法的 `raw`（如 `1E+5`）输出为普通十进制（`100000`） |
+| `ESCAPE_NON_ASCII` | `ESCAPE_NON_ASCII` | 关闭 | 7 位 ASCII 之外字符写成 `\uXXXX`，代理对写成两个转义 |
+| `WRITE_HEX_UPPER_CASE` | `WRITE_HEX_UPPER_CASE` | 开启 | `\uXXXX` 中十六进制字母大写 |
+
+### `JsonParser.Feature` / `StreamReadFeature` 全量覆盖
+
+| 参考实现 特性 | 状态 | 说明 |
+|---|---|---|
+| `AUTO_CLOSE_SOURCE` | 未作为特性暴露 | 解析 API 不关闭调用方输入流（IO 所有权归调用方） |
+| `ALLOW_COMMENTS` | 已实现 | → `ALLOW_JAVA_COMMENTS`（默认开启，见上文差异） |
+| `ALLOW_YAML_COMMENTS` | 已实现 | → `ALLOW_YAML_COMMENTS` |
+| `ALLOW_UNQUOTED_FIELD_NAMES` | 已实现 | → 同名特性 |
+| `ALLOW_SINGLE_QUOTES` | 已实现 | → 同名特性 |
+| `ALLOW_UNQUOTED_CONTROL_CHARS` | 已实现 | → `ALLOW_UNESCAPED_CONTROL_CHARS` |
+| `ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER` | 已实现 | → 同名特性 |
+| `ALLOW_NUMERIC_LEADING_ZEROS` | 已实现 | → `ALLOW_LEADING_ZEROS_FOR_NUMBERS` |
+| `ALLOW_LEADING_PLUS_SIGN_FOR_NUMBERS` | 已实现 | → 同名特性 |
+| `ALLOW_LEADING_DECIMAL_POINT_FOR_NUMBERS` | 已实现 | → 同名特性 |
+| `ALLOW_TRAILING_DECIMAL_POINT_FOR_NUMBERS` | 已实现 | → 同名特性 |
+| `ALLOW_NON_NUMERIC_NUMBERS` | 已实现 | → 同名特性（Node 树以 `raw` 保留） |
+| `ALLOW_MISSING_VALUES` | 已实现 | → 同名特性 |
+| `ALLOW_TRAILING_COMMA` | 已实现 | → 同名特性 |
+| `STRICT_DUPLICATE_DETECTION` | 已实现 | → 同名特性，等价 `duplicateKeyPolicy(FAIL)` |
+| `IGNORE_UNDEFINED` | 不适用 | databind 层概念，JSON 文本没有 undefined token |
+| `INCLUDE_SOURCE_IN_LOCATION` | 不适用 | `JsonParseException` 已包含行列位置，不保留源文本片段 |
+| `USE_FAST_DOUBLE_PARSER` / `USE_FAST_BIG_NUMBER_PARSER` | 不适用 | 纯性能提示；本实现使用 JDK `Double.parseDouble` 与 `BigDecimal`，语义无差异 |
+
+### `JsonGenerator.Feature` / `StreamWriteFeature` 全量覆盖
+
+| 参考实现 特性 | 状态 | 说明 |
+|---|---|---|
+| `AUTO_CLOSE_TARGET` | 未作为特性暴露 | `format(value, OutputStream/Writer)` 只 flush，不关闭调用方目标（本模块既有约定） |
+| `AUTO_CLOSE_JSON_CONTENT` | 不适用 | 写出器始终输出成对闭合的对象/数组，不存在遗留未闭合容器 |
+| `FLUSH_PASSED_TO_STREAM` | 恒等价开启 | `flush()` 直接传递给底层输出流 |
+| `QUOTE_FIELD_NAMES` | 已实现 | → 同名特性（默认开启） |
+| `QUOTE_NON_NUMERIC_NUMBERS` | 已实现 | → `WRITE_NAN_AS_STRINGS`（默认开启） |
+| `ESCAPE_NON_ASCII` | 已实现 | → 同名特性（默认关闭） |
+| `WRITE_NUMBERS_AS_STRINGS` | 已实现 | → 同名特性（默认关闭） |
+| `WRITE_BIGDECIMAL_AS_PLAIN` | 已实现 | → 同名特性（默认关闭） |
+| `STRICT_DUPLICATE_DETECTION` | 不适用 | 本模块公开 API 不产生重复字段名（Node/Bean 字段唯一）；仅底层内部 Token 写出器可驱动，不对外暴露 |
+| `IGNORE_UNKNOWN` | 不适用 | databind 层特性 |
+| `USE_FAST_DOUBLE_WRITER` | 不适用 | 纯性能提示；本实现已使用 JDK `Double.toString` 最短往返表示 |
+| `WRITE_HEX_UPPER_CASE` | 已实现 | → 同名特性（默认开启） |
+
+### ObjectMapper 常用配置映射
+
+| 参考实现 配置 | 本项目对应 | 状态 |
+|---|---|---|
+| `JsonInclude.Include.ALWAYS` | 默认 `writeNulls(true)` | 已实现 |
+| `JsonInclude.Include.NON_NULL` | `writeNulls(false)` 或 `@DocumentInclude(NON_NULL)` | 已实现 |
+| `JsonInclude.Include.NON_EMPTY` | `@DocumentInclude(NON_EMPTY)` | 已实现 |
+| `JsonInclude.Include.USE_DEFAULTS` | `@DocumentInclude(USE_DEFAULTS)` | 已实现 |
+| `JsonInclude.Include.NON_ABSENT` | 无专门策略 | 不支持：Node 无 `Optional`/引用缺席语义，可近似使用 `NON_NULL` |
+| `JsonInclude.Include.NON_DEFAULT` / `CUSTOM` | 无 | 不支持：需 serialization 层扩展 |
+| `SerializationFeature.INDENT_OUTPUT` | `JsonConfig.pretty(true)` | 已实现（参考实现 通过 PrettyPrinter 配置） |
+| `SerializationFeature.WRITE_BIGDECIMAL_AS_PLAIN` | `JsonWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN` | 已实现（Bean 的 BigDecimal 在 serialization 层恒为普通表示） |
+| `SerializationFeature.WRITE_DATES_AS_TIMESTAMPS` 等日期/枚举/排序项 | 由 serialization、转换器与注解层负责 | 不在 format-json 范围 |
+| `DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES` | `serialization.DeserializationFeature` 同名项 | 已实现（`JsonConfigBuilder.enable` 转发） |
+| `DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY` | `duplicateKeyPolicy(FAIL)` / `STRICT_DUPLICATE_DETECTION` | 已实现 |
+| `DeserializationFeature.FAIL_ON_TRAILING_TOKENS` | 无开关（所有解析入口恒拒绝 trailing content） | 等价恒开启 |
+| `DeserializationFeature.FAIL_ON_NUMBERS_FOR_ENUMS` | 无开关（serialization 的 enum 只接受 JSON 字符串） | 等价恒开启，无法关闭 |
+| `DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES` | `failOnUnknownFields(true)` | 已实现 |
+| `DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS` 等数字目标策略 | Node 数字始终保留 `raw` + `BigDecimal`；Bean 数字目标由字段类型决定 | 部分等价：不支持 `Object` 泛型目标按 Long/BigInteger 的策略切换 |
+| `ACCEPT_SINGLE_VALUE_AS_ARRAY` / `UNWRAP_SINGLE_VALUE_ARRAYS` / `ACCEPT_EMPTY_STRING_AS_NULL_OBJECT` / `READ_UNKNOWN_ENUM_VALUES_*` | 无 | serialization 层项，当前未提供 |
 
 ## Mapper 构造与 Builder
 
@@ -182,6 +331,9 @@ val node4 = """{"a":1}""".toJsonNode()
 
 - 直接产生 `DocumentTokenType` Token 流，Bean 映射在 Token 上完成，不构建完整 Node 树；
 - 解析深度由 JSON 专属的 `JsonConfig.maxDepth` 控制（默认 512），与通用 `maxNodeDepth` 相互独立；
+- 读取特性（`JsonReadFeature`）在 Token 路径同样生效；`ALLOW_MISSING_VALUES` 会产出
+  `NULL` token，`ALLOW_NON_NUMERIC_NUMBERS` 产出文本为 `NaN` / `Infinity` / `-Infinity`
+  的 `NUMBER` token；
 - 通用 Node 树限制（`maxNodeDepth` / `maxNodeCount` / `maxStringLength`）主要作用于 Node 路径（`fromNode` / `toNode`）以及各格式的 Node 回退路径；JSON 的文本 Token 快路径不执行这些 Node 树限制；
 - 需要自定义 Token 来源时，实现 `DocumentTokenReader` 后调用 `DocumentMapper.fromTokens(...)`；也可以先用 `JsonReader` 构建 Node，再通过 `serialization` 模块的 `NodeTokenReader(node)` 接入。
 
@@ -203,7 +355,7 @@ val node4 = """{"a":1}""".toJsonNode()
 | `format(value, output: OutputStream)` | 直接流式写到输出流（内部 `JsonUtf8StreamWriter`） |
 | `formatPretty(value, output: OutputStream)` | 流式 pretty 输出 |
 | `format(value, writer: Writer)` / `formatPretty(value, writer)` | 写字符流 |
-| `Node.toJsonString(pretty: Boolean = false)` | 扩展函数：Node → JSON 文本 |
+| `Node.toJsonString(pretty: Boolean = false, writeFeatures: Set<JsonWriteFeature> = DEFAULT)` | 扩展函数：Node → JSON 文本，可指定写出特性 |
 
 流式支持：
 
@@ -254,7 +406,7 @@ class User {
 val mapper = JsonMapper()
 val user = mapper.parse("""{"name":"小于","age":18}""", User::class.java)
 val text = mapper.format(user)
-println(text)   // {"name":"小于","age":18}
+println(text)   // 紧凑 JSON（字段顺序由 Bean 属性元数据决定）
 ```
 
 ### 2. JSON → Node 树
@@ -521,6 +673,11 @@ format：date-time / date / time / email / hostname / ipv4 / ipv6 / uri / uuid
 | 数字 NaN / Infinity | 无法构造 `NumberNode`；写出非有限 Double 抛 `IllegalArgumentException` |
 | `BinaryNode` 写入 | 写成 Base64 字符串，读取回来是 `StringNode`（JSON 无二进制类型） |
 | 非字符串 Map key | Bean 层 Map 的 key 作为 JSON 字段名 `toString()` |
+| 开启 `ALLOW_NON_NUMERIC_NUMBERS` 后读取 `NaN` / `Infinity` | Node 树保留 `raw`；`NumberNode.value` 访问抛 `NumberFormatException`，需要数值时用 `asNumber().toDouble()` |
+| 使用 `toNode` 序列化非有限 `Double` / `Float` | `IllegalArgumentException`（`NumberNode` 只能表示有限 `BigDecimal`）；流式写出 `format` / `formatBytes` 在 `WRITE_NAN_AS_STRINGS` 开启时写成 `"NaN"` 等字符串 |
+| 关闭 `WRITE_HEX_UPPER_CASE` | `\uXXXX` 中的十六进制字母变为小写（默认大写，与 参考实现 一致） |
+| 关闭 `QUOTE_FIELD_NAMES` | 字段名按原样输出，可能得到非标准 JSON（参考实现 行为） |
+| `format(value, OutputStream/Writer)` | 只 flush 不关闭调用方目标（`AUTO_CLOSE_TARGET` 未暴露） |
 
 ## 与通用 `DocumentMapper` 的差异
 
@@ -529,6 +686,10 @@ format：date-time / date / time / email / hostname / ipv4 / ipv6 / uri / uuid
 - `formatBytes`：紧凑模式下用 `JsonUtf8StreamWriter` 直接输出 UTF-8 字节，不先构造 `String`；
 - `format` / `formatPretty`：尊重 `JsonConfig.pretty`；`formatPretty` 始终 pretty；
 - `createStreamingTokenWriter`：`OutputStream` 写出走原生流式 Token 写出器；
+- 配置 API：新增 `JsonReadFeature` / `JsonWriteFeature`、`JsonConfig.readFeatures/writeFeatures`、
+  `JsonConfigBuilder.enable/disable/configure`，并转发全部通用 `DocumentMapperConfig` 选项；
+  `JsonParser.Feature` / `JsonGenerator.Feature` / `StreamReadFeature` / `StreamWriteFeature`
+  的覆盖情况见上文「参考实现 2.15.3 配置对齐」；
 - JSON 专属：`JsonReader`、`DuplicateKeyPolicy`、`JsonSchema`、`String.toJsonNode()` / `Node.toJsonString()`；
 - 严格 UTF-8 字节语义：仅 `parse(ByteArray)` 使用严格解码，文件/流路径按 `fileCharset` 解码。
 

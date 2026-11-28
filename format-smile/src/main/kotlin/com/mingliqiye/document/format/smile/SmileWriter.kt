@@ -19,18 +19,27 @@ import java.math.BigInteger
 /**
  * 将文档树写成 Smile 二进制。
  *
- * 使用 Jackson Smile 写出器（默认写出 Smile 头部，共享字段名开启），因此输出
+ * 使用 上游实现 Smile 写出器（默认写出 Smile 头部，共享字段名开启），因此输出
  * 是自描述的 Smile 文档，可直接用 [SmileReader] 读回。
  *
  * 数字按 [NumberNode.raw] 分类：纯整数写为 Smile 整数（int / long / big integer），
  * 含小数点或指数的写为 big decimal；读取后按数值比较与原始树等价。
  *
- * Smile 格式规范本身没有独立的 binary 类型，Jackson 的 Smile 实现通过扩展令牌
+ * Smile 格式规范本身没有独立的 binary 类型，上游实现 的 Smile 实现通过扩展令牌
  * （7-bit 编码的 `0xE8` / 原始 `0xFD`）承载二进制内容，解析时给出
  * `VALUE_EMBEDDED_OBJECT`。本模块直接使用该扩展完成 [BinaryNode] 往返，
  * 不额外做 Base64 字符串降级。
+ *
+ * 写出特性（头部、结束标记、共享字段名/字符串值、二进制 7-bit 编码、宽松 UTF 编码、
+ * 严格重复字段名检查）由 [config] 提供，默认与 上游实现 一致。
+ *
+ * @param config Smile 配置；`null` 表示使用 上游实现 默认写出特性
  */
-public class SmileWriter {
+public class SmileWriter @JvmOverloads constructor(
+    private val config: SmileConfig? = null,
+) {
+
+    private val generatorFactory: SmileFactory = createSmileGeneratorFactory(config)
 
     /**
      * 写出节点并返回 Smile 字节。
@@ -55,7 +64,7 @@ public class SmileWriter {
         }
         val output = ByteArrayOutputStream()
         val generator = try {
-            SMILE_FACTORY.createGenerator(output)
+            generatorFactory.createGenerator(output)
         } catch (e: IOException) {
             throw SmileException("Cannot create Smile generator", e)
         }
@@ -108,11 +117,6 @@ public class SmileWriter {
             // 内容已经写出，关闭失败不影响结果。
         }
     }
-
-    public companion object {
-
-        private val SMILE_FACTORY: SmileFactory = SmileFactory()
-    }
 }
 
 /**
@@ -122,9 +126,9 @@ public class SmileWriter {
  * big integer；其余写为 big decimal。Node 写出与 Token 写出共用该分类，保证两条
  * 路径的输出一致。
  *
- * @param generator Jackson Smile 生成器
+ * @param generator 上游实现 Smile 生成器
  * @param raw 数字原始文本
- * @throws java.io.IOException Jackson 写出失败
+ * @throws java.io.IOException 上游实现 写出失败
  * @throws SmileException 数字文本非法
  */
 internal fun writeSmileNumber(generator: JsonGenerator, raw: String) {

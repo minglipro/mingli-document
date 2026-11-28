@@ -15,6 +15,9 @@ TomlMapper / TomlMapperBuilder        Bean <-> TOML 映射
 TomlReader / TomlWriter               文档树 <-> TOML 文本
 TomlTokenReader                       原生 Token 读取
 
+TomlConfig / TomlConfigBuilder        TOML 专属配置（对齐 参考实现 TOML）
+TomlReadFeature / TomlWriteFeature    TOML 读取/写出特性开关
+
 TomlMapper.DEFAULT_MAX_DEPTH          默认解析深度上限（512）
 TomlMapper.parseCommented             读取保留注释的文档（便捷入口）
 TomlMapper.formatCommented            写出保留注释的文档（便捷入口）
@@ -69,6 +72,93 @@ val document = com.mingliqiye.document.format.toml.TomlCommentPreservingReader(s
   `com.mingliqiye.document.serialization.exception.DocumentSerializationException`；
 - `TomlReader` / `TomlTokenReader` / `TomlCommentPreservingReader` 的 `maxDepth`
   显式传 `0` 或负数表示关闭保护。
+
+## 配置对齐 参考实现（TomlConfig）
+
+`format-toml` 提供专属 `TomlConfig`（继承 `DocumentMapperConfig`），配置项对齐
+TOML 底层库：参考实现 2.15 与 3.x 的 TOML 特性全部覆盖，默认值一致。
+
+### 特性矩阵
+
+| 参考实现 特性 | 默认值 | 本模块行为 |
+| --- | --- | --- |
+| `TomlReadFeature.PARSE_JAVA_TIME` | 关闭 | 关闭：日期时间读取为 TOML 源码原文（空格分隔符归一化为 `T`、`z` 归一化为 `Z`）；开启：读取为 `java.time` 规范化 ISO-8601 字符串。参考实现 以 `VALUE_EMBEDDED_OBJECT` 返回 `java.time` 对象，本项目的 `Node`/Token 模型没有 embedded object 类型，因此以规范化字符串作为明确替代，详见“限制”。 |
+| `TomlReadFeature.VALIDATE_DATE_TIME`（参考实现 3.2+） | 关闭 | 关闭：返回源码原文；开启：额外用 `java.time` 复核日期时间，非法值抛 `TomlParseException`。tomlj 解析器本身已严格校验，故正常输入两种模式结果一致。 |
+| `TomlWriteFeature.FAIL_ON_NULL_WRITE` | 关闭 | 关闭：`null` 写成空字符串 `""`（参考实现 默认）；开启：任何 `null` 写出抛 `TomlException`。 |
+
+参考实现 TOML 还会继承 `StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN`（本模块数字固定
+plain 输出，等价开启）与 `StreamReadFeature.USE_FAST_BIG_NUMBER_PARSER`（由 tomlj 决定），
+它们不是 TOML 专属特性，未单独提供开关。
+
+### 使用方式
+
+```kotlin
+import com.mingliqiye.document.format.toml.TomlConfig
+import com.mingliqiye.document.format.toml.TomlMapper
+import com.mingliqiye.document.format.toml.TomlOrphanCommentPolicy
+import com.mingliqiye.document.format.toml.TomlReadFeature
+import com.mingliqiye.document.format.toml.TomlWriteFeature
+
+// Mapper 构建器直接开关特性
+val mapper = TomlMapper.builder()
+    .maxDepth(64)                                        // 解析深度
+    .enable(TomlReadFeature.PARSE_JAVA_TIME)             // 日期时间 -> java.time 规范化字符串
+    .enable(TomlWriteFeature.FAIL_ON_NULL_WRITE)         // null 写出报错
+    .trailingNewline(false)                              // 注释保留写出：不写结尾换行
+    .preserveBlankLines(false)                           // 注释保留写出：不保留空行
+    .build()
+
+// 等价：先构建 TomlConfig 再交给 Mapper
+val config = TomlConfig.builder()
+    .maxDepth(64)
+    .enable(TomlReadFeature.PARSE_JAVA_TIME)
+    .disable(TomlReadFeature.VALIDATE_DATE_TIME)
+    .configure(TomlWriteFeature.FAIL_ON_NULL_WRITE, false)
+    .orphanCommentPolicy(TomlOrphanCommentPolicy.DROP)
+    .build()
+val mapper2 = TomlMapper(config)
+```
+
+```kotlin
+// 独立 Reader / Writer 也接受特性集合
+val node = TomlReader(toml, readFeatures = setOf(TomlReadFeature.PARSE_JAVA_TIME)).read()
+val text = node.toTomlString(setOf(TomlWriteFeature.FAIL_ON_NULL_WRITE))
+```
+
+`TomlConfigBuilder` 同时转发全部通用 `DocumentMapperConfig` 便捷方法：
+`field` / `missingFieldPolicy` / `failOnUnknownFields` / `writeNulls` / `namingStrategy` /
+`fileCharset` / `atomicFileWrite` / `createParentDirectories` / `maxInputSize` /
+`maxStringLength` / `maxNodeDepth` / `maxNodeCount` / `resolveReferences` /
+`writeReferences` / `remoteReferenceResolver` / `beanValidator` / `subtype` /
+`typeProperty` / `enable`/`disable`/`configure(DeserializationFeature)` /
+`failOnNullForPrimitives`。
+
+### 注释配置合并
+
+`TomlCommentConfigBuilder` 继续保留，可独立使用；主配置同样携带注释写出配置：
+
+```kotlin
+val tomlConfig = TomlConfig.builder()
+    .orphanCommentPolicy(TomlOrphanCommentPolicy.PRESERVE_AT_END_OF_FILE)
+    .preserveBlankLines(false)
+    .trailingNewline(false)
+    .build()
+
+// 从主配置取出注释配置
+val commentConfig = TomlCommentConfig.from(tomlConfig)
+
+// 独立构建器可基于现有配置继续覆盖
+val merged = TomlCommentConfig.builder().base(commentConfig).trailingNewline(true).build()
+```
+
+`TomlMapper.formatCommented(document)` 默认使用 Mapper 的 `TomlConfig.commentConfig` 与
+`writeFeatures`；`formatCommented(document, config)` 仍可显式覆盖注释配置。
+
+### null 行为（对齐 参考实现 默认）
+
+- 默认（`FAIL_ON_NULL_WRITE` 关闭）：`null` 写成 `""`，包括对象字段、内联 table 字段与
+  数组元素；需要“省略 null 字段”时配置通用 `writeNulls(false)`（对应 参考实现 的 `NON_NULL`）；
+- 开启 `FAIL_ON_NULL_WRITE`：任何 `null` 写出抛 `TomlException`。
 
 ## 注释保留
 
@@ -225,6 +315,7 @@ val text = document.toTomlString(config)
 - 文件/流读写
 - Token 直读 Bean
 - 原生 TOML Token Reader
+- 配置对齐 参考实现 TOML（`TomlConfig` / `TomlReadFeature` / `TomlWriteFeature`）
 - 解析深度限制（默认 512，可配置，含词法预扫描保护）
 - 注释/空行保留 round-trip（独立 API + Mapper 便捷入口）
 
@@ -232,10 +323,17 @@ val text = document.toTomlString(config)
 
 基础读写：
 
-- TOML 日期时间类型映射为 ISO-8601 字符串
-- TOML 没有 null 类型
+- TOML 日期时间默认读取为源码原文（日期时间分隔符空格归一化为 `T`、`z` 归一化为 `Z`）；
+  开启 `TomlReadFeature.PARSE_JAVA_TIME` 后读取为 `java.time` 规范化 ISO-8601 字符串。
+  参考实现 返回 `java.time` embedded object，本项目 `Node`/Token 模型无该类型，属明确替代
+- TOML 没有 null 类型：默认写成 `""`（对齐 参考实现），开启 `FAIL_ON_NULL_WRITE` 时抛 `TomlException`；
+  读回为字符串，Bean 的对象字段不会自动把 `""` 转成 null
+- 参考实现 `TomlMapper` 默认启用的 `DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT`
+  （空串按目标类型转为 null）未对齐：本项目 `DocumentMapper` 暂无该反序列化特性，需要省略
+  null 字段请用通用 `writeNulls(false)`
 - 根节点固定为对象
-- tomlj 1.0.0 只支持 TOML 0.5：数组元素必须同类型；且无法回读内联 table/数组中的空数组
+- tomlj 1.0.0 只支持 TOML 0.5：数组元素必须同类型；且无法回读内联 table/数组中的空数组；
+  数组中以逗号分隔的多个日期时间字面量也无法回读（tomlj 解析器限制）
 - `TomlMapper` 的 Bean 映射不保留注释：注释保留 API 独立于 Mapper 使用；
   `parseCommented` / `formatCommented` 只是便捷入口，不改变 Bean 映射语义
 - 显式把 `maxDepth` 设为 `0` 或负数会关闭保护，此时超深输入可能由 tomlj 内部

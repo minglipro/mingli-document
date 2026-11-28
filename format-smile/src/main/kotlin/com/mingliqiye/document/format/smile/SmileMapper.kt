@@ -23,7 +23,11 @@ import java.io.OutputStream
  * [SmileTokenReader] 直接解码 Bean，均不构建完整 Node 树；[SmileReader] / [SmileWriter]
  * 的 Node 路径仍作为基类 fallback 保留。
  *
- * 与 Jackson 的 `SmileMapper` 类似：外部只使用这个 Mapper，不需要接触内部
+ * 通过 [SmileConfig] 可配置 Smile 读写特性（头部、结束标记、共享字段名/字符串值、
+ * 二进制编码、宽松 UTF 编码、严格重复字段名检测等），默认值对齐
+ * Smile 底层库；传入普通 [DocumentMapperConfig] 时使用 上游实现 默认特性。
+ *
+ * 与 上游实现 的 `SmileMapper` 类似：外部只使用这个 Mapper，不需要接触内部
  * Codec SPI。
  */
 public open class SmileMapper internal constructor(
@@ -34,8 +38,8 @@ public open class SmileMapper internal constructor(
     config: DocumentMapperConfig,
 ) : BinaryDocumentMapper(
     "smile",
-    { source -> SmileReader(source, config.maxNodeDepth).read() },
-    { node, _ -> SmileWriter().write(node) },
+    { source -> SmileReader(source, config.maxNodeDepth, config as? SmileConfig).read() },
+    { node, _ -> SmileWriter(config as? SmileConfig).write(node) },
     serializers,
     deserializers,
     objectInstantiator,
@@ -44,6 +48,7 @@ public open class SmileMapper internal constructor(
 ) {
 
     private val maxNodeDepth: Int = config.maxNodeDepth
+    private val smileConfig: SmileConfig? = config as? SmileConfig
 
     /**
      * 创建默认 Smile 映射器。
@@ -51,7 +56,16 @@ public open class SmileMapper internal constructor(
     public constructor() : this(emptyMap(), emptyMap(), null, null, DocumentMapperConfig.empty())
 
     /**
+     * 使用 Smile 配置创建映射器。
+     *
+     * @param config Smile 配置（读写特性 + 通用配置）
+     */
+    public constructor(config: SmileConfig) : this(emptyMap(), emptyMap(), null, null, config)
+
+    /**
      * 使用通用字段配置创建 Smile 映射器。
+     *
+     * 通用配置不包含 Smile 读写特性，此时使用 上游实现 默认特性。
      *
      * @param config 通用 Mapper 配置
      */
@@ -72,9 +86,9 @@ public open class SmileMapper internal constructor(
      * @param source Smile 二进制内容
      * @return Smile Token 读取器
      */
-    override fun createTokenReader(source: ByteArray): DocumentTokenReader = SmileTokenReader(source)
+    override fun createTokenReader(source: ByteArray): DocumentTokenReader = SmileTokenReader(source, smileConfig)
 
-    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty) null else SmileTokenWriter(output)
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty) null else SmileTokenWriter(output, smileConfig)
 
     /**
      * 将 Java 实体直接写成 Smile 字节。
@@ -86,7 +100,7 @@ public open class SmileMapper internal constructor(
      * @return Smile 二进制内容
      */
     override fun formatBytes(value: Any?): ByteArray {
-        val writer = SmileTokenWriter()
+        val writer = SmileTokenWriter(config = smileConfig)
         try {
             writeTo(value, writer)
             return writer.toByteArray()
@@ -110,7 +124,7 @@ public open class SmileMapper internal constructor(
      */
     public fun parseAllToNodes(source: ByteArray, maxItems: Int = 0): List<Node> {
         checkInputSize(source.size.toLong())
-        return SmileSequenceReader(source, maxNodeDepth, maxItems).readAll()
+        return SmileSequenceReader(source, maxNodeDepth, maxItems, smileConfig).readAll()
     }
 
     /**
@@ -159,7 +173,7 @@ public open class SmileMapper internal constructor(
         if (!iterator.hasNext()) {
             return ByteArray(0)
         }
-        val writer = SmileTokenWriter()
+        val writer = SmileTokenWriter(config = smileConfig)
         return try {
             while (iterator.hasNext()) {
                 writeTo(iterator.next(), writer)

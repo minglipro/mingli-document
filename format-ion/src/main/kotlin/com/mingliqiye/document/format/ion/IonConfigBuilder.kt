@@ -1,6 +1,8 @@
 package com.mingliqiye.document.format.ion
 
+import com.mingliqiye.document.serialization.DeserializationFeature
 import com.mingliqiye.document.serialization.DocumentBaseConverter
+import com.mingliqiye.document.serialization.DocumentBeanValidator
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.MissingFieldPolicy
 import com.mingliqiye.document.serialization.PropertyNamingStrategy
@@ -11,11 +13,15 @@ import java.nio.charset.Charset
  * [IonConfig] 构建器。
  *
  * 通用选项直接委托 [DocumentMapperConfig] 构建器，Ion 专属选项单独保存。
+ * 读/写特性默认值对齐 Ion 底层库，可用 [enable] / [disable] /
+ * [configure] 调整。
  */
 public class IonConfigBuilder {
 
     private val base = DocumentMapperConfig.builder()
     private var preserveTypes = false
+    private val readFeatures = IonConfig.DEFAULT_READ_FEATURES.toMutableSet()
+    private val writeFeatures = IonConfig.DEFAULT_WRITE_FEATURES.toMutableSet()
 
     /**
      * 为指定字段绑定转换器。
@@ -115,6 +121,73 @@ public class IonConfigBuilder {
     }
 
     /**
+     * 设置 Node 树中单个字符串最大长度，0 表示不限制。
+     *
+     * @param max 最大长度
+     * @return 当前构建器
+     */
+    public fun maxStringLength(max: Int): IonConfigBuilder {
+        base.maxStringLength(max)
+        return this
+    }
+
+    /**
+     * 设置根对象 Bean 校验器；`null` 表示不校验。
+     *
+     * @param validator 校验器
+     * @return 当前构建器
+     */
+    public fun beanValidator(validator: DocumentBeanValidator?): IonConfigBuilder {
+        base.beanValidator(validator)
+        return this
+    }
+
+    /**
+     * 开启通用反序列化特性（[DeserializationFeature]）。
+     *
+     * @param feature 反序列化特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: DeserializationFeature): IonConfigBuilder {
+        base.enable(feature)
+        return this
+    }
+
+    /**
+     * 关闭通用反序列化特性（[DeserializationFeature]）。
+     *
+     * @param feature 反序列化特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: DeserializationFeature): IonConfigBuilder {
+        base.disable(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭通用反序列化特性（[DeserializationFeature]）。
+     *
+     * @param feature 反序列化特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: DeserializationFeature, enabled: Boolean): IonConfigBuilder {
+        base.configure(feature, enabled)
+        return this
+    }
+
+    /**
+     * 便捷设置 [DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES]。
+     *
+     * @param fail 是否在 `null` 赋给基本类型时抛出异常
+     * @return 当前构建器
+     */
+    public fun failOnNullForPrimitives(fail: Boolean): IonConfigBuilder {
+        base.failOnNullForPrimitives(fail)
+        return this
+    }
+
+    /**
      * 设置反序列化前是否解析本地 `$ref`。
      */
     public fun resolveReferences(resolve: Boolean): IonConfigBuilder {
@@ -190,7 +263,69 @@ public class IonConfigBuilder {
     }
 
     /**
+     * 开启 Ion 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: IonReadFeature): IonConfigBuilder {
+        readFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭 Ion 读取特性。
+     *
+     * @param feature 读取特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: IonReadFeature): IonConfigBuilder {
+        readFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭 Ion 读取特性。
+     *
+     * @param feature 读取特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: IonReadFeature, enabled: Boolean): IonConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
+     * 开启 Ion 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun enable(feature: IonWriteFeature): IonConfigBuilder {
+        writeFeatures.add(feature)
+        return this
+    }
+
+    /**
+     * 关闭 Ion 写出特性。
+     *
+     * @param feature 写出特性
+     * @return 当前构建器
+     */
+    public fun disable(feature: IonWriteFeature): IonConfigBuilder {
+        writeFeatures.remove(feature)
+        return this
+    }
+
+    /**
+     * 按布尔值开启或关闭 Ion 写出特性。
+     *
+     * @param feature 写出特性
+     * @param enabled 是否开启
+     * @return 当前构建器
+     */
+    public fun configure(feature: IonWriteFeature, enabled: Boolean): IonConfigBuilder = if (enabled) enable(feature) else disable(feature)
+
+    /**
      * 构建配置。
      */
-    public fun build(): IonConfig = IonConfig(base.build(), preserveTypes)
+    public fun build(): IonConfig = IonConfig(base.build(), preserveTypes, readFeatures.toSet(), writeFeatures.toSet())
 }

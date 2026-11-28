@@ -1,6 +1,7 @@
 package com.mingliqiye.document.format.xml
 
 import com.mingliqiye.document.annotation.DocumentRootName
+import com.mingliqiye.document.core.Node
 import com.mingliqiye.document.serialization.DocumentBaseDeserializer
 import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapper
@@ -31,9 +32,16 @@ import java.io.OutputStreamWriter
  *   `PRESERVE_ORDERED` 额外输出 `#content` 有序数组（文本项 `StringNode`、
  *   子元素项单字段 `ObjectNode`），写出时按该数组顺序交错输出文本与子元素；`REJECT` 抛异常。
  *
+ * 读/写特性（[XmlReadFeature] / [XmlWriteFeature]）与 Builder 选项
+ * （`defaultUseWrapper`、`nameForTextElement`、`nameProcessor`）对齐 上游实现 XML 3.x，
+ * 默认值也采用 3.x 默认；`XmlConfigBuilder.上游库2Defaults()` 可切换到 上游实现 2.x 默认。
+ * 注意默认开启的 [XmlWriteFeature.UNWRAP_ROOT_OBJECT_NODE] 只对“以 Node 树显式写出”生效，
+ * Bean 序列化保持根元素；默认开启的 [XmlWriteFeature.AUTO_DETECT_XSI_TYPE] 仅在标量类型
+ * 推断会失真时写 `xsi:type`。
+ *
  * `parse(String)` 默认通过原生 [XmlTokenReader] 直接消费 Token，不构建 Node 树；
- * 非默认读取配置（属性映射、命名空间、自定义键名、有序/拒绝混合内容）或配置了
- * Node 树限制/`resolveReferences` 时回退 [NodeTokenReader] 路径。
+ * 非默认读取配置（属性映射、命名空间、自定义键名、有序/拒绝混合内容、非默认读特性或
+ * 名称处理器）或配置了 Node 树限制/`resolveReferences` 时回退 [NodeTokenReader] 路径。
  *
  * 解析深度限制：默认安全上限为 [XmlConfig.DEFAULT_MAX_DEPTH]（512，根元素深度为 `1`），
  * 可用 [XmlConfig.maxDepth] 或通用 `DocumentMapperConfig.maxNodeDepth` 调整；两者同时
@@ -106,12 +114,12 @@ public open class XmlMapper internal constructor(
 
     private fun writeXml(value: Any?, pretty: Boolean): String {
         val rootName = value?.javaClass?.getAnnotation(DocumentRootName::class.java)?.value
-        return XmlWriter.from(xmlConfig, rootName).write(toNode(value), pretty)
+        return XmlWriter.from(xmlConfig, rootName, treeModel = value is Node).write(toNode(value), pretty)
     }
 
     private fun writeXmlTo(value: Any?, pretty: Boolean, out: Appendable) {
         val rootName = value?.javaClass?.getAnnotation(DocumentRootName::class.java)?.value
-        XmlWriter.from(xmlConfig, rootName).writeTo(toNode(value), pretty, out)
+        XmlWriter.from(xmlConfig, rootName, treeModel = value is Node).writeTo(toNode(value), pretty, out)
     }
 
     /**

@@ -1,30 +1,24 @@
 package com.mingliqiye.document.format.properties
 
-import com.mingliqiye.document.format.properties.exception.PropertiesParseException
 import com.mingliqiye.document.serialization.DocumentToken
 import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.DocumentTokenType
 import com.mingliqiye.document.serialization.exception.DocumentSerializationException
-import java.io.StringReader
 import java.math.BigDecimal
-import java.util.Properties
 
 /**
  * Properties 原生 Token 读取器。
  *
  * 直接把 Properties 平铺 key/value 转换成 [DocumentTokenReader] Token 流，
- * 不构建 `com.mingliqiye.document.core.Node` 树；为了还原对象/数组层级，只使用
- * `Map` / `List` / [DocumentToken] 组成的轻量中间结构，最终输出 Token 列表。
+ * 不构建 `com.mingliqiye.document.core.Node` 树；使用与 [PropertiesReader] 相同的
+ * 轻量路径树（[PropertiesTreeReader]），按 [PropertiesConfig] 的 上游实现
+ * `JavaPropsSchema` 语义生成 Token：
+ * - 对象：START_OBJECT、若干 FIELD_NAME + 值 Token、END_OBJECT；
+ * - 数组：START_ARRAY、元素 Token、END_ARRAY（稠密）；
+ * - 标量：STRING / NUMBER / BOOLEAN；
+ * - 空输入：空对象（START_OBJECT、END_OBJECT）。
  *
- * 生成的 Token 序列与 `NodeTokenReader(PropertiesReader(source).read())` 等价：
- * - 对象：START_OBJECT、若干 FIELD_NAME + 值 Token、END_OBJECT
- * - 数组：START_ARRAY、元素 Token、END_ARRAY
- * - 标量：STRING / NUMBER / BOOLEAN
- * - 空输入：空对象（START_OBJECT、END_OBJECT）
- *
- * 解析语义与 [PropertiesReader] 保持一致：key 先排序，再由 [PropertiesPath] 还原
- * `.` 对象路径和 `[index]` 数组下标（包含百分号转义）；值按 true/false/数字/字符串
- * 推断；冲突路径抛 [PropertiesParseException]。
+ * 与 `NodeTokenReader(PropertiesReader(source, config).read())` 的 Token 序列一致。
  *
  * Token 流同样受 maxNodeDepth/maxNodeCount/maxStringLength 限制：构造时在生成
  * Token 的过程中执行与 Node 路径 `NodeLimits` 等价的校验，超限抛
@@ -33,23 +27,24 @@ import java.util.Properties
  * `DocumentMapper.parse` 在创建本读取器之前校验。
  *
  * @param source Properties 文本
+ * @param config Properties 配置
  * @param maxNodeDepth Node 树最大深度；0 表示不限制
  * @param maxNodeCount Node 树最大节点数；0 表示不限制
  * @param maxStringLength 字段名与字符串值最大长度；0 表示不限制
- * @param maxDepth 解析最大嵌套深度（根对象深度为 `1`，即 key 路径段数 + 1），
- *   默认 [PropertiesMapper.DEFAULT_MAX_DEPTH]；超限抛 [PropertiesParseException]，
+ * @param maxDepth 解析最大嵌套深度；默认取 [PropertiesConfig.maxDepth]，
  *   `0` 或负数表示不限制
  */
 internal class PropertiesTokenReader(
     source: String,
+    private val config: PropertiesConfig = PropertiesConfig.empty(),
     maxNodeDepth: Int = 0,
     maxNodeCount: Long = 0,
     maxStringLength: Int = 0,
-    private val maxDepth: Int = PropertiesMapper.DEFAULT_MAX_DEPTH,
+    maxDepth: Int = config.maxDepth,
 ) : DocumentTokenReader {
 
     private val limits = TokenLimits(maxNodeDepth, maxNodeCount, maxStringLength)
-    private val tokens: List<DocumentToken> = buildTokens(source)
+    private val tokens: List<DocumentToken> = buildTokens(source, maxDepth)
     private var index = -1
     private var current: DocumentToken? = null
 
@@ -76,93 +71,34 @@ internal class PropertiesTokenReader(
         return token.type
     }
 
-    private fun buildTokens(source: String): List<DocumentToken> {
-        val properties = Properties()
-        try {
-            properties.load(StringReader(source))
-        } catch (e: Exception) {
-            throw PropertiesParseException("Invalid Properties: ${e.message}", e)
-        }
-        var root: Any? = null
-        for (name in properties.stringPropertyNames().sorted()) {
-            val segments = PropertiesPath.parse(name)
-            checkDepth(segments, name)
-            val value = inferScalar(properties.getProperty(name))
-            root = insert(root, segments, 0, value, name)
-        }
+    private fun buildTokens(source: String, maxDepth: Int): List<DocumentToken> {
+        val root = PropertiesTreeReader(config, maxDepth).read(source)
         val tokens = ArrayList<DocumentToken>()
-        appendNode(root ?: LinkedHashMap<String, Any?>(), 1, tokens)
+        appendNode(root, 1, tokens)
         return tokens
     }
 
-    /**
-     * 在插入前校验 key 路径深度，避免超深路径导致递归构建/输出 StackOverflow。
-     */
-    private fun checkDepth(segments: List<PropertiesPathSegment>, name: String) {
-        if (maxDepth <= 0) {
-            return
-        }
-        val depth = segments.size + 1
-        if (depth > maxDepth) {
-            throw PropertiesParseException("Properties key path '$name' depth $depth exceeds maxDepth $maxDepth")
-        }
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun insert(
-        current: Any?,
-        segments: List<PropertiesPathSegment>,
-        depth: Int,
-        value: DocumentToken,
-        path: String,
-    ): Any? {
-        if (depth == segments.size) {
-            return value
-        }
-        val segment = segments[depth]
-        return if (segment.isIndex) {
-            val list = current as? MutableList<Any?> ?: if (current == null) {
-                ArrayList<Any?>()
-            } else {
-                throw conflict(path)
-            }
-            while (list.size <= segment.index) {
-                list.add(null)
-            }
-            list[segment.index] = insert(list[segment.index], segments, depth + 1, value, path)
-            list
-        } else {
-            val map = current as? MutableMap<String, Any?> ?: if (current == null) {
-                LinkedHashMap<String, Any?>()
-            } else {
-                throw conflict(path)
-            }
-            val key = segment.key ?: throw conflict(path)
-            map[key] = insert(map[key], segments, depth + 1, value, path)
-            map
-        }
-    }
-
-    private fun appendNode(value: Any?, depth: Int, tokens: MutableList<DocumentToken>) {
-        limits.enterNode(depth)
-        when (value) {
-            null -> {
-                // [PropertiesReader] 把数组空洞还原成空对象节点，Token 流保持一致。
-                tokens.add(DocumentToken.startObject())
-                tokens.add(DocumentToken.endObject())
-            }
-
-            is DocumentToken -> {
-                if (value.type == DocumentTokenType.STRING) {
-                    value.text?.let(limits::checkString)
+    private fun appendNode(node: PropertiesPathNode, depth: Int, tokens: MutableList<DocumentToken>) {
+        when {
+            node.isArray -> {
+                limits.enterNode(depth)
+                tokens.add(DocumentToken.startArray())
+                node.nullableValue?.let { appendScalar(it, depth + 1, tokens) }
+                for (child in node.arrayContents()) {
+                    appendNode(child, depth + 1, tokens)
                 }
-                tokens.add(value)
+                tokens.add(DocumentToken.endArray())
             }
 
-            is Map<*, *> -> {
+            node.hasNameChildren -> {
+                limits.enterNode(depth)
                 tokens.add(DocumentToken.startObject())
-                for ((key, child) in value) {
-                    val name = key.toString()
+                node.nullableValue?.let {
+                    limits.checkString("")
+                    tokens.add(DocumentToken.fieldName(""))
+                    appendScalar(it, depth + 1, tokens)
+                }
+                for ((name, child) in node.nameContents()) {
                     limits.checkString(name)
                     tokens.add(DocumentToken.fieldName(name))
                     appendNode(child, depth + 1, tokens)
@@ -170,23 +106,31 @@ internal class PropertiesTokenReader(
                 tokens.add(DocumentToken.endObject())
             }
 
-            is List<*> -> {
-                tokens.add(DocumentToken.startArray())
-                for (element in value) {
-                    appendNode(element, depth + 1, tokens)
+            else -> {
+                val value = node.nullableValue
+                if (value == null) {
+                    // 空输入/无内容：与 PropertiesReader 一致返回空对象。
+                    limits.enterNode(depth)
+                    tokens.add(DocumentToken.startObject())
+                    tokens.add(DocumentToken.endObject())
+                } else {
+                    appendScalar(value, depth, tokens)
                 }
-                tokens.add(DocumentToken.endArray())
             }
-
-            else -> throw PropertiesParseException("Unsupported Properties tree value: ${value.javaClass.name}")
         }
     }
 
-    private fun inferScalar(text: String): DocumentToken = when {
-        text == "true" -> DocumentToken.boolean(true)
-        text == "false" -> DocumentToken.boolean(false)
-        isNumber(text) -> DocumentToken.number(text)
-        else -> DocumentToken.string(text)
+    private fun appendScalar(text: String, depth: Int, tokens: MutableList<DocumentToken>) {
+        limits.enterNode(depth)
+        when {
+            text == "true" -> tokens.add(DocumentToken.boolean(true))
+            text == "false" -> tokens.add(DocumentToken.boolean(false))
+            isNumber(text) -> tokens.add(DocumentToken.number(text))
+            else -> {
+                limits.checkString(text)
+                tokens.add(DocumentToken.string(text))
+            }
+        }
     }
 
     private fun isNumber(text: String): Boolean = try {
@@ -195,8 +139,6 @@ internal class PropertiesTokenReader(
     } catch (_: NumberFormatException) {
         false
     }
-
-    private fun conflict(path: String): PropertiesParseException = PropertiesParseException("Conflicting Properties key path '$path'")
 }
 
 /**

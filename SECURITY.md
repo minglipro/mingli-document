@@ -31,7 +31,7 @@ fuzz/SecurityBaselineTest
 以下不在当前安全基线内：
 
 - 恶意 schema 导致的业务逻辑绕过
-- 不受信任的 Jackson/第三方库漏洞
+- 不受信任的 参考实现/第三方库漏洞
 - 侧信道、DoS 级别的 CPU/内存竞争
 - 远程 `$ref` 解析器的 SSRF 防护（由使用方实现）
 

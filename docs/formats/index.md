@@ -23,15 +23,15 @@ Java Bean / Kotlin data class
 
 | 格式 | 模块 artifact | 文本 | 二进制 | 专属配置类 | 原生 Token 路径 | 多值/多消息 | 第三方依赖 |
 |---|---|---|---|---|---|---|---|
-| JSON / JSONC | `com.mingliqiye.document.format:json` | ✅ | 字节 API（UTF-8） | `JsonConfig` | ✅ 读取、写出 | — | Jackson `jackson-core 2.15.3` |
+| JSON / JSONC | `com.mingliqiye.document.format:json` | ✅ | 字节 API（UTF-8） | `JsonConfig` | ✅ 读取、写出 | — | 参考实现 `JSON Token 底层库 2.15.3` |
 | YAML | `com.mingliqiye.document.format:yaml` | ✅ | — | `YamlConfig` | ✅ 读取 | 多文档 `---` | SnakeYAML `2.6` |
 | XML | `com.mingliqiye.document.format:xml` | ✅ | — | `XmlConfig` | ✅ 默认配置读取 | — | JDK DOM |
 | Properties | `com.mingliqiye.document.format:properties` | ✅ | — | 无（用通用配置） | ✅ 读取 | — | 无 |
 | TOML | `com.mingliqiye.document.format:toml` | ✅ | — | 无（用通用配置） | ✅ 读取 | — | tomlj `1.0.0` |
 | CSV | `com.mingliqiye.document.format:csv` | ✅ | — | `CsvConfig` | ✅ 读取 | 多行表格 | commons-csv `1.10.0` |
 | Ion | `com.mingliqiye.document.format:ion` | ✅ | ✅ | `IonConfig` | ✅ 读取、直写 | — | ion-java `1.11.9` |
-| CBOR | `com.mingliqiye.document.format:cbor` | — | ✅ | `CborConfig` | ✅ 读取、直写 | CBOR sequence | jackson-dataformat-cbor `2.15.3` |
-| Smile | `com.mingliqiye.document.format:smile` | — | ✅ | 无（用通用配置） | ✅ 读取、直写 | 多消息流 | jackson-dataformat-smile `2.15.3` |
+| CBOR | `com.mingliqiye.document.format:cbor` | — | ✅ | `CborConfig` | ✅ 读取、直写 | CBOR sequence | CBOR 底层库 `2.15.3` |
+| Smile | `com.mingliqiye.document.format:smile` | — | ✅ | 无（用通用配置） | ✅ 读取、直写 | 多消息流 | Smile 底层库 `2.15.3` |
 | Avro | `com.mingliqiye.document.format:avro` | — | ✅ | 无（用通用配置） | —（Schema 驱动） | OCF 容器 | Apache Avro `1.11.3`、snappy-java |
 | Protobuf | `com.mingliqiye.document.format:protobuf` | — | ✅ | 无（构造参数） | —（Descriptor 驱动） | MessageSet | protobuf-java `3.25.5` |
 

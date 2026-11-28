@@ -1,6 +1,6 @@
 ---
 title: Protobuf
-description: format-protobuf 模块：ProtobufMapper、ProtobufSchema/Descriptor、extension、group、MessageSet、未知字段策略与 proto3 语义
+description: format-protobuf 模块：ProtobufMapper、ProtobufConfig（参考实现 对齐特性）、ProtobufSchema/Descriptor、extension、group、MessageSet、未知字段策略与 proto3 语义
 ---
 
 # Protobuf
@@ -39,9 +39,114 @@ implementation("com.mingliqiye.document.format:protobuf:2.5.1")
 - **MessageSet wire format**：`option message_set_wire_format = true` 自动识别；
 - **未知字段策略**：`FAIL` / `IGNORE` / `PRESERVE`；
 - **Schema 层**：`ProtobufSchema` → `Descriptor`，或从 `Descriptor` 还原 Schema，或导出 JSON 风格描述；
-- **解析深度限制**：`ProtobufMapper(..., maxDepth)`；
+- **解析深度限制**：`ProtobufMapper(..., maxDepth)` 或 `ProtobufConfig.maxDepth`；
+- **配置**：`ProtobufConfig` / `ProtobufConfigBuilder`，参考实现 对齐的读取/写出特性 + protobuf 专属项；
 - **文件/流读写**：二进制语义；
 - **Mapper 复用**：`ProtobufMapperFactory` 按 Descriptor 缓存，线程安全。
+
+## 配置：`ProtobufConfig`
+
+`ProtobufConfig` 继承通用 `DocumentMapperConfig`，在通用字段/读写配置基础上增加 Protobuf 专属选项；
+由 `ProtobufConfigBuilder` 构建后传给 `ProtobufMapper` 或 `ProtobufMapperFactory`。
+
+### 参考实现 对齐说明
+
+参考实现 `Protobuf 底层库`（2.15.3 与 2.23.0 官方源码核对）**没有格式专属的
+Parser/Generator Feature 枚举**：
+
+- `ProtobufFactory.getFormatReadFeatureType()` / `getFormatWriteFeatureType()` 均被注释并标注
+  "No format-specific configuration, yet"；
+- `ProtobufFactoryBuilder` 也只透传 参考实现 core 的 `TSFBuilder` 设置，无额外选项；
+- 参考实现 protobuf 解析器/生成器实际只查询核心特性
+  `StreamReadFeature.IGNORE_UNDEFINED` 与 `JsonGenerator.Feature.IGNORE_UNKNOWN` 来控制未知字段行为。
+
+因此本模块以 参考实现 同名常量封装这两项真正影响 wire 语义的特性（默认值对齐 参考实现：关闭），
+其余 参考实现 核心特性见下方「未提供开关的 参考实现 特性」表。
+
+### 读取特性（`ProtobufReadFeature`）
+
+| 特性 | 参考实现 名称（`legacyName`） | 默认 | 行为 |
+|---|---|---|---|
+| `IGNORE_UNDEFINED` | `StreamReadFeature.IGNORE_UNDEFINED`（旧版 `JsonParser.Feature.IGNORE_UNDEFINED`） | 关闭 | 关闭：未知 wire 字段抛 `ProtobufParseException`；开启：丢弃未知字段（等价 `ProtobufUnknownFieldPolicy.IGNORE`）。`PRESERVE` 策略优先，不丢数据。 |
+
+### 写出特性（`ProtobufWriteFeature`）
+
+| 特性 | 参考实现 名称（`legacyName`） | 默认 | 行为 |
+|---|---|---|---|
+| `IGNORE_UNKNOWN` | `JsonGenerator.Feature.IGNORE_UNKNOWN` | 关闭 | 关闭：对象节点出现未声明字段名抛 `ProtobufException`；开启：静默跳过未声明字段（含嵌套 message）。`$unknownFields` 保留字段不在此列，仍只在 `PRESERVE` 下接受。 |
+
+### 专属字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `unknownFieldPolicy` | `ProtobufUnknownFieldPolicy` | `FAIL` | 未知字段策略（`FAIL` / `IGNORE` / `PRESERVE`） |
+| `maxDepth` | `Int` | `0`（不限制） | 解析最大嵌套深度 |
+| `extensions` | `ProtobufExtensionRegistry` | `EMPTY` | extension 注册表 |
+| `readFeatures` | `Set<ProtobufReadFeature>` | `DEFAULT_READ_FEATURES`（空） | 读取特性（对齐 参考实现 默认） |
+| `writeFeatures` | `Set<ProtobufWriteFeature>` | `DEFAULT_WRITE_FEATURES`（空） | 写出特性（对齐 参考实现 默认） |
+
+查询与派生属性：
+
+| 成员 | 说明 |
+|---|---|
+| `isEnabled(ProtobufReadFeature)` / `isEnabled(ProtobufWriteFeature)` | 特性是否开启 |
+| `effectiveUnknownFieldPolicy` | 读取实际生效的策略：`PRESERVE` 优先；`IGNORE_UNDEFINED` 开启时 `FAIL` 升级为 `IGNORE` |
+| `ignoreUndefinedFields` / `ignoreUnknownFields` | 两个特性的便捷布尔属性 |
+| `ProtobufMapper.isEnabled(feature)` | Mapper 上查询特性 |
+
+### 未提供开关的 参考实现 特性（不适用 / 通用层处理）
+
+| 参考实现 特性 | 本模块处理 |
+|---|---|
+| `StreamReadFeature.AUTO_CLOSE_SOURCE` | 通用 Mapper 层的 `parse(InputStream)` 负责关闭，行为与 参考实现 默认（开启）一致，格式层不涉及流所有权 |
+| `JsonGenerator.Feature.AUTO_CLOSE_TARGET` | 通用 Mapper 层的 `format(value, OutputStream)` 负责关闭/刷新 |
+| `JsonGenerator.Feature.FLUSH_PASSED_TO_STREAM` | 通用 Mapper 层负责 flush |
+| `JsonGenerator.Feature.AUTO_CLOSE_JSON_CONTENT` | 字节 API 无「未闭合容器」概念：`formatBytes` 总是写完整个 message |
+| `StreamReadFeature.USE_FAST_BIG_NUMBER_PARSER` | 不适用：protobuf 数字来自二进制 wire，本库始终使用精确 `BigDecimal`/整数表示，无 ASCII 数字解析路径 |
+| `StreamReadFeature.STRICT_DUPLICATE_DETECTION` | 不适用：protobuf 字段按编号唯一，重复 singular 字段按官方 last-wins 合并 |
+| `JsonParser.Feature.CLEAR_CURRENT_TOKEN_ON_CLOSE`（2.23+） | 不适用：本模块不暴露 `JsonParser`，解析结果直接映射为 Node/实体，无 parser 生命周期 API |
+
+### Builder 方法
+
+`ProtobufConfig.builder()` 返回 `ProtobufConfigBuilder`：
+
+| 方法 | 说明 |
+|---|---|
+| `unknownFieldPolicy(ProtobufUnknownFieldPolicy)` | 未知字段策略（默认 `FAIL`） |
+| `maxDepth(Int)` | 解析最大嵌套深度（默认 `0` 不限制，负数抛 `IllegalArgumentException`） |
+| `extensions(ProtobufExtensionRegistry)` | extension 注册表 |
+| `readFeatures(Set<ProtobufReadFeature>)` / `writeFeatures(Set<ProtobufWriteFeature>)` | 整体设置特性集合 |
+| `enable/disable/configure(ProtobufReadFeature[, Boolean])` | 读取特性开关 |
+| `enable/disable/configure(ProtobufWriteFeature[, Boolean])` | 写出特性开关 |
+| `base(DocumentMapperConfig)` | 直接复用完整通用配置；与下列通用便捷方法互斥 |
+| `field` / `missingFieldPolicy` / `failOnUnknownFields` / `writeNulls` | 通用字段与未知/缺失字段策略 |
+| `namingStrategy` / `fileCharset` / `atomicFileWrite` / `createParentDirectories` | 命名、文件读写选项 |
+| `maxInputSize` / `maxStringLength` / `maxNodeDepth` / `maxNodeCount` | 输入与 Node 树限制 |
+| `resolveReferences` / `writeReferences` / `remoteReferenceResolver` / `beanValidator` | `$ref`、根对象校验 |
+| `subtype(...)` / `typeProperty(...)` | 多态子类型注册 |
+| `enable/disable/configure(DeserializationFeature)` / `failOnNullForPrimitives` | 反序列化特性便捷方法 |
+| `build()` | 构建 `ProtobufConfig` |
+
+### 示例
+
+```kotlin
+import com.mingliqiye.document.format.protobuf.ProtobufConfig
+import com.mingliqiye.document.format.protobuf.ProtobufMapper
+import com.mingliqiye.document.format.protobuf.ProtobufMapperFactory
+import com.mingliqiye.document.format.protobuf.ProtobufReadFeature
+import com.mingliqiye.document.format.protobuf.ProtobufUnknownFieldPolicy
+import com.mingliqiye.document.format.protobuf.ProtobufWriteFeature
+
+val config = ProtobufConfig.builder()
+    .unknownFieldPolicy(ProtobufUnknownFieldPolicy.IGNORE)
+    .maxDepth(64)
+    .enable(ProtobufReadFeature.IGNORE_UNDEFINED)   // 对齐 参考实现 IGNORE_UNDEFINED
+    .enable(ProtobufWriteFeature.IGNORE_UNKNOWN)    // 对齐 参考实现 IGNORE_UNKNOWN
+    .build()
+
+val mapper = ProtobufMapper(descriptor, config)
+val factory = ProtobufMapperFactory(config)
+```
 
 ## Schema 层
 
@@ -179,23 +284,34 @@ val schema = ProtobufSchema.builder("Container")
 
 | 构造器 | 说明 |
 |---|---|
-| `ProtobufMapper(descriptor, unknownFieldPolicy = FAIL, maxDepth = 0, extensions = ProtobufExtensionRegistry.EMPTY)` | 主构造器 |
+| `ProtobufMapper(descriptor, unknownFieldPolicy = FAIL, maxDepth = 0, extensions = ProtobufExtensionRegistry.EMPTY)` | 兼容构造器：参数组合为默认 `ProtobufConfig` |
+| `ProtobufMapper(descriptor, config: ProtobufConfig)` | 使用完整配置（参考实现 对齐特性 + 通用配置） |
 | `ProtobufMapper(schema: ProtobufSchema)` | 由 Schema 生成 Descriptor |
 | `ProtobufMapper(schema: ProtobufSchema, unknownFieldPolicy)` | 同上，指定策略 |
+| `ProtobufMapper(schema: ProtobufSchema, config: ProtobufConfig)` | 由 Schema 生成 Descriptor 并使用完整配置 |
 | `ProtobufMapper(descriptor, extensions: ProtobufExtensionRegistry)` | 默认 `FAIL` 策略 |
 | `ProtobufMapper(descriptor, unknownFieldPolicy, extensions)` | 指定策略与 extension |
 
-属性：`descriptor`、`unknownFieldPolicy`、`maxDepth`、`extensions`；常量 `ProtobufMapper.FORMAT_NAME = "protobuf"`。
+属性：`descriptor`、`protobufConfig`、`unknownFieldPolicy`、`maxDepth`、`extensions`，
+方法 `isEnabled(ProtobufReadFeature)` / `isEnabled(ProtobufWriteFeature)`；常量
+`ProtobufMapper.FORMAT_NAME = "protobuf"`。
 
 ```kotlin
+import com.mingliqiye.document.format.protobuf.ProtobufConfig
 import com.mingliqiye.document.format.protobuf.ProtobufMapper
+import com.mingliqiye.document.format.protobuf.ProtobufReadFeature
 import com.mingliqiye.document.format.protobuf.ProtobufUnknownFieldPolicy
+import com.mingliqiye.document.format.protobuf.ProtobufWriteFeature
 
 val descriptor = schema.toDescriptor()
 val mapper = ProtobufMapper(
     descriptor,
-    ProtobufUnknownFieldPolicy.FAIL,
-    maxDepth = 64,
+    ProtobufConfig.builder()
+        .unknownFieldPolicy(ProtobufUnknownFieldPolicy.FAIL)
+        .maxDepth(64)
+        .enable(ProtobufReadFeature.IGNORE_UNDEFINED)
+        .enable(ProtobufWriteFeature.IGNORE_UNKNOWN)
+        .build(),
 )
 ```
 
@@ -212,6 +328,10 @@ val factory = ProtobufMapperFactory(
 )
 val userMapper = factory.mapper(userDescriptor)
 val orderMapper = factory.mapper(orderDescriptor)
+
+// 或使用完整配置：
+val configured = ProtobufMapperFactory(config)
+val shared = configured.mapper(userDescriptor)
 ```
 
 Factory 内部用 `ConcurrentHashMap<Descriptor, ProtobufMapper>` 缓存；Mapper 是线程安全的读对象，建议按 Descriptor 复用，Descriptor / FileDescriptor / extension 注册表也应只构建一次。
@@ -264,7 +384,8 @@ val bean = mapper.parse(bytes, currentDescriptor, User::class.java)
 写出细节：
 
 - 实体先经 `toNode` 转成对象节点，再由 `ProtobufWireCodec.encode` 编码为 `DynamicMessage.toByteArray()`；
-- 对象节点中出现 Descriptor 与注册表都未声明的字段名 → `ProtobufException`；
+- 对象节点中出现 Descriptor 与注册表都未声明的字段名 → `ProtobufException`（开启
+  `ProtobufWriteFeature.IGNORE_UNKNOWN` 或 `ProtobufConfig` 后静默跳过）；
 - `null` 表示“未设置”（跳过），必填字段为 `null` 抛 `ProtobufException`；
 - oneof 同时设置多个字段 → `ProtobufException`；
 - 字符串写出前校验可编码为合法 UTF-8（拒绝未配对 UTF-16 代理项）；
@@ -312,6 +433,11 @@ presence（字段存在性）：
 | `FAIL`（默认） | 遇到未知字段抛 `ProtobufParseException` | 对象出现未声明字段（包括 `$unknownFields`）抛异常 |
 | `IGNORE` | 丢弃未知字段，只映射声明字段与已注册 extension | 对象出现未声明字段仍抛异常 |
 | `PRESERVE` | 未知字段映射为 `$unknownFields` 字段并支持写回 | 接受 `$unknownFields` 并按原 wire 类型还原 |
+
+与 参考实现 对齐的读取特性 `ProtobufReadFeature.IGNORE_UNDEFINED` 是 `FAIL` → `IGNORE` 的开关：
+`ProtobufConfig.effectiveUnknownFieldPolicy` 在开启该特性且策略为 `FAIL` 时取 `IGNORE`；
+`PRESERVE` 优先级最高（不会因该特性丢失未知字段）。写出侧对应的 参考实现 特性是
+`ProtobufWriteFeature.IGNORE_UNKNOWN`（跳过未声明字段名，不改变 `$unknownFields` 规则）。
 
 `ProtobufUnknownFields` 字段名与结构：
 
@@ -829,6 +955,9 @@ val declared = ProtobufSchema.builder("MessageSetRoot")
 | 根 MessageSet 的畸形 payload | 解析前额外结构校验会抛 `ProtobufParseException` |
 | 扩展字段 required | 无 required 语义（proto2 规范不允许 required extension） |
 | 多 message 类型 | 用 `ProtobufMapperFactory` 或显式 Descriptor API 复用 Mapper |
+| 参考实现 格式专属 Feature | 参考实现 protobuf 官方没有格式专属枚举；本模块按源码只对齐其实际查询的 `IGNORE_UNDEFINED` / `IGNORE_UNKNOWN` 两项，其余核心特性不提供空开关（见上文「配置：`ProtobufConfig`」） |
+| `ProtobufConfigBuilder.base(...)` 与通用便捷方法混用 | 抛 `IllegalStateException`，二者只能选其一 |
+| `ProtobufConfig.maxDepth` 为负 | 抛 `IllegalArgumentException` |
 
 ## 与通用 `DocumentMapper` 的差异
 
@@ -837,7 +966,9 @@ val declared = ProtobufSchema.builder("MessageSetRoot")
 - 额外能力：`ProtobufSchema` / `ProtobufSchemaBuilder` / `ProtobufMessage` / `ProtobufEnum`、`ProtobufExtensionRegistry`、group、MessageSet、未知字段策略、`ProtobufMapperFactory`；
 - 显式 Descriptor 调用：`parseToNode` / `parse(source, descriptor, ...)` / `formatBytes(value, descriptor)`；
 - Node 表示受 proto3 presence 影响：解码只输出实际存在或非默认字段；
-- 没有格式专属 Config 类：未知字段策略、深度、extension 都是 Mapper 构造参数。
+- 配置：`ProtobufConfig` / `ProtobufConfigBuilder`（参考实现 对齐的 `IGNORE_UNDEFINED` /
+  `IGNORE_UNKNOWN` 特性、未知字段策略、深度、extension 注册表），并转发全部通用
+  `DocumentMapperConfig` 便捷方法。
 
 ## 相关链接
 

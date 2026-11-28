@@ -15,18 +15,27 @@ import com.mingliqiye.document.format.yaml.exception.YamlParseException
  * [com.mingliqiye.document.core.ArrayNode]，映射 ->
  * [com.mingliqiye.document.core.ObjectNode]，anchor/merge/alias/深度限制保持有效。
  *
+ * 读取特性（[readFeatures]）与 SnakeYAML LoaderOptions（[allowDuplicateKeys]、
+ * [codePointLimit]）对齐 上游实现 YAML 2.15，详见 [YamlConfig]。
+ *
  * 输入包含多个文档时请使用 [YamlMultiDocumentReader] 或 [YamlMapper.parseAllToNodes]。
  *
  * @param source YAML 文本
  * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
  * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
  * @param allowCustomTags 是否允许未知自定义 tag，默认 `false`（保持 SafeConstructor 行为）
+ * @param readFeatures 读取特性集合，默认 [YamlConfig.DEFAULT_READ_FEATURES]
+ * @param allowDuplicateKeys 是否允许重复 mapping key，默认 `false`
+ * @param codePointLimit 单次输入最大 code point 数量；`0` 使用 SnakeYAML 默认值
  */
 public class YamlReader @JvmOverloads constructor(
     private val source: String,
     private val maxDepth: Int = 0,
     private val maxAliases: Int = 0,
     private val allowCustomTags: Boolean = false,
+    private val readFeatures: Set<YamlReadFeature> = YamlConfig.DEFAULT_READ_FEATURES,
+    private val allowDuplicateKeys: Boolean = false,
+    private val codePointLimit: Int = 0,
 ) {
 
     /**
@@ -37,7 +46,15 @@ public class YamlReader @JvmOverloads constructor(
      *
      * @throws YamlParseException YAML 格式非法或包含不支持的类型时抛出
      */
-    public fun read(): Node = YamlNodeMapping.readRoot(source, maxDepth, maxAliases, allowCustomTags)
+    public fun read(): Node = YamlNodeMapping.readRoot(
+        source,
+        maxDepth,
+        maxAliases,
+        allowCustomTags,
+        readFeatures,
+        allowDuplicateKeys,
+        codePointLimit,
+    )
 
     public companion object {
 

@@ -10,7 +10,8 @@ import org.apache.commons.csv.CSVRecord
  *
  * 在 Commons CSV 的惰性记录迭代器之上复用 [CsvRowDecoder] / [CsvSchemaRowDecoder]：
  * 首次调用 [next] 时读取表头（有表头时）或确定无表头列布局，此后每次调用最多读取
- * 一条记录，不预读整张表。表头、类型推断、嵌套与 Schema 规则与整段解析完全一致。
+ * 一条记录，不预读整张表。表头、类型推断、空单元格语义、上游实现 读取特性与 Schema
+ * 规则与整段解析完全一致。
  *
  * 迭代过程中的 CSV 格式错误、IO 错误与解码错误统一包装为 [CsvParseException]。
  *
@@ -19,6 +20,7 @@ import org.apache.commons.csv.CSVRecord
  * @param nestedMode 嵌套值读写方式
  * @param schema CSV Schema；`null` 表示使用类型推断路径
  * @param maxDepth 解析最大嵌套深度；`0` 或负数表示不限制
+ * @param support 读取特性与 Schema 选项应用层
  */
 internal class CsvStreamRowSource(
     private val records: Iterator<CSVRecord>,
@@ -26,6 +28,7 @@ internal class CsvStreamRowSource(
     nestedMode: CsvNestedMode?,
     private val schema: CsvSchema?,
     maxDepth: Int = CsvConfig.DEFAULT_MAX_DEPTH,
+    private val support: CsvReadSupport,
 ) {
 
     private val plainDecoder: CsvRowDecoder?
@@ -36,11 +39,11 @@ internal class CsvStreamRowSource(
 
     init {
         if (schema == null) {
-            plainDecoder = CsvRowDecoder(nestedMode, maxDepth)
+            plainDecoder = CsvRowDecoder(nestedMode, maxDepth, support)
             schemaDecoder = null
         } else {
             plainDecoder = null
-            schemaDecoder = CsvSchemaRowDecoder(schema, nestedMode, maxDepth)
+            schemaDecoder = CsvSchemaRowDecoder(schema, nestedMode, maxDepth, support)
         }
     }
 
@@ -63,34 +66,43 @@ internal class CsvStreamRowSource(
             initialized = true
             initializeHeader()
         }
-        if (!hasNextRecord()) {
-            return null
+        while (hasNextRecord()) {
+            val record = nextRecord()
+            if (support.shouldSkip(record)) {
+                continue
+            }
+            val index = rowIndex
+            rowIndex++
+            val structured = schemaDecoder
+            return if (structured != null) {
+                structured.readRow(record, index)
+            } else {
+                plainDecoder?.readRow(record)
+            }
         }
-        val record = nextRecord()
-        val index = rowIndex
-        rowIndex++
-        val structured = schemaDecoder
-        return if (structured != null) {
-            structured.readRow(record, index)
-        } else {
-            plainDecoder?.readRow(record)
-        }
+        return null
     }
 
     private fun initializeHeader() {
         if (!headerEnabled) {
             schemaDecoder?.positionalLayout()
-            return
-        }
-        if (!hasNextRecord()) {
-            return
-        }
-        val headerRecord = nextRecord()
-        val structured = schemaDecoder
-        if (structured != null) {
-            structured.readHeader(headerRecord)
         } else {
-            plainDecoder?.readHeader(headerRecord)
+            while (hasNextRecord()) {
+                val record = nextRecord()
+                if (support.shouldSkip(record)) {
+                    continue
+                }
+                val structured = schemaDecoder
+                if (structured != null) {
+                    structured.readHeader(record)
+                } else {
+                    plainDecoder?.readHeader(record)
+                }
+                break
+            }
+        }
+        if (schema?.skipFirstDataRow == true && hasNextRecord()) {
+            nextRecord()
         }
     }
 

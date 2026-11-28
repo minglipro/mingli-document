@@ -236,23 +236,27 @@ class TomlCodecTest {
     }
 
     @Test
-    fun nullObjectFieldsAreOmitted() {
+    fun nullObjectFieldsAreWrittenAsEmptyString() {
         val node = ObjectNode.of(
             "name" to StringNode.of("x"),
             "missing" to NullNode.INSTANCE,
             "nested" to ObjectNode.of("nil" to NullNode.INSTANCE, "keep" to NumberNode.of(1)),
         )
 
-        assertEquals("name = \"x\"\nnested = { keep = 1 }\n", node.toTomlString())
+        // 对齐 上游实现 TOML 默认行为：TOML 没有 null，FAIL_ON_NULL_WRITE 关闭时写成空字符串。
+        assertEquals("name = \"x\"\nmissing = \"\"\nnested = { nil = \"\", keep = 1 }\n", node.toTomlString())
+        val restored = TomlReader(node.toTomlString()).read().asObject()
+        assertEquals("", restored["missing"]?.asString())
+        assertEquals("", restored["nested"]?.asObject()?.get("nil")?.asString())
     }
 
     @Test
-    fun nullArrayElementThrows() {
-        assertFailsWith<TomlException> {
-            ObjectNode.of(
-                "list" to ArrayNode.of(StringNode.of("a"), NullNode.INSTANCE),
-            ).toTomlString()
-        }
+    fun nullArrayElementIsWrittenAsEmptyString() {
+        val toml = ObjectNode.of(
+            "list" to ArrayNode.of(StringNode.of("a"), NullNode.INSTANCE),
+        ).toTomlString()
+
+        assertEquals("list = [ \"a\", \"\" ]\n", toml)
     }
 
     @Test
@@ -300,19 +304,23 @@ class TomlCodecTest {
     }
 
     @Test
-    fun temporalValuesBecomeIsoStrings() {
+    fun temporalValuesUseSourceTextByDefault() {
         val toml = """
             offset = 1979-05-27T07:32:00Z
             local = 1979-05-27T07:32:00
+            spaced = 1979-05-27 07:32:00.123
             date = 1979-05-27
             time = 07:32:00
         """.trimIndent()
 
         val root = TomlReader(toml).read().asObject()
-        assertEquals("1979-05-27T07:32Z", root["offset"]?.asString())
-        assertEquals("1979-05-27T07:32", root["local"]?.asString())
+        // 对齐 上游实现 TOML 默认行为：PARSE_JAVA_TIME 关闭时返回源码原文，
+        // 仅把日期时间分隔符空格归一化为 T。
+        assertEquals("1979-05-27T07:32:00Z", root["offset"]?.asString())
+        assertEquals("1979-05-27T07:32:00", root["local"]?.asString())
+        assertEquals("1979-05-27T07:32:00.123", root["spaced"]?.asString())
         assertEquals("1979-05-27", root["date"]?.asString())
-        assertEquals("07:32", root["time"]?.asString())
+        assertEquals("07:32:00", root["time"]?.asString())
     }
 
     @Test

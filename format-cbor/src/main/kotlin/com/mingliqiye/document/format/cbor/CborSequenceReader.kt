@@ -14,18 +14,21 @@ import com.mingliqiye.document.core.Node
  * - 空输入即零个数据项的合法 sequence，返回空列表；
  * - 只有一个数据项时返回长度为 1 的列表；
  * - 任一数据项格式非法或数据不完整时整体抛出 [CborParseException]，不返回部分结果；
- * - 每个数据项独立解析，深度从 1 重新计数；标签保真开关 [preserveTags] 对每一项生效。
+ * - 每个数据项独立解析，深度从 1 重新计数；标签保真开关 [preserveTags] 与读取特性
+ *   [readFeatures] 对每一项生效。
  *
  * @param source CBOR sequence 二进制内容
  * @param maxDepth 单个数据项的 Node 树最大深度；0 表示不限制
  * @param maxItems 最大数据项数量；0 表示不限制
  * @param preserveTags 是否保留 CBOR tag（包装对象协议），默认 `false`
+ * @param readFeatures CBOR 读取特性集合，默认 [CborConfig.DEFAULT_READ_FEATURES]
  */
 public class CborSequenceReader @JvmOverloads constructor(
     private val source: ByteArray,
     private val maxDepth: Int = 0,
     private val maxItems: Int = 0,
     private val preserveTags: Boolean = false,
+    private val readFeatures: Set<CborReadFeature> = CborConfig.DEFAULT_READ_FEATURES,
 ) {
 
     /**
@@ -36,7 +39,7 @@ public class CborSequenceReader @JvmOverloads constructor(
      *   任一数据项格式非法、数据不完整、项数超过 maxItems，或包含 NaN/Infinity
      *   等无法表示的浮点值时抛出
      */
-    public fun readAll(): List<Node> = CborReader(source, maxDepth, preserveTags).readAll(maxItems)
+    public fun readAll(): List<Node> = CborReader(source, maxDepth, preserveTags, readFeatures).readAll(maxItems)
 
     public companion object {
 
@@ -47,6 +50,7 @@ public class CborSequenceReader @JvmOverloads constructor(
          * @param maxDepth 单个数据项的 Node 树最大深度；0 表示不限制
          * @param maxItems 最大数据项数量；0 表示不限制
          * @param preserveTags 是否保留 CBOR tag，默认 `false`
+         * @param readFeatures CBOR 读取特性集合，默认 [CborConfig.DEFAULT_READ_FEATURES]
          * @return 按出现顺序排列的文档树列表；空输入返回空列表
          * @throws com.mingliqiye.document.format.cbor.exception.CborParseException
          *   任一数据项格式非法、数据不完整、项数超过 maxItems，或包含 NaN/Infinity
@@ -59,7 +63,8 @@ public class CborSequenceReader @JvmOverloads constructor(
             maxDepth: Int = 0,
             maxItems: Int = 0,
             preserveTags: Boolean = false,
-        ): List<Node> = CborSequenceReader(source, maxDepth, maxItems, preserveTags).readAll()
+            readFeatures: Set<CborReadFeature> = CborConfig.DEFAULT_READ_FEATURES,
+        ): List<Node> = CborSequenceReader(source, maxDepth, maxItems, preserveTags, readFeatures).readAll()
     }
 }
 
@@ -69,9 +74,12 @@ public class CborSequenceReader @JvmOverloads constructor(
  * 空输入返回空列表；任一数据项格式非法时抛出
  * [com.mingliqiye.document.format.cbor.exception.CborParseException]。
  *
+ * @param readFeatures CBOR 读取特性集合，默认 [CborConfig.DEFAULT_READ_FEATURES]
  * @return 按出现顺序排列的文档树列表
  */
-public fun ByteArray.toCborNodes(): List<Node> = CborSequenceReader(this).readAll()
+public fun ByteArray.toCborNodes(
+    readFeatures: Set<CborReadFeature> = CborConfig.DEFAULT_READ_FEATURES,
+): List<Node> = CborSequenceReader(this, readFeatures = readFeatures).readAll()
 
 /**
  * 按 reified 泛型参数把 CBOR sequence 解析为实体列表。

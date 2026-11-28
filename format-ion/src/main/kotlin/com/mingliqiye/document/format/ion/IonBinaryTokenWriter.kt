@@ -3,6 +3,15 @@ package com.mingliqiye.document.format.ion
 import com.amazon.ion.IonSystem
 import com.amazon.ion.IonType
 import com.amazon.ion.system.IonSystemBuilder
+import com.mingliqiye.document.core.ArrayNode
+import com.mingliqiye.document.core.BinaryNode
+import com.mingliqiye.document.core.BooleanNode
+import com.mingliqiye.document.core.Node
+import com.mingliqiye.document.core.NullNode
+import com.mingliqiye.document.core.NumberNode
+import com.mingliqiye.document.core.ObjectNode
+import com.mingliqiye.document.core.StringNode
+import com.mingliqiye.document.format.ion.exception.IonException
 import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.io.ByteArrayOutputStream
 import java.io.FilterOutputStream
@@ -17,9 +26,19 @@ import java.io.OutputStream
  *
  * 数字复用 [writeIonNumber] 规则（int / decimal）；[writeBinary] 写出为
  * Ion blob。输出以 `$ion_1_0` 二进制版本标记开头。
+ *
+ * [writeFeatures] 行为：
+ * - [IonWriteFeature.USE_NATIVE_TYPE_ID] 开启时，`$ionAnnotations` 注解包装对象
+ *   写成原生 Ion annotation；
+ * - [IonWriteFeature.STRICT_DUPLICATE_DETECTION] 开启时，struct 重复字段名抛
+ *   [IonException]。
+ *
+ * @param target 目标输出流；默认内存缓冲（可用 [toByteArray] 取字节）
+ * @param writeFeatures Ion 写出特性
  */
 internal class IonBinaryTokenWriter(
     target: OutputStream = ByteArrayOutputStream(),
+    private val writeFeatures: Set<IonWriteFeature> = IonConfig.DEFAULT_WRITE_FEATURES,
 ) : DocumentTokenWriter {
 
     private val output = target as? ByteArrayOutputStream
@@ -30,25 +49,39 @@ internal class IonBinaryTokenWriter(
             }
         },
     )
+    private val containers = ArrayDeque<Boolean>()
+    private val structFieldNames = ArrayDeque<MutableSet<String>>()
     private var closed = false
 
     override fun startObject() {
         writer.stepIn(IonType.STRUCT)
+        containers.addLast(true)
+        structFieldNames.addLast(HashSet())
     }
 
     override fun endObject() {
         writer.stepOut()
+        containers.removeLast()
+        structFieldNames.removeLast()
     }
 
     override fun startArray() {
         writer.stepIn(IonType.LIST)
+        containers.addLast(false)
     }
 
     override fun endArray() {
         writer.stepOut()
+        containers.removeLast()
     }
 
     override fun fieldName(name: String) {
+        if (IonWriteFeature.STRICT_DUPLICATE_DETECTION in writeFeatures && containers.lastOrNull() == true) {
+            val fieldNames = structFieldNames.last()
+            if (!fieldNames.add(name)) {
+                throw IonException("Duplicate Ion struct field '$name'")
+            }
+        }
         writer.setFieldName(name)
     }
 
@@ -70,6 +103,40 @@ internal class IonBinaryTokenWriter(
 
     override fun writeBinary(value: ByteArray) {
         writer.writeBlob(value)
+    }
+
+    override fun writeNode(node: Node) {
+        if (IonWriteFeature.USE_NATIVE_TYPE_ID in writeFeatures) {
+            val annotationWrapper = IonTypeFidelity.annotationWrapper(node)
+            if (annotationWrapper != null) {
+                writer.setTypeAnnotations(*annotationWrapper.first.toTypedArray())
+                writeNode(annotationWrapper.second)
+                return
+            }
+        }
+        when (node) {
+            is NullNode -> writeNull()
+            is BooleanNode -> writeBoolean(node.value)
+            is StringNode -> writeString(node.value)
+            is NumberNode -> writeNumber(node.raw)
+            is BinaryNode -> writeBinary(node.value)
+            is ObjectNode -> {
+                startObject()
+                for ((name, value) in node.entries()) {
+                    fieldName(name)
+                    writeNode(value)
+                }
+                endObject()
+            }
+
+            is ArrayNode -> {
+                startArray()
+                for (element in node) {
+                    writeNode(element)
+                }
+                endArray()
+            }
+        }
     }
 
     /**

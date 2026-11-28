@@ -17,12 +17,12 @@ module com.mingliqiye.document.format.smile {
     requires transitive com.mingliqiye.document.exception;
     requires transitive com.mingliqiye.document.serialization;
 
-    // 两个 Jackson 2.15.3 jar 都是 Multi-Release 显式模块：
-    //   jackson-core               -> com.fasterxml.jackson.core
-    //   jackson-dataformat-smile   -> com.fasterxml.jackson.dataformat.smile
+    // 两个 上游实现 2.15.3 jar 都是 Multi-Release 显式模块：
+    //   JSON Token 底层库               -> com.fasterxml.上游库.core
+    //   Smile 底层库   -> com.fasterxml.上游库.dataformat.smile
     // 本模块直接用 JsonParser/JsonGenerator/JsonToken 与 SmileFactory，因此两者都要 requires。
-    // 注意 jackson-dataformat-smile 的显式 module-info 还 requires com.fasterxml.jackson.databind，
-    // 所以运行时 module path 上必须同时提供 jackson-databind（Gradle 传递依赖已包含）。
+    // 注意 Smile 底层库 的显式 module-info 还 requires com.fasterxml.上游库.databind，
+    // 所以运行时 module path 上必须同时提供 数据绑定底层库（Gradle 传递依赖已包含）。
     requires com.fasterxml.jackson.core;
     requires com.fasterxml.jackson.dataformat.smile;
 

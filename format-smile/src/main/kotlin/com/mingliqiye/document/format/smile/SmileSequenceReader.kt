@@ -18,11 +18,13 @@ import com.mingliqiye.document.core.Node
  * @param source Smile 多消息流二进制内容
  * @param maxDepth 单个根值的 Node 树最大深度；0 表示不限制
  * @param maxItems 最大消息数量；0 表示不限制
+ * @param config Smile 配置；`null` 表示使用 上游实现 默认读取特性
  */
 public class SmileSequenceReader @JvmOverloads constructor(
     private val source: ByteArray,
     private val maxDepth: Int = 0,
     private val maxItems: Int = 0,
+    private val config: SmileConfig? = null,
 ) {
 
     /**
@@ -32,7 +34,7 @@ public class SmileSequenceReader @JvmOverloads constructor(
      * @throws SmileParseException 任一消息格式非法、数据不完整、消息数超过
      *   maxItems，或包含 NaN/Infinity 等无法表示的浮点值时抛出
      */
-    public fun readAll(): List<Node> = SmileReader(source, maxDepth).readAll(maxItems)
+    public fun readAll(): List<Node> = SmileReader(source, maxDepth, config).readAll(maxItems)
 
     public companion object {
 
@@ -42,6 +44,7 @@ public class SmileSequenceReader @JvmOverloads constructor(
          * @param source Smile 多消息流二进制内容
          * @param maxDepth 单个根值的 Node 树最大深度；0 表示不限制
          * @param maxItems 最大消息数量；0 表示不限制
+         * @param config Smile 配置；`null` 表示使用 上游实现 默认读取特性
          * @return 按出现顺序排列的文档树列表；空输入返回空列表
          * @throws SmileParseException 任一消息格式非法、数据不完整、消息数超过
          *   maxItems，或包含 NaN/Infinity 等无法表示的浮点值时抛出
@@ -52,7 +55,8 @@ public class SmileSequenceReader @JvmOverloads constructor(
             source: ByteArray,
             maxDepth: Int = 0,
             maxItems: Int = 0,
-        ): List<Node> = SmileSequenceReader(source, maxDepth, maxItems).readAll()
+            config: SmileConfig? = null,
+        ): List<Node> = SmileSequenceReader(source, maxDepth, maxItems, config).readAll()
     }
 }
 

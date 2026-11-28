@@ -17,6 +17,10 @@ private fun preserveTagsOf(config: DocumentMapperConfig): Boolean = (config as? 
 
 private fun bufferPoolOf(config: DocumentMapperConfig): ByteArrayPool? = (config as? CborConfig)?.bufferPool
 
+private fun readFeaturesOf(config: DocumentMapperConfig): Set<CborReadFeature> = (config as? CborConfig)?.readFeatures ?: CborConfig.DEFAULT_READ_FEATURES
+
+private fun writeFeaturesOf(config: DocumentMapperConfig): Set<CborWriteFeature> = (config as? CborConfig)?.writeFeatures ?: CborConfig.DEFAULT_WRITE_FEATURES
+
 /**
  * CBOR 文档映射器。
  *
@@ -35,6 +39,15 @@ private fun bufferPoolOf(config: DocumentMapperConfig): ByteArrayPool? = (config
  * - 带 tag 的值以 `{"$cborTag": <tag 整数>, "value": <Node>}` 包装对象表示；
  * - Bean 映射会把包装对象当普通对象处理，因此保真模式下的 Bean 映射不感知 tag。
  *
+ * [CborConfig.readFeatures] / [CborConfig.writeFeatures] 对齐 上游实现 CBOR 的
+ * parser/generator 特性（见 [CborReadFeature] / [CborWriteFeature]）：
+ * - 读取特性 `DECODE_USING_STANDARD_NEGATIVE_BIGINT_ENCODING`、`STRICT_DUPLICATE_DETECTION`
+ *   在 Token 路径与 Node 路径都生效；
+ * - 读取特性 `READ_UNDEFINED_AS_EMBEDDED_OBJECT`、`READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT`
+ *   需要 Node 标记对象表示，开启时 `parse(ByteArray)` 的 Token 快路径自动禁用；
+ * - 写出特性通过配置好的 [com.fasterxml.上游库.dataformat.cbor.CBORFactory] 落到
+ *   Token 直写与 Node 写出两条路径（`WRITE_MINIMAL_DOUBLES` 仅 Token 直写路径生效）。
+ *
  * CBOR 的 byte string 映射为 [com.mingliqiye.document.core.BinaryNode]/BINARY Token，
  * 因此 Java 的 `byte[]` 属性可无损往返。
  */
@@ -46,8 +59,21 @@ public open class CborMapper internal constructor(
     config: DocumentMapperConfig,
 ) : BinaryDocumentMapper(
     "cbor",
-    { source -> CborReader(source, config.maxNodeDepth, preserveTagsOf(config)).read() },
-    { node, _ -> CborWriter(preserveTags = preserveTagsOf(config), bufferPool = bufferPoolOf(config)).write(node) },
+    { source ->
+        CborReader(
+            source,
+            config.maxNodeDepth,
+            preserveTagsOf(config),
+            readFeaturesOf(config),
+        ).read()
+    },
+    { node, _ ->
+        CborWriter(
+            preserveTags = preserveTagsOf(config),
+            bufferPool = bufferPoolOf(config),
+            writeFeatures = writeFeaturesOf(config),
+        ).write(node)
+    },
     serializers,
     deserializers,
     objectInstantiator,
@@ -58,6 +84,8 @@ public open class CborMapper internal constructor(
     private val preserveTags: Boolean = preserveTagsOf(config)
     private val maxNodeDepth: Int = config.maxNodeDepth
     private val bufferPool: ByteArrayPool? = bufferPoolOf(config)
+    private val readFeatures: Set<CborReadFeature> = readFeaturesOf(config)
+    private val writeFeatures: Set<CborWriteFeature> = writeFeaturesOf(config)
 
     /**
      * 创建默认 CBOR 映射器。
@@ -74,7 +102,7 @@ public open class CborMapper internal constructor(
     /**
      * 使用 CBOR 配置创建映射器。
      *
-     * @param config CBOR 配置，可开启 tag 保真
+     * @param config CBOR 配置，可开启 tag 保真与 上游实现 CBOR 读取/写出特性
      */
     public constructor(config: CborConfig) : this(emptyMap(), emptyMap(), null, null, config)
 
@@ -89,15 +117,35 @@ public open class CborMapper internal constructor(
      *
      * 用于从字节流直接解码 Bean；解析失败抛
      * [com.mingliqiye.document.format.cbor.exception.CborParseException]。
-     * 开启 [CborConfig.preserveTags] 时返回 `null`，使基类回退到 [CborReader] 的
-     * Node 解析（tag 保真读取不支持 Token 快路径）。
+     * 以下情况返回 `null`，使基类回退到 [CborReader] 的 Node 解析：
+     * - [CborConfig.preserveTags] 开启（tag 保真不支持 Token 快路径）；
+     * - `maxNodeDepth > 0`（深度限制需要 Node 路径）；
+     * - 开启 [CborReadFeature.READ_UNDEFINED_AS_EMBEDDED_OBJECT] 或
+     *   [CborReadFeature.READ_SIMPLE_VALUE_AS_EMBEDDED_OBJECT]（需要 Node 标记对象）。
+     *
+     * 其余读取特性（负数 bignum 规范解码、重复 key 检测）通过配置好的 上游实现
+     * parser 在 Token 路径直接生效。
      *
      * @param source CBOR 二进制内容
-     * @return Token 读取器；保真模式下为 `null`
+     * @return Token 读取器；需要 Node 路径时为 `null`
      */
-    override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTags || maxNodeDepth > 0) null else CborTokenReader(source)
+    override fun createTokenReader(source: ByteArray): DocumentTokenReader? = if (preserveTags || maxNodeDepth > 0 || readFeatures.any { it.requiresNodeReader }) {
+        null
+    } else {
+        CborTokenReader(source, readFeatures)
+    }
 
-    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty || preserveTags) null else CborTokenWriter(output)
+    /**
+     * 创建 CBOR 流式 Token 写出器（`format(value, OutputStream)`）。
+     *
+     * CBOR 是二进制格式，`pretty` 不适用；[CborConfig.preserveTags] 开启时返回
+     * `null` 以回退 Node 写出（流式 Token 写出无法识别 tag 包装对象）。
+     *
+     * @param output 目标输出流
+     * @param pretty 是否格式化输出（CBOR 忽略）
+     * @return Token 写出器；需要 Node 写出时为 `null`
+     */
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty || preserveTags) null else CborTokenWriter(output, writeFeatures)
 
     /**
      * 将 Java 实体写成 CBOR 字节。
@@ -116,7 +164,11 @@ public open class CborMapper internal constructor(
      */
     override fun formatBytes(value: Any?): ByteArray {
         if (preserveTags) {
-            return CborWriter(preserveTags = true, bufferPool = bufferPool).write(toNode(value))
+            return CborWriter(
+                preserveTags = true,
+                bufferPool = bufferPool,
+                writeFeatures = writeFeatures,
+            ).write(toNode(value))
         }
         val writer = newTokenWriter()
         return try {
@@ -138,14 +190,19 @@ public open class CborMapper internal constructor(
      * @return CBOR 二进制内容
      * @throws com.mingliqiye.document.format.cbor.exception.CborException 写出失败时抛出
      */
-    public fun formatCanonicalBytes(value: Any?): ByteArray = CborWriter(canonical = true, preserveTags = preserveTags, bufferPool = bufferPool).write(toNode(value))
+    public fun formatCanonicalBytes(value: Any?): ByteArray = CborWriter(
+        canonical = true,
+        preserveTags = preserveTags,
+        bufferPool = bufferPool,
+        writeFeatures = writeFeatures,
+    ).write(toNode(value))
 
     /**
      * 解析 CBOR sequence（连续多个自描述数据项），按出现顺序返回全部文档树。
      *
      * 空输入返回空列表；只有一个数据项时返回长度为 1 的列表。每个数据项独立
      * 解析，深度限制取自 Mapper 配置的 `maxNodeDepth`（0 表示不限制）。
-     * [CborConfig.preserveTags] 开启时每个数据项都保留 tag 包装对象。
+     * [CborConfig.preserveTags] 与 [CborConfig.readFeatures] 开启时对每个数据项生效。
      *
      * @param source CBOR sequence 二进制内容
      * @param maxItems 最大数据项数量；0 表示不限制
@@ -156,7 +213,7 @@ public open class CborMapper internal constructor(
      */
     public fun parseAllToNodes(source: ByteArray, maxItems: Int = 0): List<Node> {
         checkInputSize(source.size.toLong())
-        return CborSequenceReader(source, maxNodeDepth, maxItems, preserveTags).readAll()
+        return CborSequenceReader(source, maxNodeDepth, maxItems, preserveTags, readFeatures).readAll()
     }
 
     /**
@@ -203,7 +260,11 @@ public open class CborMapper internal constructor(
      */
     public fun formatAll(values: Iterable<Any?>): ByteArray {
         if (preserveTags) {
-            return CborSequenceWriter(preserveTags = true, bufferPool = bufferPool).writeAll(values.map(::toNode))
+            return CborSequenceWriter(
+                preserveTags = true,
+                bufferPool = bufferPool,
+                writeFeatures = writeFeatures,
+            ).writeAll(values.map(::toNode))
         }
         val writer = newTokenWriter()
         return try {
@@ -218,7 +279,7 @@ public open class CborMapper internal constructor(
 
     private fun newTokenWriter(): CborTokenWriter {
         val pool = bufferPool
-        return if (pool != null) CborTokenWriter(pool) else CborTokenWriter()
+        return if (pool != null) CborTokenWriter(pool, writeFeatures) else CborTokenWriter(writeFeatures = writeFeatures)
     }
 
     public companion object {

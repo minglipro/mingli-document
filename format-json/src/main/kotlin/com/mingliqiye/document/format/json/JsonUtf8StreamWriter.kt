@@ -18,14 +18,20 @@ private val FALSE_BYTES = "false".toByteArray(Charsets.US_ASCII)
 private val NULL_BYTES = "null".toByteArray(Charsets.US_ASCII)
 
 /**
- * 直接输出 UTF-8 JSON 字节的流式写出器（紧凑格式）。
+ * 直接输出 UTF-8 JSON 字节的流式写出器。
  *
- * 与 [JsonStreamWriter] 的 `pretty = false` 输出逐字节一致，但直接从 Token
- * 流写出 UTF-8 字节，不构造中间 String。
+ * 与 [JsonStreamWriter] 的输出逐字节一致（在相同特性下），但直接从 Token 流写出
+ * UTF-8 字节，不构造中间 String（字符串需要转义时除外）。输出行为由
+ * [JsonWriteOptions] 控制。
+ *
+ * @param output 目标输出流；默认使用内存缓冲
+ * @param pretty 是否使用两空格缩进
+ * @param options 写出特性
  */
 internal class JsonUtf8StreamWriter(
     private val output: OutputStream = ByteArrayOutputStream(32 * 1024),
     private val pretty: Boolean = false,
+    private val options: JsonWriteOptions = JsonWriteOptions.DEFAULT,
 ) : DocumentTokenWriter {
 
     private val buffer = output as? ByteArrayOutputStream
@@ -56,23 +62,22 @@ internal class JsonUtf8StreamWriter(
 
     override fun writeNumber(raw: String) {
         beforeValue()
-        output.write(raw.toByteArray(Charsets.US_ASCII))
+        appendNumber(raw)
     }
 
     override fun writeInt(value: Int) {
         beforeValue()
-        output.write(value.toString().toByteArray(Charsets.US_ASCII))
+        appendNumber(value.toString())
     }
 
     override fun writeLong(value: Long) {
         beforeValue()
-        output.write(value.toString().toByteArray(Charsets.US_ASCII))
+        appendNumber(value.toString())
     }
 
     override fun writeDouble(value: Double) {
-        require(value.isFinite()) { "NaN and Infinity cannot be serialized" }
         beforeValue()
-        output.write(JsonDoubleFormatter.format(value).toByteArray(Charsets.US_ASCII))
+        appendNumber(if (value.isFinite()) JsonDoubleFormatter.format(value) else nonFiniteDoubleText(value))
     }
 
     override fun writeBoolean(value: Boolean) {
@@ -123,7 +128,7 @@ internal class JsonUtf8StreamWriter(
             newlineAndIndent()
         }
         firstElements[index] = false
-        appendString(name)
+        appendFieldName(name)
         output.write(':'.code)
         if (pretty) {
             output.write(' '.code)
@@ -191,45 +196,33 @@ internal class JsonUtf8StreamWriter(
         firstElements[depth++] = true
     }
 
-    private fun appendString(value: String) {
-        var needsEscape = false
-        for (ch in value) {
-            if (ch == '"' || ch == '\\' || ch < ' ') {
-                needsEscape = true
-                break
-            }
+    private fun appendFieldName(name: String) {
+        if (options.quoteFieldNames) {
+            appendString(name)
+        } else {
+            output.write(name.toByteArray(Charsets.UTF_8))
         }
-        if (!needsEscape) {
+    }
+
+    private fun appendString(value: String) {
+        if (!options.needsEscape(value)) {
             output.write('"'.code)
             output.write(value.toByteArray(Charsets.UTF_8))
             output.write('"'.code)
             return
         }
+        val escaped = options.escape(value)
         output.write('"'.code)
-        val escaped = StringBuilder(value.length + 8)
-        for (ch in value) {
-            when (ch) {
-                '"' -> escaped.append("\\\"")
-                '\\' -> escaped.append("\\\\")
-                '\b' -> escaped.append("\\b")
-                '\u000C' -> escaped.append("\\f")
-                '\n' -> escaped.append("\\n")
-                '\r' -> escaped.append("\\r")
-                '\t' -> escaped.append("\\t")
-                else -> {
-                    if (ch < ' ') {
-                        escaped.append("\\u")
-                        val code = ch.code
-                        for (shift in 12 downTo 0 step 4) {
-                            escaped.append("0123456789abcdef"[(code shr shift) and 0xF])
-                        }
-                    } else {
-                        escaped.append(ch)
-                    }
-                }
-            }
+        output.write(escaped.toByteArray(Charsets.UTF_8))
+        output.write('"'.code)
+    }
+
+    private fun appendNumber(raw: String) {
+        val text = options.numberLiteral(raw)
+        if (options.shouldQuoteNumber(text)) {
+            appendString(text)
+        } else {
+            output.write(text.toByteArray(Charsets.US_ASCII))
         }
-        output.write(escaped.toString().toByteArray(Charsets.UTF_8))
-        output.write('"'.code)
     }
 }

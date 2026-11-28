@@ -1,14 +1,14 @@
 package com.mingliqiye.document.serialization
 
 /**
- * 反序列化特性开关，对应 Jackson 的 `DeserializationFeature`。
+ * 反序列化特性开关，对应 上游实现 的 `DeserializationFeature`。
  *
  * 通过 [DocumentMapperConfigBuilder.enable] / [DocumentMapperConfigBuilder.disable] /
  * [DocumentMapperConfigBuilder.configure] 显式开启或关闭，也可直接构造
  * [DocumentMapperConfig.deserializationFeatures] 集合；查询使用
  * [DocumentMapperConfig.isEnabled]。
  *
- * 默认全部关闭，与 Jackson 默认配置保持一致，因此升级不会改变既有反序列化行为。
+ * 默认全部关闭，与 上游实现 默认配置保持一致，因此升级不会改变既有反序列化行为。
  */
 public enum class DeserializationFeature {
 
