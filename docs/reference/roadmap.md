@@ -116,8 +116,8 @@
 - [x] 原子文件写入
 - [x] 自动创建父目录
 - [x] CI/CD（GitHub Actions）
-- [ ] Gitea CI
-- [x] Maven Central 发布配置
+- [x] Gitea CI（已放弃）
+- [x] Maven Central 发布配置（已放弃）
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`）
@@ -127,8 +127,8 @@
   `codegen-test` / `openapi` 仍为自动模块，见 [JPMS 指南](../guide/jpms.md)）
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
-> 未完成项：Gitea CI、`serialization-kotlin` / `codegen` / `openapi` 等剩余模块的 JPMS
-> `module-info`、Maven Central 实际发布。
+> 已放弃：Gitea CI、Maven Central 发布。
+> 未完成项：`serialization-kotlin` / `codegen` / `openapi` 等剩余模块的 JPMS `module-info`。
 
 ## 批次计划
 
@@ -243,11 +243,10 @@
 
 仍延后：
 
-- Hibernate Session / EntityManager 运行期集成
-- serialization / format-* / jdbc / validation / jpa 的显式 `module-info`
-  （`alias-for` 模块名是 Java 关键字，阻塞中）
-- Maven Central 实际发布（配置已就绪，需要额度/凭据）
-- Gitea CI
+- 2.4.0 代码与发布（当前暂停）
+- `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` 的显式 `module-info`
+- `format-json` 去除 Jackson 内部包 `DoubleToDecimal` 依赖
+- Gitea CI、Maven Central 发布（已放弃）
 
 ## 当前状态（2.3.0）
 
@@ -265,21 +264,22 @@
 | 对象池 / 零拷贝 | ✅ |
 | Schema Registry / Bean Validation | ✅ |
 | JDBC / JPA 注解映射 | ✅ |
-| JPMS 自动模块名 + 9 个显式 MR-JAR 模块 | ✅ |
+| Hibernate Session / EntityManager / @Convert / Map / 多态 | ✅ |
+| JPMS 自动模块名 + 21 个显式 MR-JAR 模块 | ✅ |
 | GraalVM Native Image | ✅ 实测 |
 | 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
-| Maven Central 实际发布 | ⏳ 等额度/凭据 |
+| Gitea CI、Maven Central | ❌ 已放弃 |
 
-### 待办清单（2.3.0 之后）
+### 待办清单（2.4.0 之后）
 
 | 序号 | 待办 | 阶段 |
 |---|---|---|
-| 1 | Hibernate Session / EntityManager 运行期集成 | 阶段 5 |
-| 2 | `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` 的显式 module-info（`format-*` / `jpa-hibernate` 已在 dev 补齐；`alias-for` 1.0.4 已解除阻塞） | 阶段 6 |
-| 3 | Maven Central 实际发布（需额度/凭据） | 阶段 6 |
-| 4 | Avro 完整 logical type | 阶段 2 |
-| 5 | XML / Properties / TOML / CSV `maxDepth` | 阶段 4 |
-| 6 | Gitea CI | 阶段 6 |
+| 1 | `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` 的显式 module-info | 阶段 6 |
+| 2 | `format-json` 去除 Jackson 内部包依赖（module path 写 Double 需 `--add-exports`） | 阶段 6 |
+| 3 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
+| 4 | `jlink` 支持（当前仅 `annotation` 可 jlink） | 阶段 6 |
+
+> 2.4.0 代码已实现，但代码与发布当前暂停。
 
 > 仓库根的 `TODO.md` 记录了更细粒度的待办项，本表只列路线图级目标。
 

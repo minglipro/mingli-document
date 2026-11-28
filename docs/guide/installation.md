@@ -39,8 +39,7 @@ Kotlin 1.x 编译器可能无法读取。若你的项目仍是 Kotlin 1.9 或更
 
 ## 发布仓库
 
-正式版本同时发布到项目自建仓库与 Maven Central。推荐优先配置自建仓库，再回退
-Maven Central：
+正式版本只发布到项目自建仓库；Maven Central 发布已放弃。
 
 ```text
 https://repository.mingliqiye.com/repository/maven-public/
@@ -53,7 +52,7 @@ repositories {
     maven {
         url = uri("https://repository.mingliqiye.com/repository/maven-public/")
     }
-    mavenCentral()
+    mavenCentral() // 第三方依赖回退，本库自身不在 Maven Central
 }
 ```
 
@@ -71,7 +70,7 @@ Maven：
 发布规则（源码 `build.gradle.kts` 实现）：
 
 - `-SNAPSHOT` 版本只推 snapshot 仓库；
-- 正式版本只推 release 仓库与 Maven Central；
+- 正式版本只推 release 仓库；
 - Gradle Plugin 专用仓库不参与本库发布；
 - 所有 jar、pom、module metadata、javadoc、kotlindoc 都带 GPG `.asc` 签名。
 
@@ -335,14 +334,10 @@ gradle publishToMavenLocal
 
 # 远程：仓库地址与凭据由 Gradle init.gradle 提供
 gradle publish
-
-# Maven Central：需要环境变量与 GPG
-# MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
-gradle publish
 ```
 
 - 版本号只改根 `gradle.properties` 的 `projectVersion`；
-- 正式版本推送 Maven Central 与 release 仓库，`-SNAPSHOT` 只推 snapshot；
+- 正式版本推送 release 仓库，`-SNAPSHOT` 只推 snapshot；
 - jar、pom、module metadata、javadoc、kotlindoc 全部签名。
 
 ## 安装排错
@@ -351,7 +346,7 @@ gradle publish
 |---|---|---|
 | 找不到 `com.mingliqiye.document:json` | 格式模块 group 不同 | 用 `com.mingliqiye.document.format:json` |
 | 找不到 `format-json` artifact | artifactId 去掉了 `format-` 前缀 | 用 `format:json` |
-| 解析不到版本 | 只配置了 Maven Central，而版本在自建仓库 | 加 `repository.mingliqiye.com` 仓库 |
+| 解析不到版本 | 只配置了 Maven Central，而本库只在自建仓库发布 | 加 `repository.mingliqiye.com` 仓库 |
 | `Failed to resolve: ...2.3.0` 但本地明明有 | 业务项目用了 `mavenLocal()` 但仓库顺序/缓存问题 | `gradle --refresh-dependencies` |
 | Kotlin 编译报元数据版本不兼容 | 业务 Kotlin < 2.0，同时依赖了 `serialization-kotlin` | 升级 Kotlin 到 2.0，或仅依赖 Java 模块 |
 | KSP 报 “ksp version mismatch” | KSP 版本与 Kotlin 版本不匹配 | 使用 `2.0.0-1.0.21` |

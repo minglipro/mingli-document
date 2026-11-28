@@ -97,8 +97,8 @@
 - [x] 自定义 Charset
 - [x] 原子文件写入
 - [x] 自动创建父目录
-- [x] CI/CD（GitHub Actions）\n- [x] Gitea CI（workflow 配置，未在 Gitea runner 实测）
-- [x] Maven Central 发布配置
+- [x] CI/CD（GitHub Actions）
+- [x] Maven Central 发布配置（已放弃）
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`，所有可发布 jar）
@@ -140,7 +140,7 @@
 - Jazzer / JQF 持续 fuzz
 - 运行期 / 编译期代码生成
 - 远程 `$ref`
-- Maven Central 自动发布
+- Maven Central 自动发布（已放弃）
 ---
 
 ## 1.2.0 交付状态
@@ -160,7 +160,7 @@
 - Ryu / Schubfach
 - Jazzer / JQF 持续 fuzz
 - 运行期 / 编译期代码生成
-- Maven Central 自动发布
+- Maven Central 自动发布（已放弃）
 ---
 
 ## 1.3.0 交付状态
@@ -228,7 +228,7 @@
 - 数据库 / ORM 集成
 - JPMS module-info
 - GraalVM Native Image
-- Maven Central 实际发布（配置已就绪，需凭据/GPG）
+- Maven Central 实际发布（已放弃）
 ---
 
 ## 2.1.0 交付状态
@@ -246,7 +246,7 @@
 - master / v2.2.0 发布
 - 私服 2.2.0 全模块发布
 - P2 完成：JDBC、TOML 注释保留、JPMS Automatic-Module-Name、GraalVM 配置
-- Maven Central 实际发布暂缓（额度原因）
+- Maven Central 实际发布（已放弃）
 - 显式 module-info / native-image 构建仍需后续 CI 验证
 
 ---
@@ -271,4 +271,4 @@
 - 显式 module-info + Multi-Release JAR（5 个模块）
 - GraalVM Native Image 实测通过（GraalVM JDK21 + Windows SDK）
 - 全量构建 1342 tests 通过
-- Maven Central 发布暂缓
+- Maven Central 发布（已放弃）
