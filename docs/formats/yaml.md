@@ -305,6 +305,10 @@ println(mapper.format(user))
 println(mapper.formatPretty(user))
 ```
 
+> 目标属性是 `String` 时，YAML 的 `NUMBER` / `BOOLEAN` 标量会按文本转换：
+> `name: 666` 解析为字符串 `"666"`，`enabled: true` 解析为 `"true"`。
+> 目标属性不是 `String` 时仍按严格类型校验。
+
 ### 2. YAML → Node 树
 
 ```kotlin

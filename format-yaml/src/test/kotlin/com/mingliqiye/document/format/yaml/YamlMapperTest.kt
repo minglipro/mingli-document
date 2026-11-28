@@ -26,6 +26,13 @@ class YamlMapperTest {
         assertTrue(text.contains("\n"))
     }
 
+    @Test
+    fun numericScalarIsCoercedToStringProperty() {
+        val mapper = YamlMapper()
+
+        assertEquals("666", mapper.parse("name: 666", Person::class.java).name)
+    }
+
     private class Person {
         var name: String = ""
     }

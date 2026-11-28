@@ -8,6 +8,7 @@
 
 | 版本 | 主题 | 关键能力 |
 |---|---|---|
+| `2.5.1`（未发布） | 标量映射修复 | YAML / JSON 的 `NUMBER` / `BOOLEAN` 标量映射到 `String` 属性时按文本转换 |
 | `2.5.0` | record 支持独立模块、JPA 剩余映射细节 | `record-support` 模块、`JavaRecordSupport` SPI、record 测试迁移、JPA `@Convert(attributeName)`/关系转换/实体 Map 键、Hibernate 复合主键引用解析 |
 | `2.4.0` | ORM、Avro、深度限制 | `jpa-hibernate`、Avro logical type、XML/Properties/TOML/CSV `maxDepth`、更多显式 module-info、对象映射便捷 API |
 | `2.3.0` | ORM 与 JPMS | `jpa` 模块、5 个显式 MR-JAR `module-info`、GraalVM Native Image 实测 |
@@ -22,6 +23,14 @@
 | `1.0.0` | 初始发布 | core/annotation/exception/schema/serialization/serialization-kotlin + 11 格式 + BOM |
 
 发布标签：`1.0.0`、`v1.1.0`、`v1.2.0`、`v1.3.0`、`v1.4.0`、`v1.5.0`、`v2.0.0`、`v2.1.0`、`v2.2.0`、`v2.3.0`、`v2.4.0`、`v2.5.0`。
+
+## 2.5.1（未发布）
+
+### 修复
+
+- 把 YAML / JSON 等 Token 读取路径中的 `NUMBER` / `BOOLEAN` 标量映射到
+  `String` 属性时按文本转换，不再抛 `Expected string ... but was NUMBER`
+  （例如 `name: 666` 映射到 `name: String` 得到 `"666"`）
 
 ## 2.5.0
 

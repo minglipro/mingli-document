@@ -1325,11 +1325,17 @@ public abstract class DocumentMapper protected constructor(
         }
     }
 
-    private fun readTokenString(reader: DocumentTokenReader, path: DecodePath): String {
-        if (reader.currentToken != DocumentTokenType.STRING) {
-            throw DocumentSerializationException("Expected string at $path but was ${reader.currentToken}")
-        }
-        return reader.textValue ?: throw DocumentSerializationException("Missing string value at $path")
+    private fun readTokenString(reader: DocumentTokenReader, path: DecodePath): String = when (reader.currentToken) {
+        DocumentTokenType.STRING, DocumentTokenType.NUMBER ->
+            reader.textValue ?: throw DocumentSerializationException("Missing string value at $path")
+
+        DocumentTokenType.BOOLEAN ->
+            reader.booleanValue?.toString()
+                ?: throw DocumentSerializationException("Missing boolean value at $path")
+
+        else -> throw DocumentSerializationException(
+            "Expected string at $path but was ${reader.currentToken}",
+        )
     }
 
     private fun readTokenBoolean(reader: DocumentTokenReader, path: DecodePath): Boolean {

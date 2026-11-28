@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.5.1（未发布）
+
+### 修复
+
+- 把 YAML / JSON 等 Token 读取路径中的 `NUMBER` / `BOOLEAN` 标量映射到
+  `String` 属性时按文本转换，不再抛 `Expected string ... but was NUMBER`
+  （例如 `name: 666` 映射到 `name: String` 得到 `"666"`）
+
 ## 2.5.0
 
 ### 新增
