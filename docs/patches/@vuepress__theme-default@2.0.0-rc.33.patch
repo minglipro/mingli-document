@@ -1,0 +1,13 @@
+diff --git a/lib/client/composables/useSidebarItems.js b/lib/client/composables/useSidebarItems.js
+index 9f5a1fdaa13019ae76737dfa51f22353db1ac6f1..acf6f9ba1534ff012707f711c7f76ce25519db0c 100644
+--- a/lib/client/composables/useSidebarItems.js
++++ b/lib/client/composables/useSidebarItems.js
+@@ -97,7 +97,7 @@ export const resolveArraySidebarItems = (sidebarConfig, sidebarDepth, page, path
+         // use headers of current page as children
+         if (childItem.link === path) {
+             // skip h1 header
+-            const headers = page.headers[0]?.level === 1 ? page.headers[0].children : page.headers;
++            const headers = page.headers?.[0]?.level === 1 ? page.headers[0].children : (page.headers ?? []);
+             return {
+                 ...childItem,
+                 children: headersToSidebarItemChildren(sidebarDepth, headers),
