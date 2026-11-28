@@ -254,9 +254,11 @@ public abstract class DocumentMapper protected constructor(
     override fun <T> parse(source: ByteArray, targetType: Class<T>): T {
         checkInputSize(source.size.toLong())
         createTokenReader(source)?.let { return fromTokens(it, targetType) }
-        val parser = parseBytes
-            ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
-        return fromNode(parser(source), targetType)
+        parseBytes?.let { return fromNode(it(source), targetType) }
+        if (usesTextFormat) {
+            return parse(String(source, config.fileCharset), targetType)
+        }
+        throw DocumentSerializationException("$formatName mapper does not support binary parsing")
     }
 
     /**
@@ -269,9 +271,11 @@ public abstract class DocumentMapper protected constructor(
     override fun <T> parse(source: ByteArray, targetType: DocumentTypeReference<T>): T {
         checkInputSize(source.size.toLong())
         createTokenReader(source)?.let { return fromTokens(it, targetType) }
-        val parser = parseBytes
-            ?: throw DocumentSerializationException("$formatName mapper does not support binary parsing")
-        return fromNode(parser(source), targetType)
+        parseBytes?.let { return fromNode(it(source), targetType) }
+        if (usesTextFormat) {
+            return parse(String(source, config.fileCharset), targetType)
+        }
+        throw DocumentSerializationException("$formatName mapper does not support binary parsing")
     }
 
     /**
@@ -282,8 +286,13 @@ public abstract class DocumentMapper protected constructor(
      */
     override fun formatBytes(value: Any?): ByteArray {
         val writer = writeBytes
-            ?: throw DocumentSerializationException("$formatName mapper does not support binary writing")
-        return writer(toNode(value), false)
+        if (writer != null) {
+            return writer(toNode(value), false)
+        }
+        if (usesTextFormat) {
+            return format(value).toByteArray(config.fileCharset)
+        }
+        throw DocumentSerializationException("$formatName mapper does not support binary writing")
     }
 
     /**
@@ -353,6 +362,34 @@ public abstract class DocumentMapper protected constructor(
         }
         writer.write(format(value))
         writer.flush()
+    }
+
+    override fun formatPretty(value: Any?, file: File) {
+        formatPretty(value, file.toPath())
+    }
+
+    override fun formatPretty(value: Any?, path: Path) {
+        writeFile(path, prettyBytes(value))
+    }
+
+    override fun formatPretty(value: Any?, output: OutputStream) {
+        output.write(prettyBytes(value))
+        output.flush()
+    }
+
+    override fun formatPretty(value: Any?, writer: Writer) {
+        if (!usesTextFormat) {
+            throw DocumentSerializationException("$formatName mapper does not support character streams")
+        }
+        writer.write(formatPretty(value))
+        writer.flush()
+    }
+
+    private fun prettyBytes(value: Any?): ByteArray {
+        if (!usesTextFormat) {
+            throw DocumentSerializationException("$formatName mapper does not support pretty printing")
+        }
+        return formatPretty(value).toByteArray(config.fileCharset)
     }
 
     private fun <T> parseBytesOrText(bytes: ByteArray, targetType: DocumentTypeReference<T>): T {
