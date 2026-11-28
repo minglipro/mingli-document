@@ -6,6 +6,7 @@ import com.mingliqiye.document.format.cbor.exception.CborException
 import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -24,9 +25,11 @@ private val CBOR_FACTORY: CBORFactory = CBORFactory()
  * CBOR 不定长形式（`0xBF`/`0x9F` ... `0xFF`），与 [CborWriter] 的定长写法不同，
  * 但都是合法 CBOR，可被 [CborReader] / [CborTokenReader] 读回。
  */
-internal class CborTokenWriter : DocumentTokenWriter {
+internal class CborTokenWriter(
+    private val buffer: OutputStream = ByteArrayOutputStream(),
+) : DocumentTokenWriter {
 
-    private val buffer = ByteArrayOutputStream()
+    private val inMemory = buffer as? ByteArrayOutputStream
 
     private val generator: CBORGenerator = try {
         CBOR_FACTORY.createGenerator(buffer)
@@ -91,7 +94,12 @@ internal class CborTokenWriter : DocumentTokenWriter {
      */
     fun toByteArray(): ByteArray {
         writing { generator.flush() }
-        return buffer.toByteArray()
+        return inMemory?.toByteArray()
+            ?: throw IllegalStateException("toByteArray is only available for the in-memory constructor")
+    }
+
+    override fun flush() {
+        writing { generator.flush() }
     }
 
     /**

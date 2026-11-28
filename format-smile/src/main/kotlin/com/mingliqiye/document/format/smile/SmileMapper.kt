@@ -7,8 +7,10 @@ import com.mingliqiye.document.serialization.DocumentBaseDeserializer
 import com.mingliqiye.document.serialization.DocumentBaseSerializer
 import com.mingliqiye.document.serialization.DocumentMapperConfig
 import com.mingliqiye.document.serialization.DocumentTokenReader
+import com.mingliqiye.document.serialization.DocumentTokenWriter
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
+import java.io.OutputStream
 
 /**
  * Smile 文档映射器。
@@ -71,6 +73,8 @@ public open class SmileMapper internal constructor(
      * @return Smile Token 读取器
      */
     override fun createTokenReader(source: ByteArray): DocumentTokenReader = SmileTokenReader(source)
+
+    override fun createStreamingTokenWriter(output: OutputStream, pretty: Boolean): DocumentTokenWriter? = if (pretty) null else SmileTokenWriter(output)
 
     /**
      * 将 Java 实体直接写成 Smile 字节。

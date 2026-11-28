@@ -402,3 +402,14 @@ gradle :serialization:recordTest
 ```
 
 文档：[根 README](../README.md) · [贡献指南](../CONTRIBUTING.md)
+'
+
+流式写出：
+
+```text
+format(value, OutputStream) 会优先通过 DocumentTokenWriter 直接写出
+当前实现：JSON（紧凑）、CBOR（默认模式）、Smile
+其他格式或 pretty 输出会回退到先构造 String/ByteArray
+OutputStream/Writer 由调用方关闭；本库只 flush
+```
+'

@@ -6,6 +6,7 @@ import com.mingliqiye.document.format.smile.exception.SmileException
 import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.OutputStream
 
 /**
  * Smile Token 写出器。
@@ -19,9 +20,11 @@ import java.io.IOException
  *
  * 使用 [toByteArray] 取结果，最后调用 [close] 释放 Jackson 生成器。
  */
-internal class SmileTokenWriter : DocumentTokenWriter {
+internal class SmileTokenWriter(
+    private val output: OutputStream = ByteArrayOutputStream(),
+) : DocumentTokenWriter {
 
-    private val output = ByteArrayOutputStream()
+    private val inMemory = output as? ByteArrayOutputStream
 
     private val generator: JsonGenerator = try {
         SMILE_FACTORY.createGenerator(output)
@@ -80,7 +83,14 @@ internal class SmileTokenWriter : DocumentTokenWriter {
         if (!closed) {
             guard { generator.flush() }
         }
-        return output.toByteArray()
+        return inMemory?.toByteArray()
+            ?: throw IllegalStateException("toByteArray is only available for the in-memory constructor")
+    }
+
+    override fun flush() {
+        if (!closed) {
+            guard { generator.flush() }
+        }
     }
 
     /**

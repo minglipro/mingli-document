@@ -11,6 +11,7 @@ import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.serialization.DocumentTokenWriter
 import java.io.ByteArrayOutputStream
+import java.io.OutputStream
 import java.util.Base64
 
 private val TRUE_BYTES = "true".toByteArray(Charsets.US_ASCII)
@@ -23,14 +24,21 @@ private val NULL_BYTES = "null".toByteArray(Charsets.US_ASCII)
  * 与 [JsonStreamWriter] 的 `pretty = false` 输出逐字节一致，但直接从 Token
  * 流写出 UTF-8 字节，不构造中间 String。
  */
-internal class JsonUtf8StreamWriter : DocumentTokenWriter {
+internal class JsonUtf8StreamWriter(
+    private val output: OutputStream = ByteArrayOutputStream(32 * 1024),
+) : DocumentTokenWriter {
 
-    private val output = ByteArrayOutputStream(32 * 1024)
+    private val buffer = output as? ByteArrayOutputStream
     private var firstElements = BooleanArray(8)
     private var depth = 0
     private var expectingValue = false
 
-    fun toByteArray(): ByteArray = output.toByteArray()
+    fun toByteArray(): ByteArray = buffer?.toByteArray()
+        ?: throw IllegalStateException("toByteArray is only available for the in-memory constructor")
+
+    override fun flush() {
+        output.flush()
+    }
 
     override fun writeBinary(value: ByteArray) {
         writeString(Base64.getEncoder().encodeToString(value))
