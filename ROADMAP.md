@@ -286,9 +286,9 @@
 
 ---
 
-## 2.4.0 状态（未发布，延期）
+## 2.4.0 交付状态
 
-- 2.4.0 功能已在 master/dev，但按当前决定延期发布
+- master / v2.4.0 发布
 - jpa-hibernate：Hibernate Session/EntityManager、懒加载、代理、Map 关联、多态
 - jpa 高级映射：@Convert、autoApply、@Inheritance
 - Avro 完整 logical type
@@ -300,6 +300,6 @@
 - DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES
 - @DocumentNaming / @DocumentInclude 类级与字段级注解
 - DocumentModule 的 converter/serializer/deserializer 注册完善
-- 全量构建 1539 tests 通过
+- 全量构建 1566 tests 通过
 - Gitea CI / Maven Central：已放弃
-- 未打 tag、未推私服、未创建 GitHub Release
+- 私服 / GitHub Release 已发布

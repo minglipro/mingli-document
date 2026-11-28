@@ -12,14 +12,14 @@ Properties 是扁平 key/value 文本；模块用 `.` 表示对象路径、`[ind
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:properties:2.3.0")
+implementation("com.mingliqiye.document.format:properties:2.4.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `properties` |
-| 版本 | `2.3.0` |
+| 版本 | `2.4.0` |
 | 传递依赖 | `core`、`exception`、`serialization` |
 | 第三方依赖 | 无（基于 JDK `java.util.Properties`） |
 | 字节码 | JDK 8 |

@@ -5,7 +5,7 @@ title: 安装与依赖
 # 安装与依赖
 
 > 本页说明运行环境、Maven 坐标、BOM、发布仓库、传递依赖，以及从源码构建与发布的方式。
-> 所有坐标都以仓库内 `gradle.properties` 的 `projectVersion` 为准，当前为 `2.3.0`。
+> 所有坐标都以仓库内 `gradle.properties` 的 `projectVersion` 为准，当前为 `2.4.0`。
 
 ## 目录
 
@@ -91,7 +91,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.3.0")
+    implementation("com.mingliqiye.document.format:json:2.4.0")
 }
 ```
 
@@ -102,12 +102,12 @@ dependencies {
 ```kotlin
 dependencies {
     // 格式
-    implementation("com.mingliqiye.document.format:json:2.3.0")
-    implementation("com.mingliqiye.document.format:yaml:2.3.0")
-    implementation("com.mingliqiye.document.format:cbor:2.3.0")
+    implementation("com.mingliqiye.document.format:json:2.4.0")
+    implementation("com.mingliqiye.document.format:yaml:2.4.0")
+    implementation("com.mingliqiye.document.format:cbor:2.4.0")
 
     // Kotlin data class 支持
-    implementation("com.mingliqiye.document:serialization-kotlin:2.3.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:2.4.0")
 }
 ```
 
@@ -115,8 +115,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    implementation 'com.mingliqiye.document.format:json:2.3.0'
-    implementation 'com.mingliqiye.document:serialization-kotlin:2.3.0'
+    implementation 'com.mingliqiye.document.format:json:2.4.0'
+    implementation 'com.mingliqiye.document:serialization-kotlin:2.4.0'
 }
 ```
 
@@ -127,12 +127,12 @@ dependencies {
     <dependency>
         <groupId>com.mingliqiye.document.format</groupId>
         <artifactId>json</artifactId>
-        <version>2.3.0</version>
+        <version>2.4.0</version>
     </dependency>
     <dependency>
         <groupId>com.mingliqiye.document</groupId>
         <artifactId>serialization-kotlin</artifactId>
-        <version>2.3.0</version>
+        <version>2.4.0</version>
     </dependency>
 </dependencies>
 ```
@@ -142,14 +142,14 @@ dependencies {
 BOM 的坐标为：
 
 ```text
-com.mingliqiye.document:mingli-document-bom:2.3.0
+com.mingliqiye.document:mingli-document-bom:2.4.0
 ```
 
 ### Gradle
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.3.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.4.0"))
 
     // 之后所有模块都不写版本
     implementation("com.mingliqiye.document:core")
@@ -163,7 +163,7 @@ Groovy：
 
 ```groovy
 dependencies {
-    implementation platform('com.mingliqiye.document:mingli-document-bom:2.3.0')
+    implementation platform('com.mingliqiye.document:mingli-document-bom:2.4.0')
     implementation 'com.mingliqiye.document.format:json'
 }
 ```
@@ -176,7 +176,7 @@ dependencies {
         <dependency>
             <groupId>com.mingliqiye.document</groupId>
             <artifactId>mingli-document-bom</artifactId>
-            <version>2.3.0</version>
+            <version>2.4.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -294,7 +294,7 @@ gradle ktlintFormat
 gradle publishToMavenLocal
 ```
 
-然后在业务项目里用 `mavenLocal()` 获取 `2.3.0`。
+然后在业务项目里用 `mavenLocal()` 获取 `2.4.0`。
 
 ### 使用 codegen 时的构建配置
 
@@ -347,7 +347,7 @@ gradle publish
 | 找不到 `com.mingliqiye.document:json` | 格式模块 group 不同 | 用 `com.mingliqiye.document.format:json` |
 | 找不到 `format-json` artifact | artifactId 去掉了 `format-` 前缀 | 用 `format:json` |
 | 解析不到版本 | 只配置了 Maven Central，而本库只在自建仓库发布 | 加 `repository.mingliqiye.com` 仓库 |
-| `Failed to resolve: ...2.3.0` 但本地明明有 | 业务项目用了 `mavenLocal()` 但仓库顺序/缓存问题 | `gradle --refresh-dependencies` |
+| `Failed to resolve: ...2.4.0` 但本地明明有 | 业务项目用了 `mavenLocal()` 但仓库顺序/缓存问题 | `gradle --refresh-dependencies` |
 | Kotlin 编译报元数据版本不兼容 | 业务 Kotlin < 2.0，同时依赖了 `serialization-kotlin` | 升级 Kotlin 到 2.0，或仅依赖 Java 模块 |
 | KSP 报 “ksp version mismatch” | KSP 版本与 Kotlin 版本不匹配 | 使用 `2.0.0-1.0.21` |
 | record 反序列化失败 / 走了无参构造 | 运行在 JDK 8~15 | 需要 JDK 16+ 运行时 |
@@ -363,7 +363,7 @@ import com.mingliqiye.document.format.json.JsonMapper
 
 fun main() {
     val mapper = JsonMapper()
-    val node: Node = mapper.parse("""{"ok":true,"version":"2.3.0"}""", Node::class.java)
+    val node: Node = mapper.parse("""{"ok":true,"version":"2.4.0"}""", Node::class.java)
     check(node.asObject()["ok"]?.asBoolean() == true)
     println("mingli-document ${node.asObject()["version"]?.asString()} is ready")
 }

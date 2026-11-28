@@ -247,7 +247,7 @@
 - `format-json` 去除 Jackson 内部包 `DoubleToDecimal` 依赖
 - Gitea CI、Maven Central 发布（已放弃）
 
-## 当前状态（2.4.0 未发布）
+## 当前状态（2.4.0）
 
 ### 已完成的核心目标
 
@@ -268,9 +268,9 @@
 | GraalVM Native Image | ✅ 实测 |
 | 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
 | Gitea CI、Maven Central | ❌ 已放弃 |
-| Avro logical type / maxDepth / jpa-hibernate 高级映射 | ✅ 2.4.0 未发布 |
-| DeserializationFeature / @DocumentNaming / @DocumentInclude | ✅ 2.4.0 未发布 |
-| 对象映射便捷 API / reified 迁移到 serialization-kotlin | ✅ 2.4.0 未发布 |
+| Avro logical type / maxDepth / jpa-hibernate 高级映射 | ✅ 2.4.0 已发布 |
+| DeserializationFeature / @DocumentNaming / @DocumentInclude | ✅ 2.4.0 已发布 |
+| 对象映射便捷 API / reified 迁移到 serialization-kotlin | ✅ 2.4.0 已发布 |
 
 ### 待办清单（2.4.0 之后）
 
@@ -281,7 +281,7 @@
 | 3 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
 | 4 | `jlink` 支持（当前仅 `annotation` 可 jlink） | 阶段 6 |
 
-> 2.4.0 功能已完成，但代码与发布当前暂停；未打 tag、未推私服、未创建 GitHub Release。
+> 2.4.0 已发布。
 
 > 仓库根的 `TODO.md` 记录了更细粒度的待办项，本表只列路线图级目标。
 

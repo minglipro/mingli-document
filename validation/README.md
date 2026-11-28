@@ -20,7 +20,7 @@ Jakarta Bean Validation（JSR 380）与 `serialization` 模块的集成。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document:validation:2.3.0")
+implementation("com.mingliqiye.document:validation:2.4.0")
 ```
 
 模块只依赖 `jakarta.validation:jakarta.validation-api`，运行期需要自行提供

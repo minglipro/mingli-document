@@ -25,9 +25,9 @@
 
 | 项目 | 值 |
 |---|---|
-| 当前版本 | `2.3.0`（根 `gradle.properties` 的 `projectVersion`） |
+| 当前版本 | `2.4.0`（根 `gradle.properties` 的 `projectVersion`） |
 | 目标字节码 | JDK 8（`jvmVersion=8`） |
-| 构建 Kotlin | 2.3.0（根 `build.gradle.kts`） |
+| 构建 Kotlin | 2.4.0（根 `build.gradle.kts`） |
 | KSP | `2.0.0-1.0.21`（仅 `codegen` 与使用方需要） |
 | 构建工具 | Gradle 8.x（仓库自带 wrapper） |
 | 许可证 | Apache License 2.0 |
@@ -160,8 +160,8 @@ repositories {
 }
 
 dependencies {
-    implementation("com.mingliqiye.document.format:json:2.3.0")
-    implementation("com.mingliqiye.document:serialization-kotlin:2.3.0")
+    implementation("com.mingliqiye.document.format:json:2.4.0")
+    implementation("com.mingliqiye.document:serialization-kotlin:2.4.0")
 }
 ```
 
@@ -169,7 +169,7 @@ dependencies {
 
 ```kotlin
 dependencies {
-    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.3.0"))
+    implementation(platform("com.mingliqiye.document:mingli-document-bom:2.4.0"))
 
     implementation("com.mingliqiye.document:core")
     implementation("com.mingliqiye.document:serialization")

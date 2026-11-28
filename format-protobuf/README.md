@@ -7,7 +7,7 @@ Protocol Buffers 格式模块。
 ## Maven
 
 ```kotlin
-implementation("com.mingliqiye.document.format:protobuf:2.3.0")
+implementation("com.mingliqiye.document.format:protobuf:2.4.0")
 ```
 
 ## 主要 API

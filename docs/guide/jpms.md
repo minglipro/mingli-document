@@ -15,7 +15,7 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 > 仍是「自动模块」。已知限制：`format-json` 写 `Double` 时引用了 jackson-core 未导出的
 > 内部包，module path 上需要消费方加 `--add-exports`，详见[限制](#限制)。**
 >
-> 版本基线：`gradle.properties` 的 `projectVersion=2.3.0`、`jvmVersion=8`。主 classes 仍由
+> 版本基线：`gradle.properties` 的 `projectVersion=2.4.0`、`jvmVersion=8`。主 classes 仍由
 > JDK 8 工具链编译；`module-info` 使用 **JDK 17 工具链 + `javac --release 9`** 单独编译。
 
 ## 目录
@@ -106,7 +106,7 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 ### 结构
 
 ```text
-core-2.3.0.jar
+core-2.4.0.jar
 ├── META-INF/MANIFEST.MF
 │   ├── Automatic-Module-Name: com.mingliqiye.document.core
 │   └── Multi-Release: true
@@ -294,9 +294,9 @@ public final class Main {
 }
 ```
 
-`lib/` 至少需要：`exception-2.3.0.jar`、`core-2.3.0.jar`、`schema-2.3.0.jar`，以及依赖
+`lib/` 至少需要：`exception-2.4.0.jar`、`core-2.4.0.jar`、`schema-2.4.0.jar`，以及依赖
 `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`（只有直接使用注解时才需要
-`annotation-2.3.0.jar`）。
+`annotation-2.4.0.jar`）。
 
 ```bash
 javac --module-path lib -d out src/smoke.app/module-info.java src/smoke.app/smoke/Main.java
@@ -310,11 +310,11 @@ JDK 17 实际运行（`--show-module-resolution` 节选）可以看到显式模�
 
 ```text
 root smoke.app file:///.../out/
-smoke.app requires com.mingliqiye.document.schema file:///.../lib/schema-2.3.0.jar
-smoke.app requires com.mingliqiye.document.core file:///.../lib/core-2.3.0.jar
+smoke.app requires com.mingliqiye.document.schema file:///.../lib/schema-2.4.0.jar
+smoke.app requires com.mingliqiye.document.core file:///.../lib/core-2.4.0.jar
 com.mingliqiye.document.schema requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
-com.mingliqiye.document.schema requires com.mingliqiye.document.core file:///.../lib/core-2.3.0.jar
-com.mingliqiye.document.core requires com.mingliqiye.document.exception file:///.../lib/exception-2.3.0.jar
+com.mingliqiye.document.schema requires com.mingliqiye.document.core file:///.../lib/core-2.4.0.jar
+com.mingliqiye.document.core requires com.mingliqiye.document.exception file:///.../lib/exception-2.4.0.jar
 com.mingliqiye.document.core requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
 com.mingliqiye.document.exception requires kotlin.stdlib file:///.../lib/kotlin-stdlib-2.0.0.jar
 com.mingliqiye.document.exception requires mingli.exception file:///.../lib/mingli-exception-1.1.1-Final.jar automatic
@@ -421,10 +421,10 @@ java --module-path "lib;out" -m smoke.app/smoke.Main
 JDK 17 `--show-module-resolution` 中可以看到四个模块的 `requires` 都被逐个解析：
 
 ```text
-smoke.app requires com.mingliqiye.document.jpa file:///.../lib/jpa-2.3.0.jar
-smoke.app requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.3.0.jar
-smoke.app requires com.mingliqiye.document.jdbc file:///.../lib/jdbc-2.3.0.jar
-smoke.app requires com.mingliqiye.document.validation file:///.../lib/validation-2.3.0.jar
+smoke.app requires com.mingliqiye.document.jpa file:///.../lib/jpa-2.4.0.jar
+smoke.app requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.4.0.jar
+smoke.app requires com.mingliqiye.document.jdbc file:///.../lib/jdbc-2.4.0.jar
+smoke.app requires com.mingliqiye.document.validation file:///.../lib/validation-2.4.0.jar
 com.mingliqiye.document.jpa requires jakarta.persistence file:///.../lib/jakarta.persistence-api-3.1.0.jar
 com.mingliqiye.document.jpa requires java.desktop jrt:/java.desktop
 com.mingliqiye.document.jpa requires java.sql jrt:/java.sql
@@ -485,9 +485,9 @@ jar + `kotlin-stdlib-2.0.0.jar`、`mingli-exception-1.1.1-Final.jar`、
 
 ```text
 root smoke.json file:///.../out/
-smoke.json requires com.mingliqiye.document.format.json file:///.../lib/format-json-2.3.0.jar
+smoke.json requires com.mingliqiye.document.format.json file:///.../lib/format-json-2.4.0.jar
 com.mingliqiye.document.format.json requires com.fasterxml.jackson.core file:///.../lib/jackson-core-2.15.3.jar
-com.mingliqiye.document.format.json requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.3.0.jar
+com.mingliqiye.document.format.json requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.4.0.jar
 com.mingliqiye.document.serialization requires com.mingliqiye.utils.aliasfor file:///.../lib/alias-for-1.0.4.jar automatic
 ```
 
@@ -703,7 +703,7 @@ gradle :annotation:build :exception:build :core:build :schema:build :schema-regi
 ### 1. 查看模块描述（确认是显式模块）
 
 ```bash
-jar --describe-module --file core/build/libs/core-2.3.0.jar --release 9
+jar --describe-module --file core/build/libs/core-2.4.0.jar --release 9
 ```
 
 JDK 17 实际输出：
@@ -711,7 +711,7 @@ JDK 17 实际输出：
 ```text
 releases: 9
 
-com.mingliqiye.document.core jar:file:///.../core-2.3.0.jar!/META-INF/versions/9/module-info.class
+com.mingliqiye.document.core jar:file:///.../core-2.4.0.jar!/META-INF/versions/9/module-info.class
 exports com.mingliqiye.document.core
 requires com.mingliqiye.document.exception transitive
 requires java.base mandated
@@ -770,7 +770,7 @@ requires kotlin.stdlib transitive
 
 ```text
 # format-json
-com.mingliqiye.document.format.json jar:file:///.../format-json-2.3.0.jar!/META-INF/versions/9/module-info.class
+com.mingliqiye.document.format.json jar:file:///.../format-json-2.4.0.jar!/META-INF/versions/9/module-info.class
 exports com.mingliqiye.document.format.json
 exports com.mingliqiye.document.format.json.exception
 exports com.mingliqiye.document.format.json.schema
@@ -809,7 +809,7 @@ requires org.hibernate.orm.core
 ### 2. 校验 Multi-Release jar
 
 ```bash
-jar --validate --file core/build/libs/core-2.3.0.jar
+jar --validate --file core/build/libs/core-2.4.0.jar
 ```
 
 命令无输出且退出码为 0 表示 jar 结构合法。本批 12 个新 jar 全部实测退出码 0
@@ -818,7 +818,7 @@ jar --validate --file core/build/libs/core-2.3.0.jar
 ### 3. 检查 jar 内容与清单
 
 ```bash
-jar tf core/build/libs/core-2.3.0.jar | grep module-info
+jar tf core/build/libs/core-2.4.0.jar | grep module-info
 # META-INF/versions/9/module-info.class
 # （基版本根目录没有 module-info.class）
 ```
@@ -826,7 +826,7 @@ jar tf core/build/libs/core-2.3.0.jar | grep module-info
 Windows PowerShell：
 
 ```powershell
-Expand-Archive core\build\libs\core-2.3.0.jar -DestinationPath tmp
+Expand-Archive core\build\libs\core-2.4.0.jar -DestinationPath tmp
 Get-Content tmp\META-INF\MANIFEST.MF | Select-String 'Multi-Release|Automatic-Module-Name'
 # Automatic-Module-Name: com.mingliqiye.document.core
 # Multi-Release: true
@@ -845,7 +845,7 @@ JDK 8 / 无法形成显式模块时的兜底。
 ### 4. 主 classes 仍是 JDK 8 字节码
 
 ```bash
-javap -verbose -cp core/build/libs/core-2.3.0.jar com.mingliqiye.document.core.StringNode \
+javap -verbose -cp core/build/libs/core-2.4.0.jar com.mingliqiye.document.core.StringNode \
   | grep 'major version'
 # major version: 52
 ```

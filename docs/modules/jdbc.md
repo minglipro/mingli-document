@@ -3,7 +3,7 @@
 ## 坐标
 
 ```kotlin
-implementation("com.mingliqiye.document:jdbc:2.3.0")
+implementation("com.mingliqiye.document:jdbc:2.4.0")
 ```
 
 ## 读取 ResultSet

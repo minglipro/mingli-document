@@ -4,9 +4,9 @@
 变更与路线图。与「模块」章节的区别是：模块章节按模块讲职责与用法，参考章节按**主题**
 做全库索引，方便查签名、查行为、查异常。
 
-- 文档对应版本：`2.3.0`
+- 文档对应版本：`2.4.0`
 - 源码基线：`dev` 分支（文档编写时的仓库状态；`gradle.properties` 中
-  `projectVersion=2.3.0`）
+  `projectVersion=2.4.0`）
 - 目标平台：JDK 8+（Java record 支持需要 JDK 16+ 运行时）
 - 语言：Kotlin 2.0.0、Java 8+
 
@@ -153,6 +153,6 @@ mapper.format(users, java.io.File("users.json"))
 | `1.3.0` | Ion/CBOR 类型保真、CSV Token、`maxStringLength`、YAML alias 限制 |
 | `1.4.0` | YAML/XML/Properties/TOML 原生 Token Reader、Schubfach Double、`fuzzContinuous` |
 | `1.5.0` | Jazzer fuzz 目标与 `fuzzJazzer` |
-| `2.3.0` | 代码生成（KSP/运行期）、Java record、只读属性、merge、CBOR sequence、Smile 多消息、Kotlin value class/sealed、CSV 嵌套、Protobuf 高级语义、安全基线、OpenAPI |
+| `2.4.0` | 代码生成（KSP/运行期）、Java record、只读属性、merge、CBOR sequence、Smile 多消息、Kotlin value class/sealed、CSV 嵌套、Protobuf 高级语义、安全基线、OpenAPI |
 
 详细变更见 [变更记录](./changelog.md)，未来计划见 [路线图](./roadmap.md)。

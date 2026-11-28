@@ -12,14 +12,14 @@ Avro 是 Schema 驱动的二进制格式：裸二进制数据不自带 Schema，
 ## Maven 坐标与依赖
 
 ```kotlin
-implementation("com.mingliqiye.document.format:avro:2.3.0")
+implementation("com.mingliqiye.document.format:avro:2.4.0")
 ```
 
 | 项 | 值 |
 |---|---|
 | groupId | `com.mingliqiye.document.format` |
 | artifactId | `avro` |
-| 版本 | `2.3.0` |
+| 版本 | `2.4.0` |
 | 传递依赖 | `schema`、`core`、`exception`、`serialization` |
 | 第三方依赖 | `org.apache.avro:avro:1.11.3`（api）、`org.xerial.snappy:snappy-java:1.1.10.5`（实现） |
 | 字节码 | JDK 8 |

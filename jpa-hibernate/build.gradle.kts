@@ -17,6 +17,18 @@ kotlin {
 // 「目标 JVM 8」，Gradle 变体选择会因此拒绝 Java 11+ 的 Hibernate 依赖
 // （例如 hibernate-commons-annotations:6.0.6.Final）。测试实际运行在 JDK 17 上，
 // 因此把测试相关 configuration 的目标 JVM 改为 17；主代码目标不受影响。
+configurations.named("compileClasspath") {
+    attributes {
+        attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 17)
+    }
+}
+
+configurations.named("runtimeClasspath") {
+    attributes {
+        attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 17)
+    }
+}
+
 configurations.named("testCompileClasspath") {
     attributes {
         attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, 17)

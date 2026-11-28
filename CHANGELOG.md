@@ -1,13 +1,10 @@
 # Changelog
 
-## 2.4.0（未发布）
+## 2.4.0
 
 ### 新增
 
 - `jpa-hibernate` 模块：Hibernate 代理、懒加载、Session/EntityManager 集成
-- reified 类型扩展迁移到 serialization-kotlin（parse<T> / romNode<T> / convert<T> / eaderFor<T>）
-- 对象映射便捷 API：readTree/writeTree/valueToTree/treeToValue/readValue/writeValueAs*/updateValue/readerFor/writer
-- DeserializationFeature、@DocumentNaming、@DocumentInclude
 - JPA 高级映射：`@Convert` / autoApply 转换器、Map 关联、`@Inheritance` 多态
 - Hibernate Map 关联与多态实体支持
 - Avro 完整 logical type：date/time/timestamp/decimal/uuid/duration
@@ -16,30 +13,34 @@
 - `serialization` / `jdbc` / `validation` / `jpa` 显式 MR-JAR `module-info`
 - 11 个 `format-*` 与 `jpa-hibernate` 显式 MR-JAR `module-info`（显式模块累计 21 个）
 - `alias-for` 升级 1.0.4（增加 `Automatic-Module-Name`）
-- `DeserializationFeature` 反序列化特性开关（`enable` / `disable` / `configure` /
-  `failOnNullForPrimitives`，`isEnabled` 查询）：`FAIL_ON_NULL_FOR_PRIMITIVES`
-  可让 `null` → 基本类型（字段/构造参数/Builder/record/基本类型数组元素）抛出
-  `DocumentSerializationException`；默认关闭，保持基本类型默认值行为
+
+### 反序列化与注解
+
+- `DeserializationFeature` 开关：`FAIL_ON_NULL_FOR_PRIMITIVES`（默认关闭）
+  - 开启后 `null` -> 基本类型（字段/构造参数/Builder/record/基本类型数组元素）
+    抛 `DocumentSerializationException`
+  - 关闭时保持基本类型默认值行为
 - `@DocumentNaming` + `DocumentNamingStrategy`：类级/字段级命名策略覆盖
-  （`SnakeCaseStrategy`、`KebabCaseStrategy`、`UpperCamelStrategy`、
-  `LowerCamelStrategy`、`AsIsStrategy`），优先级
-  `@DocumentName` > 字段级 > 类级 > 全局 `namingStrategy`
-- `@DocumentInclude` + `DocumentIncludePolicy`：类级/字段级写出策略覆盖
-  （`ALWAYS` / `NON_NULL` / `NON_EMPTY` / `USE_DEFAULTS`），优先级
-  字段级 > 类级 > 全局 `writeNulls`，支持嵌套对象与集合元素
-- `DocumentMapperBuilder.propertyMetadataResolver(...)`：补齐 Builder 直接注册属性
-  元数据解析器的 API（模块注册仍优先）
-- 明确并文档化 `DocumentModule` / `ModuleSetupContext` 注册优先级：模块注册覆盖
-  Builder 直接注册，后注册模块覆盖先注册模块，同名模块按 `moduleName` 去重
-- 对象映射便捷 API（`serialization`，format-agnostic）：
-  - 树 API：`readTree`（String / ByteArray / File / Path / InputStream / Reader）、
-    `writeTree` / `writeTreeAsBytes`、`valueToTree`、`treeToValue`
-  - 值 API：`readValue`（六种来源 × `Class` / `DocumentTypeReference`）、
-    `writeValueAsString` / `writeValueAsBytes`、`updateValue`、`convertValue`
-  - Reader / Writer：`readerFor`、`writer()`、`writerWithDefaultPrettyPrinter()`，
-    返回轻量包装 `DocumentObjectReader` / `DocumentObjectWriter`
-  - 全部基于既有 `parse` / `format` / `toNode` / `fromNode` / `merge` 实现，
-    不改变原有行为；`DocumentMapper` 显式覆写，Java 可直接通过具体 Mapper 调用
+  - 优先级：`@DocumentName` > 字段级 > 类级 > 全局 `namingStrategy`
+- `@DocumentInclude` + `DocumentIncludePolicy`：
+  `ALWAYS` / `NON_NULL` / `NON_EMPTY` / `USE_DEFAULTS`
+  - 优先级：字段级 > 类级 > 全局 `writeNulls`
+- `DocumentMapperBuilder.propertyMetadataResolver(...)` 补齐 Builder 直接注册
+- `DocumentModule` / `ModuleSetupContext` 注册优先级明确：
+  模块注册覆盖 Builder 直接注册；后注册模块覆盖先注册模块；同名模块按
+  `moduleName` 去重
+
+### 对象映射 API
+
+- 树 API：`readTree`（String / ByteArray / File / Path / InputStream / Reader）、
+  `writeTree` / `writeTreeAsBytes`、`valueToTree`、`treeToValue`
+- 值 API：`readValue`（六种来源 × `Class` / `DocumentTypeReference`）、
+  `writeValueAsString` / `writeValueAsBytes`、`updateValue`、`convertValue`
+- Reader / Writer：`readerFor`、`writer()`、`writerWithDefaultPrettyPrinter()`，
+  返回 `DocumentObjectReader` / `DocumentObjectWriter`
+- Kotlin reified 扩展迁移到 `serialization-kotlin`：
+  `parse<T>` / `fromNode<T>` / `convert<T>` / `readerFor<T>`
+  - `serialization` 保持纯 Java 可用，不包含 reified API
 
 ## 2.3.0
 

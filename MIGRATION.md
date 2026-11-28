@@ -1,4 +1,21 @@
-# 从 1.x 迁移到 2.3.0
+# 从 1.x 迁移到 2.4.0
+
+## 2.4.0
+
+2.4.0 在 2.3.0 基础上新增：
+
+```text
+jpa-hibernate 模块
+JPA 高级映射与 Hibernate Map/多态
+Avro logical type
+XML/Properties/TOML/CSV maxDepth
+21 个显式 MR-JAR module-info
+DeserializationFeature / @DocumentNaming / @DocumentInclude
+对象映射便捷 API
+reified 扩展迁移到 serialization-kotlin
+```
+
+API 向后兼容；Gitea CI 与 Maven Central 发布已放弃。
 
 ## 2.3.0
 

@@ -6,12 +6,12 @@
 
 ## 使用方式
 
-根工程声明 KSP Gradle 插件（版本必须与 Kotlin 2.3.0 匹配）：
+根工程声明 KSP Gradle 插件（版本必须与 Kotlin 2.4.0 匹配）：
 
 ```kotlin
 plugins {
-    kotlin("jvm") version "2.3.0" apply false
-    id("com.google.devtools.ksp") version "2.3.0-1.0.21" apply false
+    kotlin("jvm") version "2.4.0" apply false
+    id("com.google.devtools.ksp") version "2.4.0-1.0.21" apply false
 }
 ```
 
