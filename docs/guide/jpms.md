@@ -6,15 +6,14 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 
 > 本页说明 `mingli-document` 在 Java 平台模块系统（JPMS / Project Jigsaw）下的支持方式。
 >
-> 结论先行：**`annotation` / `exception` / `core` / `schema` / `schema-registry` /
-> `serialization` / `jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate`
-> 共 21 个模块的主 jar 已经是 Multi-Release JAR：JDK 9+ 会读到真正的显式
-> `module-info.class`（`jar --describe-module --release 9` 不再显示 `automatic`），
+> 结论先行：**全部 26 个可发布模块的主 jar 都已经是 Multi-Release JAR：JDK 9+ 会读到真正的
+> 显式 `module-info.class`（`jar --describe-module --release 9` 不再显示 `automatic`），
 > JDK 8 仍然只看到原来的 JDK 8 字节码（class file 52），完全按 classpath 使用。
-> 其余可发布模块（`serialization-kotlin`、`record-support`、`codegen`、`codegen-test`、
-> `openapi`）仍是「自动模块」；其中 `record-support` 是 JDK 17 字节码，只在 JDK 17+
-> 运行期使用（record 映射依赖它）。已知限制：`format-json` 写 `Double` 时引用了 jackson-core 未导出的
-> 内部包，module path 上需要消费方加 `--add-exports`，详见[限制](#限制)。**
+> 其中 `record-support` 是 JDK 17 字节码（class file 61）的可选增强模块，只在 JDK 17+
+> 运行期使用（record 映射依赖它）；`record-support` / `codegen` 还通过 `provides` 声明了
+> `JavaRecordSupport` 服务与 KSP 处理器。已知限制：`format-json` 写 `Double` 时引用了
+> jackson-core 未导出的内部包，module path 上需要消费方加 `--add-exports`，详见[限制](#限制)。**
+
 >
 > 版本基线：`gradle.properties` 的 `projectVersion=2.4.0`、`jvmVersion=8`。主 classes 仍由
 > JDK 8 工具链编译；`module-info` 使用 **JDK 17 工具链 + `javac --release 9`** 单独编译。
@@ -34,14 +33,12 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 
 | 产物 | 形态 | 说明 |
 |---|---|---|
-| `annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` 的主 jar | ✅ 显式模块（Multi-Release） | JDK 9+ 读取 `META-INF/versions/9/module-info.class`；JDK 8 看不到该目录 |
-| `format-avro` / `format-cbor` / `format-csv` / `format-ion` / `format-json` / `format-properties` / `format-protobuf` / `format-smile` / `format-toml` / `format-xml` / `format-yaml`、`jpa-hibernate` 的主 jar | ✅ 显式模块（Multi-Release，本批新增） | 共 12 个；模块 path 用法与单独验证见[各模块的 exports / requires](#各模块的-exports--requires)与[验证方式](#验证方式) |
-| 其余可发布模块的主 jar（`serialization-kotlin`、`record-support`、`codegen`、`codegen-test`、`openapi`） | ⚠️ 自动模块 | 只有 `Automatic-Module-Name`，`jar --describe-module` 会显示 `automatic`；`record-support` 主 classes 是 JDK 17 字节码 |
+| 全部 26 个可发布模块的主 jar（`annotation` / `exception` / `core` / `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` / `jpa-hibernate` / 11 个 `format-*` / `serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi`） | ✅ 显式模块（Multi-Release） | JDK 9+ 读取 `META-INF/versions/9/module-info.class`；JDK 8 看不到该目录。本批新增：`serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi` |
 | `javadoc` / `kotlindoc` classifier jar | ❌ 不参与 module path | 文档 jar 不参与模块解析 |
 | `bom`（`mingli-document-bom`） | ❌ | `java-platform`，没有 jar |
 | 根项目 `mingli-document`、`benchmarks`、`fuzz` | ❌ | 聚合/非发布模块，不写自动模块名 |
 
-两类产物共同点：
+共同点：
 
 - 所有可发布模块的主 jar 清单**仍然保留** `Automatic-Module-Name`：JDK 8、纯 classpath
   消费方完全不受影响，JDK 9+ 若因依赖链问题无法形成显式模块，也有稳定兜底名字；
@@ -85,18 +82,18 @@ title: JPMS、显式 module-info 与 Multi-Release JAR
 | `format-xml` | `com.mingliqiye.document.format:xml` | `com.mingliqiye.document.format.xml` |
 | `format-yaml` | `com.mingliqiye.document.format:yaml` | `com.mingliqiye.document.format.yaml` |
 | `jpa-hibernate` | `com.mingliqiye.document:jpa-hibernate` | `com.mingliqiye.document.jpa.hibernate` |
+| `serialization-kotlin` | `com.mingliqiye.document:serialization-kotlin` | `com.mingliqiye.document.serialization.kotlin` |
+| `record-support` | `com.mingliqiye.document:record-support` | `com.mingliqiye.document.record.support` |
+| `codegen` | `com.mingliqiye.document:codegen` | `com.mingliqiye.document.codegen` |
+| `codegen-test` | `com.mingliqiye.document:codegen-test` | `com.mingliqiye.document.codegen.test` |
+| `openapi` | `com.mingliqiye.document:openapi` | `com.mingliqiye.document.openapi` |
 
-### 仍为自动模块的模块
+### 模块形态说明
 
-以下 5 个可发布模块的主 jar 只带 `Automatic-Module-Name`（名称与上表规则一致）：
-
-| 模块 | 模块名 |
-|---|---|
-| `serialization-kotlin` | `com.mingliqiye.document.serialization.kotlin` |
-| `record-support` | `com.mingliqiye.document.record.support`（JDK 17 字节码，通过 `META-INF/services` 提供 `JavaRecordSupport`） |
-| `codegen` | `com.mingliqiye.document.codegen` |
-| `codegen-test` | `com.mingliqiye.document.codegen.test` |
-| `openapi` | `com.mingliqiye.document.openapi` |
+全部可发布模块都已提供 `src/main/java9/module-info.java`，**没有剩余的「可发布自动模块」**：
+`benchmarks` / `fuzz` 不是可发布模块，`bom` 是 `java-platform`（没有 jar），根项目只做聚合，
+它们都不需要模块描述。第三方依赖中仍有自动模块（`mingli.exception`、`alias-for`、
+Avro / Ion / TOML / commons-csv / protobuf-java、`hibernate-core` 等），见[限制](#限制)。
 
 ::: tip 模块名是发布契约
 自动模块名和 `module-info` 里的模块名一样，是使用方的编译期/运行期契约。本库按
@@ -176,6 +173,11 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
 | `com.mingliqiye.document.format.xml` | `.format.xml`、`.format.xml.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`com.mingliqiye.document.annotation`、`java.xml` |
 | `com.mingliqiye.document.format.yaml` | `.format.yaml`、`.format.yaml.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception`、`transitive com.mingliqiye.document.serialization`、`org.yaml.snakeyaml` |
 | `com.mingliqiye.document.jpa.hibernate` | `.jpa.hibernate`、`.jpa.hibernate.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.jpa`、`transitive com.mingliqiye.document.core`、`com.mingliqiye.document.exception`、`transitive jakarta.persistence`、`org.hibernate.orm.core`（自动模块） |
+| `com.mingliqiye.document.serialization.kotlin` | `.serialization.kotlin` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.serialization`、`transitive com.mingliqiye.document.core`、`com.mingliqiye.document.annotation`、`com.mingliqiye.document.exception`、`kotlin.reflect`、`java.desktop` |
+| `com.mingliqiye.document.record.support` | `.serialization.record` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.serialization`；`provides com.mingliqiye.document.serialization.JavaRecordSupport with com.mingliqiye.document.serialization.record.Jdk17RecordSupport`（主 classes 为 JDK 17 / class file 61） |
+| `com.mingliqiye.document.codegen` | `.codegen` | `transitive kotlin.stdlib`、`symbol.processing.api`（自动模块）；`provides com.google.devtools.ksp.processing.SymbolProcessorProvider with com.mingliqiye.document.codegen.DocumentEnumCodecProcessorProvider` |
+| `com.mingliqiye.document.codegen.test` | `.codegen.test`、`.generated`、`.generated.custom` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.annotation`、`transitive com.mingliqiye.document.serialization` |
+| `com.mingliqiye.document.openapi` | `.openapi`、`.openapi.exception` | `transitive kotlin.stdlib`、`transitive com.mingliqiye.document.schema`、`transitive com.mingliqiye.document.core`、`transitive com.mingliqiye.document.exception` |
 
 说明：
 
@@ -259,6 +261,29 @@ JDK 8 的 `JarFile` 不认识 `Multi-Release` 清单属性，会把
   `format.<name>` 与 `format.<name>.exception` 两个公共包。
   Kotlin `internal` 类在字节码层仍是 public，这一点与自动模块相同；真正隐藏实现需要继续
   拆分 internal 包，属于后续工作。
+- `serialization-kotlin` 的 `kotlin.reflect` 来自 `kotlin-reflect-2.0.0.jar`：该 jar 自带
+  Multi-Release 显式 `module-info`，模块名为 `kotlin.reflect`，只导出 `kotlin.reflect.full` /
+  `kotlin.reflect.jvm`（`KClass` / `KType` 等基础接口在 `kotlin.stdlib` 的 `kotlin.reflect`
+  包里，所以同时需要 `kotlin.stdlib`）。`java.desktop` 来自 `java.beans.Introspector`；
+  `annotation` / `exception` 只在实现内部使用，因此用普通 `requires`。
+- `record-support` 的 `provides` 与 `serialization` 的 `uses` 配对：module path 上消费方
+  只需 `requires com.mingliqiye.document.record.support`（或 `--add-modules`）让本模块进入
+  模块图，`ServiceLoader` 就能在 `serialization` 侧发现 provider；未解析本模块时 record
+  映射安全降级为普通 Bean。classpath 使用方式继续走 `META-INF/services` 文件（jar 内保留）。
+  本模块主 classes 是 class file 61，JDK 8–16 不能加载。
+- `codegen` 依赖的 `symbol-processing-api-2.0.0-1.0.21.jar` 没有显式 `module-info`、也没有
+  `Automatic-Module-Name`，按文件名推导出的自动模块名是 `symbol.processing.api`。模块通过
+  `provides com.google.devtools.ksp.processing.SymbolProcessorProvider` 声明 KSP 处理器；
+  KSP 构建插件日常以 classpath 方式加载处理器（继续读 `META-INF/services`），不受影响；
+  若在 module path 上使用，则必须同时提供 KSP API jar 与 `kotlin-stdlib`。
+- `codegen-test` 是 codegen 的示例/测试支持模块：编译期由 KSP 生成
+  `com.mingliqiye.document.generated`（及 `.generated.custom`）包，生成代码随主 jar 一起
+  发布，因此这三个包都 `exports`。它是测试夹具，不建议在正式 module path 上与「同样生成
+  `com.mingliqiye.document.generated` 包」的消费方模块同时使用（split package 风险）。
+- `openapi` 与 Gradle 的 `api(project(":schema"))` / `api(project(":core"))` /
+  `api(project(":exception"))` 一致使用 `requires transitive`，消费方 `requires
+  com.mingliqiye.document.openapi` 后可直接使用 `DocumentSchema` / `Node` 等公开类型，并
+  捕获继承自 `DocumentException` 的 `OpenApiException`。
 
 ## 在 module path 上使用
 
@@ -563,35 +588,103 @@ Hibernate bootstrap / `EntityManager` 运行期路径还依赖 `hibernate-core` 
 `jakarta.interceptor`），在 module path 上需要额外准备 `--add-modules` 与这些模块，本次未
 纳入 smoke；这类场景仍建议以 classpath 使用（见[限制](#限制)）。
 
+### serialization-kotlin / record-support / codegen / openapi smoke（实测）
+
+本批 5 个模块都在 JDK 17 module path 上做了消费方 smoke：
+
+```java
+// serialization-kotlin：require 后调用 KotlinModuleKt.kotlinModule()
+module smoke.serialization.kotlin {
+    requires com.mingliqiye.document.serialization.kotlin;
+}
+
+// openapi：require 后构建 OpenApiConfig / OpenApiGenerator
+module smoke.openapi {
+    requires com.mingliqiye.document.openapi;
+}
+
+// record-support：open module 便于 record 反射；声明 uses 便于 ServiceLoader 调用
+open module smoke.record {
+    requires com.mingliqiye.document.record.support;
+    requires com.mingliqiye.document.serialization;
+    requires com.mingliqiye.document.format.json;
+
+    uses com.mingliqiye.document.serialization.JavaRecordSupport;
+}
+
+// codegen：KSP API 目前是自动模块 symbol.processing.api
+module smoke.codegen {
+    requires com.mingliqiye.document.codegen;
+    requires symbol.processing.api;
+
+    uses com.google.devtools.ksp.processing.SymbolProcessorProvider;
+}
+```
+
+实测输出（Zulu JDK 17.0.19，module path = 本库 jar + 传递依赖）：
+
+```text
+serialization-kotlin smoke OK: module=com.mingliqiye.document.serialization.kotlin.KotlinModule, namedModule=true
+openapi smoke OK: keys=[openapi, info, paths, components], namedModule=true
+record-support smoke OK: provider=com.mingliqiye.document.serialization.record.Jdk17RecordSupport, isRecord=true, components=2, parsed=1,2, json={"x":1,"y":2}
+codegen smoke OK: provider=com.mingliqiye.document.codegen.DocumentEnumCodecProcessorProvider
+codegen-test smoke OK: pet=CAT, generated=com.mingliqiye.document.generated.GeneratedDocumentModule, generatedModule=com.mingliqiye.document.codegen.test
+```
+
+其中 record smoke 定义了一个 `record Point(int x, int y)`，`JsonMapper.parse` 反序列化为
+`parsed=1,2`、`format` 输出 `{"x":1,"y":2}`，说明 `provides` + `uses` 的服务发现与 record
+映射在 module path 上可用。
+
+`--show-module-resolution` 关键行（record-support / codegen）：
+
+```text
+smoke.record requires com.mingliqiye.document.record.support file:///.../lib/record-support-2.4.0.jar
+com.mingliqiye.document.record.support requires com.mingliqiye.document.serialization file:///.../lib/serialization-2.4.0.jar
+com.mingliqiye.document.serialization binds com.mingliqiye.document.record.support file:///.../lib/record-support-2.4.0.jar
+smoke.codegen requires com.mingliqiye.document.codegen file:///.../lib/codegen-2.4.0.jar
+com.mingliqiye.document.codegen requires symbol.processing.api file:///.../lib/symbol-processing-api-2.0.0-1.0.21.jar automatic
+smoke.codegen binds com.mingliqiye.document.codegen file:///.../lib/codegen-2.4.0.jar
+```
+
+`lib/` 需要本批 5 个模块 jar + `annotation` / `exception` / `core` / `schema` /
+`serialization` / `format-json` jar，以及 `kotlin-stdlib-2.0.0.jar`、
+`kotlin-reflect-2.0.0.jar`（`serialization-kotlin`）、`alias-for-1.0.4.jar`、
+`mingli-exception-1.1.1-Final.jar`、`jackson-core-2.15.3.jar`（record smoke 的 `JsonMapper`）、
+`symbol-processing-api-2.0.0-1.0.21.jar`（`codegen` 的 KSP 依赖）。
+
 ### 显式模块与自动模块的解析差异
 
 - 自动模块会「抱团」进入模块图：`requires` 一个自动模块时，module path 上其它自动模块会一起
   解析。**显式模块不会**：只按 `requires` / `requires transitive` 逐个解析。
-- 21 个模块变成显式模块后，module path 上必须同时提供它们声明的依赖：
+- 26 个可发布模块全部变成显式模块后，module path 上必须同时提供它们声明的依赖：
   `com.mingliqiye.document.exception`（`core` / `schema-registry` 需要）、
   `com.mingliqiye.document.annotation` / `com.mingliqiye.document.core`（`serialization` 需要）、
   `com.mingliqiye.utils.aliasfor`（`serialization` 需要）、
   `mingli.exception`（`exception` / `serialization` 需要）、`kotlin.stdlib`（全部需要）、
-  `jakarta.validation`（`validation` 需要）、`jakarta.persistence`（`jpa` / `jpa-hibernate`
-  需要）、`jackson-core` / `jackson-databind` / `jackson-dataformat-cbor` /
-  `jackson-dataformat-smile`（`format-cbor` / `format-smile` / `format-json` 需要）、
-  `org.yaml.snakeyaml`（`format-yaml` 需要）、`org.hibernate.orm.core`（`jpa-hibernate` 需要）。
-  缺任何一个都会在编译或启动解析阶段失败。其余格式的第三方依赖（`org.apache.avro`、
-  `com.amazon.ion`、`tomlj`、`org.apache.commons.csv`、`com.google.protobuf`）是自动模块，
-  module path 上也必须提供。
+  `kotlin.reflect`（`serialization-kotlin` 需要）、`jakarta.validation`（`validation` 需要）、
+  `jakarta.persistence`（`jpa` / `jpa-hibernate` 需要）、`jackson-core` / `jackson-databind` /
+  `jackson-dataformat-cbor` / `jackson-dataformat-smile`（`format-cbor` / `format-smile` /
+  `format-json` 需要）、`org.yaml.snakeyaml`（`format-yaml` 需要）、
+  `symbol.processing.api`（`codegen` 需要，自动模块）、`org.hibernate.orm.core`
+  （`jpa-hibernate` 需要）。缺任何一个都会在编译或启动解析阶段失败。其余格式的第三方依赖
+  （`org.apache.avro`、`com.amazon.ion`、`tomlj`、`org.apache.commons.csv`、
+  `com.google.protobuf`）是自动模块，module path 上也必须提供。
 - `requires transitive` 让消费方无需重复声明：`requires com.mingliqiye.document.core` 时，
   `com.mingliqiye.document.exception`（以及 `kotlin.stdlib`）自动可读；`requires
   com.mingliqiye.document.format.json` 时，`core` / `exception` / `serialization` 自动可读
   （11 个格式模块与 `jpa-hibernate` 都按 Gradle 的 `api(...)` 语义声明了 `requires
-  transitive`）。
-- 仍为自动模块的 `serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi` 的显式模块依赖不会自动带上：
-  例如只 `requires com.mingliqiye.document.codegen`（自动模块）时，它引用的显式模块
-  （`core` / `schema` 等）不会被解析，需要显式补 `requires`；自动模块同时会导出全部包，
-  与本库显式模块混用时注意包可见性冲突（见下文[混合使用注意](#混合使用注意)）。
+  transitive`）；本批的 `serialization-kotlin` / `openapi` / `codegen-test` 同样按
+  `api(...)` 语义声明了 `requires transitive`（`serialization` / `core` / `schema` /
+  `annotation` 等）。
+- 本批 5 个模块也全部是显式模块：`requires com.mingliqiye.document.serialization.kotlin`、
+  `...openapi`、`...record.support`、`...codegen`、`...codegen.test` 时，它们的
+  `requires` 会逐个解析，不再有「自动模块抱团」的兜底。`record-support` 的
+  `provides JavaRecordSupport` 与 `codegen` 的 `provides SymbolProcessorProvider` 都要求
+  对应模块本身被解析（`requires` 或 `--add-modules`）才会被 `ServiceLoader` 发现。
 - 第三方自动模块（`org.apache.avro`、`com.amazon.ion`、`tomlj`、`org.apache.commons.csv`、
-  `com.google.protobuf`、`org.hibernate.orm.core` 等）被 `requires` 后仍会「抱团」解析
-  module path 上的其它自动模块；它们没有 `requires transitive`，消费方直接使用其类型时
-  需要自己声明 `requires`。
+  `com.google.protobuf`、`org.hibernate.orm.core`、`symbol.processing.api` 等）被
+  `requires` 后仍会「抱团」解析 module path 上的其它自动模块；它们没有 `requires
+  transitive`，消费方直接使用其类型时需要自己声明 `requires`。
 
 ### JDK 8 行为不变
 
@@ -632,6 +725,16 @@ JPMS yaml smoke OK
 52（本次 12 个新 jar 全部实测为 52），`META-INF/versions/9/module-info.class` 是 53，JDK 8
 不会读取该目录。
 
+本批 5 个模块中，`serialization-kotlin` / `openapi`（以及 `codegen` / `codegen-test` 的
+主 classes）也是 class file 52，已在 JDK 8 classpath 上实测通过：
+
+```text
+JDK8 classpath smoke OK: kotlinModule=KotlinModule, openapiKeys=[openapi, info, paths, components], java=1.8.0_492
+```
+
+`record-support` 例外：主 classes 是 class file 61，只支持 JDK 17+；它不参与 JDK 8 的
+classpath 使用（JDK 8–16 消费者不引入该 jar 即可，`serialization` 会安全降级）。
+
 ::: warning jpa 运行期需要 JDK 11+
 `jpa` 依赖的 `jakarta.persistence-api-3.1.0.jar` 主 classes 是 class file 55（Java 11），
 `serialization` / `jdbc` / `validation` 的依赖仍是 Java 8 字节码。因此 `jpa` 走 module path
@@ -649,40 +752,38 @@ JPMS yaml smoke OK
 | JDBC | `com.mingliqiye.document.jdbc` | 显式模块 |
 | Bean Validation | `com.mingliqiye.document.validation` | 显式模块 |
 | JPA 注解映射 | `com.mingliqiye.document.jpa` | 显式模块 |
-| Kotlin data class | `com.mingliqiye.document.serialization.kotlin` | 自动模块 |
-| Java record（JDK 17+） | `com.mingliqiye.document.record-support`（同时需要 `com.mingliqiye.document.serialization`） | 自动模块（JDK 17 字节码） |
+| Kotlin data class | `com.mingliqiye.document.serialization.kotlin`（module path 上还需 `kotlin-reflect` 提供的 `kotlin.reflect` 模块） | 显式模块 |
+| Java record（JDK 17+） | `com.mingliqiye.document.record-support`（同时需要 `com.mingliqiye.document.serialization`） | 显式模块（JDK 17 字节码；`provides JavaRecordSupport`，模块需被解析才生效） |
+| OpenAPI 3.0 生成 | `com.mingliqiye.document.openapi` | 显式模块 |
 | JSON / YAML / XML / ... | `com.mingliqiye.document.format.<name>` | 显式模块（`core` / `exception` / `serialization` 等已传递可读） |
 | JPA + Hibernate | `com.mingliqiye.document.jpa.hibernate`（或 `com.mingliqiye.document.jpa`） | 显式模块（直接使用 `org.hibernate.Session` 时再加 `requires org.hibernate.orm.core`） |
-| KSP 代码生成 | `com.mingliqiye.document.codegen`（注解处理器场景一般走 classpath） | 自动模块 |
+| KSP 代码生成 | `com.mingliqiye.document.codegen`（module path 上还需自动模块 `symbol.processing.api`；KSP 构建插件场景一般走 classpath） | 显式模块 |
+| codegen 示例/测试支持 | `com.mingliqiye.document.codegen.test`（jar 内含 KSP 生成的 `com.mingliqiye.document.generated` 包） | 显式模块 |
 
 ### 混合使用注意
 
 ::: warning
-`serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi` 仍是自动模块。自动模块会导出全部包，并且
-`requires` 一个自动模块时会把 module path 上其它自动模块一并拉入模块图；但它们**不会**把
-显式模块拉入模块图。与本库的显式模块混用时：
+现在 26 个可发布模块全部是显式模块，没有「本库自动模块」；混用时的自动化规则只和**第三方
+自动模块**有关。自动模块会导出全部包，并且 `requires` 一个自动模块时会把 module path 上其它
+自动模块一并拉入模块图；但它们不会把显式模块拉入模块图（显式模块本来就只能按
+`requires` 解析，这一点与模块形态无关）。
 
-```java
-// 只 requires 自动模块 codegen 不够：它引用的显式模块不会被自动解析
-module smoke.codegen {
-    requires com.mingliqiye.document.codegen; // 自动模块
-    requires com.mingliqiye.document.schema;  // 显式补上 codegen 用到的显式模块
-}
-```
-
-`format-*` 与 `jpa-hibernate` 已经改为显式模块，不再有这个问题：`requires
-com.mingliqiye.document.format.json` 会自动解析并传递可读 `core` / `exception` /
-`serialization`，`requires com.mingliqiye.document.jpa.hibernate` 会自动传递可读 `jpa` /
-`core` / `jakarta.persistence`。
-
-反过来，显式模块也不会把自动模块「带上」：消费方直接使用自动模块里的类型（如
-`MingLiBaseException`、`org.hibernate.Session`、格式模块的第三方类型）时需要自行
-`requires`；module path 上也必须提供对应 jar。
+- `record-support` 的 `provides JavaRecordSupport` 只有在它被解析时才会被
+  `serialization` 的 `ServiceLoader` 发现：消费方需要 `requires
+  com.mingliqiye.document.record.support`（或 `--add-modules`），仅把 jar 放在 module path
+  上不够。
+- `codegen` 在 module path 上需要同时提供自动模块 `symbol.processing.api`；KSP 构建插件场景
+  仍建议走 classpath（处理器通过 `META-INF/services` 发现）。
+- `codegen-test` 的 jar 里带有 KSP 生成的 `com.mingliqiye.document.generated` 包；如果消费方
+  自己的模块也生成同名包，两个模块同时放到 module path 上会触发 split package 错误。它是
+  示例/测试夹具，不建议与真实业务模块一起放在 module path。
+- 消费方直接使用第三方自动模块里的类型（如 `MingLiBaseException`、`org.hibernate.Session`、
+  格式模块的第三方类型）时需要自行 `requires`；module path 上也必须提供对应 jar。
 :::
 
 ## 验证方式
 
-下面命令不需要跑全量测试。构建 21 个显式模块 jar（`format-*` 换成 `:format-json:jar`
+下面命令不需要跑全量测试。构建 26 个显式模块 jar（`format-*` 换成 `:format-json:jar`
 等对应模块；`jpa-hibernate` 依赖 `jpa`）：
 
 ```bash
@@ -690,19 +791,23 @@ gradle :annotation:jar :exception:jar :core:jar :schema:jar :schema-registry:jar
   :serialization:jar :jdbc:jar :validation:jar :jpa:jar \
   :format-avro:jar :format-cbor:jar :format-csv:jar :format-ion:jar :format-json:jar \
   :format-properties:jar :format-protobuf:jar :format-smile:jar :format-toml:jar \
-  :format-xml:jar :format-yaml:jar :jpa-hibernate:jar
+  :format-xml:jar :format-yaml:jar :jpa-hibernate:jar \
+  :serialization-kotlin:jar :record-support:jar :codegen:jar :codegen-test:jar :openapi:jar
 # 需要连同测试/ktlint/dokka 一起验证时，把 :jar 换成 :build：
 gradle :annotation:build :exception:build :core:build :schema:build :schema-registry:build \
   :serialization:build :jdbc:build :validation:build :jpa:build \
   :format-avro:build :format-cbor:build :format-csv:build :format-ion:build \
   :format-json:build :format-properties:build :format-protobuf:build :format-smile:build \
-  :format-toml:build :format-xml:build :format-yaml:build :jpa-hibernate:build
+  :format-toml:build :format-xml:build :format-yaml:build :jpa-hibernate:build \
+  :serialization-kotlin:build :record-support:build :codegen:build :codegen-test:build \
+  :openapi:build
 ```
 
-> 本批改动实测（Zulu JDK 17.0.19 + Gradle 8.14.7，`--no-daemon`）：
-> 12 个模块（11 个 `format-*` + `jpa-hibernate`）的 `build` 全部通过
-> （含各模块测试、ktlint、Dokka；`BUILD SUCCESSFUL in 57s`，224 个 task 中 93 个执行），
-> 12 个 `compileJava9ModuleInfo` 任务全部执行；生成的主 jar 全部为显式模块。
+> 已实测：21 个存量模块用同一套构建逻辑生成显式 MR jar（历史批次）。本批 5 个模块
+> （`serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi`）的
+> `build` 全部通过（Zulu JDK 17.0.19 + Gradle 8.14.7，含 129 个测试、ktlint、Dokka；
+> `BUILD SUCCESSFUL in 22s`，134 个 task 中 48 个执行），5 个 `compileJava9ModuleInfo`
+> 任务全部执行；生成的主 jar 全部为显式模块。
 
 ### 1. 查看模块描述（确认是显式模块）
 
@@ -810,6 +915,53 @@ requires org.hibernate.orm.core
 
 12 个新 jar 全部实测 `releases: 9` 且输出中没有 `automatic` 标记。
 
+本批 5 个模块的实际输出（节选）：
+
+```text
+# serialization-kotlin
+exports com.mingliqiye.document.serialization.kotlin
+requires com.mingliqiye.document.annotation
+requires com.mingliqiye.document.core transitive
+requires com.mingliqiye.document.exception
+requires com.mingliqiye.document.serialization transitive
+requires java.desktop
+requires kotlin.reflect
+requires kotlin.stdlib transitive
+
+# record-support（JDK 17 字节码 + provides）
+exports com.mingliqiye.document.serialization.record
+requires com.mingliqiye.document.serialization transitive
+requires kotlin.stdlib transitive
+provides com.mingliqiye.document.serialization.JavaRecordSupport
+        with com.mingliqiye.document.serialization.record.Jdk17RecordSupport
+
+# codegen
+exports com.mingliqiye.document.codegen
+requires kotlin.stdlib transitive
+requires symbol.processing.api
+provides com.google.devtools.ksp.processing.SymbolProcessorProvider
+        with com.mingliqiye.document.codegen.DocumentEnumCodecProcessorProvider
+
+# codegen-test
+exports com.mingliqiye.document.codegen.test
+exports com.mingliqiye.document.generated
+exports com.mingliqiye.document.generated.custom
+requires com.mingliqiye.document.annotation transitive
+requires com.mingliqiye.document.serialization transitive
+requires kotlin.stdlib transitive
+
+# openapi
+exports com.mingliqiye.document.openapi
+exports com.mingliqiye.document.openapi.exception
+requires com.mingliqiye.document.core transitive
+requires com.mingliqiye.document.exception transitive
+requires com.mingliqiye.document.schema transitive
+requires kotlin.stdlib transitive
+```
+
+本批 5 个 jar 同样实测 `releases: 9` 且输出中没有 `automatic` 标记；全量 26 个显式模块 jar
+逐项用 `jar --describe-module --release 9` 核对，均无 `automatic`。
+
 ### 2. 校验 Multi-Release jar
 
 ```bash
@@ -817,7 +969,8 @@ jar --validate --file core/build/libs/core-2.4.0.jar
 ```
 
 命令无输出且退出码为 0 表示 jar 结构合法。本批 12 个新 jar 全部实测退出码 0
-（`META-INF/versions/9/` 下的 `previous-compilation-data.bin` 不影响校验）。
+（`META-INF/versions/9/` 下的 `previous-compilation-data.bin` 不影响校验）；本批 5 个新
+jar（含 `record-support` 的 class file 61 主 classes）同样全部退出码 0。
 
 ### 3. 检查 jar 内容与清单
 
@@ -837,8 +990,8 @@ Get-Content tmp\META-INF\MANIFEST.MF | Select-String 'Multi-Release|Automatic-Mo
 ```
 
 本批 12 个新模块的清单同样保留 `Automatic-Module-Name`（模块名与上表一致）并写入
-`Multi-Release: true`；全部 21 个显式模块的清单都保留 `Automatic-Module-Name` 作为
-JDK 8 / 无法形成显式模块时的兜底。
+`Multi-Release: true`；本批 5 个模块同样如此。全部 **26 个**显式模块的清单都保留
+`Automatic-Module-Name` 作为 JDK 8 / 无法形成显式模块时的兜底。
 
 > 备注：当前 jar 的 `META-INF/versions/9/` 下除 `module-info.class` 外还有一个
 > `previous-compilation-data.bin`，它是 Gradle `JavaCompile` 的增量编译缓存文件，会被
@@ -858,14 +1011,21 @@ javap -verbose -cp core/build/libs/core-2.4.0.jar com.mingliqiye.document.core.S
 本批 12 个新模块实测：主 classes `major version: 52`，`module-info.class`
 `major version: 53`（`format-json` / `format-yaml` / `format-xml` / `jpa-hibernate`
 逐项用 `javap -verbose` 核对了 module-info 的版本，其余模块同为 52/53）。
+本批 5 个模块的实测结果：`serialization-kotlin` / `openapi` / `codegen` / `codegen-test`
+主 classes 为 **52**，`module-info.class` 为 **53**；`record-support` 是唯一例外——主 classes
+为 **61**（JDK 17 字节码，JDK 8–16 不能加载），`module-info.class` 仍为 53（放在
+`META-INF/versions/9/`，由 JDK 9+ 模块系统读取，JDK 17 才真正能用该模块）。
 
 ### 5. JDK 17 module path smoke
 
 见上文[端到端示例](#端到端示例jdk-17)、「serialization / jdbc / validation / jpa smoke
-（实测）」、「format-* smoke（实测：format-json / format-yaml）」与「jpa-hibernate smoke
-（实测）」小节：用 `javac --module-path lib` 编译、`java -m` 运行，输出 `JPMS smoke OK`。
-本批实测另有 `java --validate-modules`（11 个格式模块 + 依赖共 31 个 jar）退出码 0，
-以及一个 `requires` 全部 11 个格式模块的消费方 `module-info` 编译通过。
+（实测）」、「format-* smoke（实测：format-json / format-yaml）」、「jpa-hibernate smoke
+（实测）」与「serialization-kotlin / record-support / codegen / openapi smoke（实测）」小节：
+用 `javac --module-path lib` 编译、`java -m` 运行，输出 `JPMS smoke OK`。
+上一批实测另有 `java --validate-modules`（11 个格式模块 + 依赖共 31 个 jar）退出码 0，
+以及一个 `requires` 全部 11 个格式模块的消费方 `module-info` 编译通过；本批实测
+`java --validate-modules --module-path lib`（17 个 jar：11 个本库/示例模块 + 6 个第三方
+依赖）退出码 0，并额外做一个 `requires` 本批 5 个模块的 `module-info` 编译测试（见上）。
 
 ### 6. JDK 8 classpath smoke
 
@@ -889,6 +1049,11 @@ jdeps --multi-release 9 --module-path lib --check com.mingliqiye.document.jpa
 本批新增模块中，`format-json` / `format-yaml` 等格式模块的 `jdeps --check` 实测退出码 0
 （它们的依赖链里只有 `mingli.exception` / `alias-for` 等自动模块，可正常解析）。
 
+本批 5 个模块的 `jdeps --check` 也全部退出码 0：`serialization-kotlin`（含
+`kotlin.reflect`、`java.desktop`）、`record-support`（含 `provides`）、`codegen`（含自动模块
+`symbol.processing.api`）、`codegen-test`（含导出生成包）与 `openapi` 的 `requires` 都能在
+module path 上解析。
+
 ::: warning jpa-hibernate 的 jdeps --check 需要额外模块
 `jpa-hibernate` 依赖自动模块 `org.hibernate.orm.core`；`jdeps --check` 会尝试解析
 module path 上的全部模块，而 `jakarta.transaction-api:2.0.1` 的 `module-info` 声明了
@@ -911,15 +1076,19 @@ jlink --module-path lib --add-modules com.mingliqiye.document.annotation --outpu
 显式模块，因此仍不能为这些模块生成自定义运行时镜像（见[限制](#限制)）。`format-*` 也
 不可用：它们的依赖链里既有 `mingli.exception` / `alias-for`，也有 Avro / Ion / TOML /
 Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `hibernate-core`。
+本批的 `serialization-kotlin` / `record-support` / `codegen` / `codegen-test` / `openapi`
+同样不可 `jlink`：它们分别依赖 `alias-for` / `mingli.exception` / 自动模块
+`symbol.processing.api` 等第三方自动模块。因此 `jlink` 仍然只对 `annotation` 这类
+「依赖链里只有显式模块」的模块可用。
 
 ## 限制
 
-1. **仍是自动模块的有 5 个可发布模块**：`serialization-kotlin` / `record-support` /
-   `codegen` / `codegen-test` / `openapi` 没有 `src/main/java9/module-info.java`，只带
-   `Automatic-Module-Name`；`format-*` 与 `jpa-hibernate` 已补齐。自动模块不能再
-   「带上」本库的显式模块依赖，混用时必须显式 `requires`（见[混合使用注意](#混合使用注意)）。
-   `record-support` 是 JDK 17 字节码的可选模块，在 module path 上需要与 `serialization`
-   一起提供，且只有 JDK 17+ 运行期可用。
+1. **`record-support` 要求 JDK 17+**：它的主 classes 是 class file 61（JDK 17），JDK 8–16
+   无法加载；它只是 record 映射的可选增强模块，未引入（或运行在 JDK 8–15）时 `serialization`
+   安全降级为普通 Bean 行为。module path 上需要与 `serialization` 一起提供，并且必须被
+   解析（`requires` / `--add-modules`）后 `provides JavaRecordSupport` 才会被
+   `ServiceLoader` 发现。除此之外，**所有 26 个可发布模块都已显式化**，不存在「本库的
+   自动模块」。
 2. **`format-json` 在 module path 上写 `Double` 需要 `--add-exports`**：主代码引用
    jackson-core 的内部包 `com.fasterxml.jackson.core.io.schubfach.DoubleToDecimal`，而
    jackson-core 2.15.3 的 `module-info` 没有导出该包，运行期会抛 `IllegalAccessError`
@@ -927,13 +1096,16 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
    `--add-exports com.fasterxml.jackson.core/com.fasterxml.jackson.core.io.schubfach=com.mingliqiye.document.format.json`。
    这不是本次显式模块化引入的回归（自动模块形态下该路径本就不可用），彻底修复需要
    format-json 主源码去掉对 jackson 内部包的依赖，属于后续工作。
-3. **部分格式模块的第三方依赖仍是自动模块**：`org.apache.avro`、`com.amazon.ion`、
+3. **部分第三方依赖仍是自动模块**：`org.apache.avro`、`com.amazon.ion`、
    `tomlj`（以及它依赖的 `antlr4-runtime`）、`org.apache.commons.csv`、
-   `com.google.protobuf` 没有显式 `module-info`。自动模块导出全部包、并且被 `requires` 后
+   `com.google.protobuf` 没有显式 `module-info`；`codegen` 依赖的
+   `symbol.processing.api` 同样没有显式 `module-info` / `Automatic-Module-Name`，模块名由
+   jar 文件名推导。自动模块导出全部包、并且被 `requires` 后
    会把 module path 上的其它自动模块一并拉入模块图；`tomlj` 的实现还需要
    `antlr4-runtime` 在 module path 上（Gradle 传递依赖已包含）。这些依赖不解决，
    `format-avro` / `format-ion` / `format-toml` / `format-csv` / `format-protobuf` 不能
-   `jlink`，也无法获得「只导出声明包」的强封装收益。
+   `jlink`，也无法获得「只导出声明包」的强封装收益；`codegen` 在 module path 上需要
+   同时提供 KSP API jar。
 4. **`hibernate-core` 是自动模块**：`org.hibernate.orm.core` 由清单
    `Automatic-Module-Name` 提供，`jpa-hibernate` 对它只用普通 `requires`（消费方直接使用
    `org.hibernate.Session` 等类型时需自行 `requires`）。另外 Hibernate 的运行期依赖
@@ -951,42 +1123,48 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
 7. **`jlink` 仅 `annotation` 可用**：`core` / `schema` / `schema-registry` / `serialization` /
    `jdbc` / `validation` / `jpa` / 11 个 `format-*` / `jpa-hibernate` 的依赖链里都有自动模块
    （`mingli.exception`、`alias-for`，格式模块还有 Avro / Ion / TOML / Protobuf / commons-csv，
-   `jpa-hibernate` 有 `hibernate-core`），`jlink` 只接受显式模块，因此仍不能生成自定义运行时
+   `jpa-hibernate` 有 `hibernate-core`），本批的 `serialization-kotlin` / `record-support` /
+   `codegen` / `codegen-test` / `openapi` 也分别依赖 `alias-for` / `mingli.exception` /
+   `symbol.processing.api` 等自动模块。`jlink` 只接受显式模块，因此仍不能生成自定义运行时
    镜像。
 8. **`jpa` / `jpa-hibernate` 的 module path 运行期要求 JDK 11+**：
    `jakarta.persistence-api:3.1.0` 主 classes 是 class file 55，Hibernate 6.5 的 class 文件
    也是 55；JDK 9/10 无法加载这些类。`serialization` / `jdbc` / `validation` / 格式模块及其它
    依赖仍是 Java 8 字节码，可在 JDK 9+ 使用。
-9. **服务声明**：`serialization` 显式模块声明了
-   `uses com.mingliqiye.document.serialization.JavaRecordSupport`，由自动模块
-   `record-support` 通过 `META-INF/services` 提供（自动模块的模块描述会据此派生出
-   `provides`）。其它显式模块没有服务提供者；`codegen` 的注解处理器日常仍建议走
-   classpath，补显式 `module-info` 时需要 `provides javax.annotation.processing.Processor`。
+9. **服务声明**：`serialization` 声明 `uses com.mingliqiye.document.serialization
+   .JavaRecordSupport`，`record-support` 用 `provides ... with ...Jdk17RecordSupport` 提供
+   实现（classpath 下两个 jar 仍保留 `META-INF/services` 文件）；`codegen` 用
+   `provides com.google.devtools.ksp.processing.SymbolProcessorProvider with
+   ...DocumentEnumCodecProcessorProvider` 声明 KSP 处理器（KSP 构建插件日常以 classpath
+   加载处理器，继续走 `META-INF/services`）。module path 上使用这两个服务时，提供者模块必须
+   被解析（`requires` 或 `--add-modules`）；`codegen-test` 没有服务提供者。
 10. **Kotlin 消费方的 JPMS 支持有限**：Kotlin 编译器不编译 `module-info.kt`，Kotlin + Java
     混合模块需要由 Java 侧 `module-info.java` 承担模块描述；Kotlin 2.0 对 module path 上消费
     Kotlin 库的支持仍在演进。
 11. **依赖必须同时放在 module path 上**：显式模块不会自动带上兄弟模块，`kotlin-stdlib`、
-    `mingli-exception`、`alias-for`、`jakarta.validation`、`jakarta.persistence`、
-    `jackson-*`、`snakeyaml`、`hibernate-core` 以及格式模块的第三方依赖都必须提供；命名模块
+    `kotlin-reflect`、`mingli-exception`、`alias-for`、`jakarta.validation`、
+    `jakarta.persistence`、`jackson-*`、`snakeyaml`、`symbol.processing.api`、
+    `hibernate-core` 以及格式模块的第三方依赖都必须提供；命名模块
     默认读不到 classpath（unnamed module）里的类。
-12. **split package 仍需注意**：21 个模块已改为显式 `exports`，但自动模块（其余 4 个可发布
-    模块与第三方自动模块）导出全部包；混用时若消费方或其它依赖声明了同名包，模块解析会报错
-    或出现可见性冲突。新增模块时应保证包名不重叠（本库现有模块已按包名核对，
-    `--validate-modules` 实测通过）。
+12. **split package 仍需注意**：本库 26 个模块已全部改为显式 `exports`，但第三方自动模块
+    仍导出全部包；混用时若消费方或其它依赖声明了同名包，模块解析会报错或出现可见性冲突。
+    `codegen-test` 的 jar 带有 KSP 生成的 `com.mingliqiye.document.generated` 包，若消费方
+    模块也生成同名包，二者同时放到 module path 会触发 split package；它是示例/测试夹具，
+    不建议与业务模块一起上 module path。新增模块时应保证包名不重叠（本库现有模块已按包名
+    核对，`--validate-modules` 实测通过）。
 13. **JDK 8 没有模块化收益**：JDK 8 忽略 `Multi-Release` 与模块描述，仍按 classpath 使用；
     新增的 `module-info.class` 对 JDK 8 不可见。
 14. **模块名不可随意变更**：显式模块名与 `Automatic-Module-Name` 必须一致（构建脚本会校验），
     改名属于破坏性变更。
 15. **构建工具链要求**：编译 module-info 需要 JDK 9+（本仓库固定 JDK 17）工具链。只装 JDK 8
-    的环境需要让 Gradle 自动下载/指定 JDK 17，否则这 21 个模块的 `jar` 任务会失败。
+    的环境需要让 Gradle 自动下载/指定 JDK 17，否则这 26 个模块的 `jar` 任务会失败。
 
 ## 后续计划
 
-1. **剩余 5 个自动模块的显式 `module-info`**：`serialization-kotlin`（`kotlin.reflect`）、
-   `record-support`（JDK 17 字节码，需要 `provides JavaRecordSupport`）、`codegen`（需要
-   `provides javax.annotation.processing.Processor`）、`codegen-test`、`openapi`。
-   `alias-for` 1.0.4 已合法，可按批次逐个补 `src/main/java9/module-info.java`，
-   并同步更新本页与 README。
+1. **第三方依赖显式模块化**：推动 `mingli-exception`、`alias-for`、`symbol-processing-api`
+   以及 Avro / Ion / TOML / commons-csv / protobuf-java、`hibernate-core` 上游提供（或升级到
+   带显式 `module-info` 的）版本，解除 `jlink` 与「自动模块抱团」限制。本库 26 个可发布模块
+   已全部显式化；仍阻塞 `jlink` 的只剩这些第三方自动模块。
 2. **去掉 format-json 对 jackson 内部包的依赖**：把
    `com.fasterxml.jackson.core.io.schubfach.DoubleToDecimal` 换成公开 API 或本库自带的
    最短浮点输出实现，解除 module path 上的 `--add-exports` 限制。
@@ -994,14 +1172,15 @@ Protobuf / commons-csv 等自动模块，`jpa-hibernate` 还依赖自动模块 `
    commons-csv / protobuf-java、`hibernate-core` 上游提供（或升级到带显式 `module-info` 的）
    版本，解除 `jlink` 与「自动模块抱团」限制；Ion 的 `ion-java` 后续版本、Hibernate 7 等
    可跟踪。
-4. **服务声明**：为 `codegen` 的注解处理器补 `provides javax.annotation.processing.Processor`，
-   并评估各格式模块与 `jpa-hibernate` 的 `uses`。
-5. **record-support 的显式 `module-info`**：自动模块形态已经能通过 `META-INF/services`
-   提供服务，后续可升级为显式模块（`provides JavaRecordSupport`）并纳入 MR-JAR 校验。
-6. **内部包拆分**：把 `internal` 实现移到独立包并由 `exports` 真正隐藏，而不是依赖 Kotlin
-   `internal` 的字节码可见性（`jdbc.internal` / `jpa.internal` / `jpa-hibernate.internal`
-   已经不导出，可作为模板；格式模块目前没有 internal 包）。
-7. **CI 校验**：在 CI 中增加 JDK 17 module path smoke、`jar --validate`、
+4. **服务声明的完整性**：`serialization` 的 `uses JavaRecordSupport` 与 `record-support` /
+   `codegen` 的 `provides` 已就位；后续评估格式模块与 `jpa-hibernate` 的 `uses`，并考虑把
+   `codegen` 的 `META-INF/services` 与 `provides` 维护收敛到一处。
+5. **内部包拆分与生成包策略**：把 `internal` 实现移到独立包并由 `exports` 真正隐藏，而不是
+   依赖 Kotlin `internal` 的字节码可见性（`jdbc.internal` / `jpa.internal` /
+   `jpa-hibernate.internal` 已经不导出，可作为模板；格式模块目前没有 internal 包）。同时
+   评估 `codegen-test` 生成包 `com.mingliqiye.document.generated` 的命名/导出策略，避免
+   未来与业务模块的生成包发生 split package。
+6. **CI 校验**：在 CI 中增加 JDK 17 module path smoke、`jar --validate`、
    `jar --describe-module --release 9`、`java --validate-modules` 与 `jdeps --check`
    的断言，防止 Multi-Release 打包与 `requires` 漂移回归；`jdeps --check` 对
    `jpa-hibernate` 需先补齐 `jakarta.cdi` / `jakarta.interceptor`（见[验证方式](#验证方式)）。

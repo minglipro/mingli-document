@@ -30,7 +30,9 @@
 - `record-support` 模块（JDK 17+）：Java record 反射访问独立成模块，提供
   `JavaRecordSupport` SPI 实现 `Jdk17RecordSupport`，经 `META-INF/services` +
   `ServiceLoader` 接入
-- `serialization` 新增公共 SPI：`JavaRecordSupport` / `JavaRecordComponentInfo`；
+- `serialization` 新增公共 SPI：`JavaRecordSupport` / `JavaRecordComponentInfo`
+- JPMS：26 个可发布模块全部为显式 MR-JAR module-info
+  （serialization-kotlin / ecord-support / codegen / codegen-test / openapi 补齐）；
   内部 `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级
   （`ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`

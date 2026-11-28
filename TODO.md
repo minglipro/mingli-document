@@ -23,6 +23,9 @@
 - record 映射测试迁移：删除 `:serialization:recordTest`，改在 `:record-support:test`
   （JDK 17 工具链）执行
 - BOM 纳入 `record-support`；GraalVM 初始化参数改指 `JavaRecordSupportLoader`
+- 26 个显式 MR-JAR module-info：补齐 `serialization-kotlin` / `record-support` / `codegen` /
+  `codegen-test` / `openapi`；`record-support` 提供 `provides JavaRecordSupport`，
+  `codegen` 提供 KSP `provides SymbolProcessorProvider`
 
 ## 已放弃
 
@@ -31,7 +34,6 @@
 
 ## 保留待办
 
-- [ ] serialization-kotlin / record-support / codegen / codegen-test / openapi 的显式 module-info
 - [ ] format-json 去掉 jackson 内部包 `DoubleToDecimal` 依赖
 - [ ] Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn`
 - [ ] `jlink` 支持

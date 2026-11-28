@@ -52,7 +52,7 @@ val user = mapper.parse(json, User::class.java)
 |---|---|---|
 | 运行 JDK | **JDK 17+** | 本模块主代码与测试均按 JDK 17 编译（class file 61），JDK 16 及以下无法加载 |
 | 库其它模块 | JDK 8+ | `serialization` / `core` / `format-*` 等仍以 JDK 8 为字节码目标 |
-| JPMS | 自动模块 `com.mingliqiye.document.record.support` | 通过 `META-INF/services` 提供服务，无需显式 `provides` |
+| JPMS | 显式模块 `com.mingliqiye.document.record.support`（Multi-Release，JDK 9+） | `module-info` 用 `provides JavaRecordSupport`；classpath 仍用 `META-INF/services` |
 
 ## SPI 契约
 
@@ -106,15 +106,19 @@ JDK 8-15、找不到 provider、provider 类版本不兼容（`LinkageError`）�
 
 ## JPMS
 
-模块路径上使用 record 支持时，业务模块需要能读到本自动模块：
+本模块主 jar 是 Multi-Release 显式模块（主 classes 为 JDK 17 字节码，`module-info.class`
+位于 `META-INF/versions/9/`）。模块路径上使用 record 支持时，业务模块需要 `requires` 本模块
+（让模块被解析，`provides` 才会被 `ServiceLoader` 发现）：
 
 ```java
 requires com.mingliqiye.document.record.support;
 ```
 
 `serialization` 的 `module-info` 已声明
-`uses com.mingliqiye.document.serialization.JavaRecordSupport`；本模块作为自动模块通过
-`META-INF/services` 提供服务实现。未 require 本模块时 record 映射自动降级。
+`uses com.mingliqiye.document.serialization.JavaRecordSupport`；本模块通过
+`provides com.mingliqiye.document.serialization.JavaRecordSupport with
+com.mingliqiye.document.serialization.record.Jdk17RecordSupport` 提供服务实现，jar 内同时
+保留 `META-INF/services` 文件供 classpath 使用。未 require 本模块时 record 映射自动降级。
 
 ## GraalVM Native Image
 

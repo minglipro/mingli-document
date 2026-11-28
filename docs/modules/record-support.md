@@ -22,8 +22,8 @@ implementation("com.mingliqiye.document:record-support:2.5.0") // 2.5.0 起提�
 
 - group：`com.mingliqiye.document`；artifactId：`record-support`；
 - `api` 依赖 `serialization`，因此引入后无需重复声明 `serialization`；
-- 自动模块名：`com.mingliqiye.document.record.support`（无显式 `module-info`，通过
-  `META-INF/services` 提供服务）。
+- 模块名：`com.mingliqiye.document.record.support`（Multi-Release 显式 `module-info`，
+  通过 `provides JavaRecordSupport` 提供服务；classpath 下仍用 `META-INF/services`）。
 
 ## 环境要求
 
@@ -38,7 +38,8 @@ implementation("com.mingliqiye.document:record-support:2.5.0") // 2.5.0 起提�
 ```text
 record-support (JDK 17)
   └─ Jdk17RecordSupport : JavaRecordSupport
-       META-INF/services/com.mingliqiye.document.serialization.JavaRecordSupport
+       META-INF/services/...                    ← classpath 使用方式
+       module-info: provides JavaRecordSupport  ← module path 使用方式
                     │ ServiceLoader（运行期）
                     ▼
 serialization (JDK 8)
@@ -63,7 +64,7 @@ serialization (JDK 8)
 
 ## JPMS
 
-模块路径上使用时，业务模块需要 require 本自动模块（否则 record-support 不会被解析，
+模块路径上使用时，业务模块需要 `requires` 本模块（否则 record-support 不会被解析，
 record 映射自动降级）：
 
 ```java
@@ -71,8 +72,10 @@ requires com.mingliqiye.document.record.support;
 ```
 
 `serialization` 的 `module-info` 已声明
-`uses com.mingliqiye.document.serialization.JavaRecordSupport`，本模块的
-`META-INF/services` 会被模块系统作为 `provides` 识别。
+`uses com.mingliqiye.document.serialization.JavaRecordSupport`；本模块通过 `module-info` 的
+`provides com.mingliqiye.document.serialization.JavaRecordSupport with
+com.mingliqiye.document.serialization.record.Jdk17RecordSupport` 提供服务实现，jar 内同时
+保留 `META-INF/services` 文件供 classpath 使用。
 
 ## GraalVM Native Image
 

@@ -120,14 +120,13 @@
 - [x] SHA-256 校验和
 - [x] CycloneDX JSON SBOM
 - [x] JPMS 自动模块名（`Automatic-Module-Name`）
-- [x] JPMS `module-info`（Multi-Release jar：`annotation` / `exception` / `core` /
-  `schema` / `schema-registry` / `serialization` / `jdbc` / `validation` / `jpa` /
-  11 个 `format-*` / `jpa-hibernate` 共 21 个模块；其余 `serialization-kotlin` / `codegen` /
-  `record-support` / `codegen-test` / `openapi` 仍为自动模块，见 [JPMS 指南](../guide/jpms.md)）
+- [x] JPMS `module-info`（Multi-Release jar：全部 26 个可发布模块；`record-support` 为
+  JDK 17 字节码并提供 `provides JavaRecordSupport`，`codegen` 通过 `provides` 声明 KSP
+  处理器，见 [JPMS 指南](../guide/jpms.md)）
 - [x] GraalVM Native Image（GraalVM JDK 21 + VS BuildTools + Windows SDK 实测）
 
 > 已放弃：Gitea CI、Maven Central 发布。
-> 未完成项：`serialization-kotlin` / `codegen` / `openapi` 等剩余模块的 JPMS `module-info`。
+> 未完成项：第三方自动模块的显式模块化（`jlink` 仍受限）。
 
 ## 批次计划
 
@@ -243,7 +242,6 @@
 仍延后：
 
 - 2.4.0 代码与发布（当前暂停）
-- `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` 的显式 `module-info`
 - `format-json` 去除 Jackson 内部包 `DoubleToDecimal` 依赖
 - Gitea CI、Maven Central 发布（已放弃）
 
@@ -264,7 +262,7 @@
 | Schema Registry / Bean Validation | ✅ |
 | JDBC / JPA 注解映射 | ✅ |
 | Hibernate Session / EntityManager / @Convert / Map / 多态 | ✅ |
-| JPMS 自动模块名 + 21 个显式 MR-JAR 模块 | ✅ |
+| JPMS 自动模块名 + 全部 26 个显式 MR-JAR 模块 | ✅ |
 | GraalVM Native Image | ✅ 实测 |
 | 安全边界、fuzz、OpenAPI、SBOM/校验和 | ✅ |
 | Gitea CI、Maven Central | ❌ 已放弃 |
@@ -276,11 +274,9 @@
 
 | 序号 | 待办 | 阶段 |
 |---|---|---|
-| 1 | `serialization-kotlin` / `codegen` / `codegen-test` / `openapi` 的显式 module-info | 阶段 6 |
-| 2 | `format-json` 去除 Jackson 内部包依赖（module path 写 Double 需 `--add-exports`） | 阶段 6 |
-| 3 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
-| 4 | `jlink` 支持（当前仅 `annotation` 可 jlink） | 阶段 6 |
-| 5 | `record-support` 的显式 `module-info`（当前为自动模块） | 阶段 6 |
+| 1 | `format-json` 去除 Jackson 内部包依赖（module path 写 Double 需 `--add-exports`） | 阶段 6 |
+| 2 | Hibernate `@Convert(attributeName)` / 关系转换 / `@MapKeyJoinColumn` | 阶段 5 |
+| 3 | `jlink` 支持（当前仅 `annotation` 可 jlink，受第三方自动模块限制） | 阶段 6 |
 
 > 2.4.0 已发布；`2.5.0` 开发中。
 
@@ -296,6 +292,9 @@
 - 删除 `:serialization:recordTest`；record 映射测试迁移到 `:record-support:test`
   （JDK 17 工具链）
 - BOM 纳入 `record-support`；GraalVM 运行期初始化参数改指 `JavaRecordSupportLoader`
+- **JPMS 全部 26 个可发布模块显式化**：补齐 `serialization-kotlin` / `record-support` /
+  `codegen` / `codegen-test` / `openapi` 的 Multi-Release `module-info`；`record-support`
+  提供 `provides JavaRecordSupport`，`codegen` 提供 KSP `provides SymbolProcessorProvider`
 - 已验证：`:serialization:ktlintFormat :serialization:test :record-support:ktlintFormat
   :record-support:test` 通过
 

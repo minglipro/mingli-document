@@ -12,6 +12,8 @@
   `JavaRecordSupportLoader` 在 JDK 8-15 或找不到 provider 时安全降级（捕获
   `ServiceConfigurationError` / `LinkageError`）
 - BOM 纳入 `record-support`
+- JPMS：26 个可发布模块全部为显式 MR-JAR module-info（补齐
+  serialization-kotlin / ecord-support / codegen / codegen-test / openapi）
 
 ### 变更
 
