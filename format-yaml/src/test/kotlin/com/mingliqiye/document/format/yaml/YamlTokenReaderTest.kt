@@ -192,8 +192,15 @@ class YamlTokenReaderTest {
     }
 
     @Test
-    fun customScalarTagBecomesString() {
-        val tokens = snapshot(YamlTokenReader("a: !custom 123\n"))
+    fun customScalarTagRejectedByDefault() {
+        assertFailsWith<YamlParseException> {
+            YamlTokenReader("a: !custom 123\n")
+        }
+    }
+
+    @Test
+    fun customScalarTagBecomesStringWhenAllowed() {
+        val tokens = snapshot(YamlTokenReader("a: !custom 123\n", allowCustomTags = true))
 
         assertEquals(DocumentTokenType.STRING, tokens[2].type)
         assertEquals("123", tokens[2].text)

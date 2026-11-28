@@ -9,9 +9,7 @@ import com.mingliqiye.document.core.NumberNode
 import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import com.mingliqiye.document.format.yaml.exception.YamlParseException
-import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
-import org.yaml.snakeyaml.constructor.SafeConstructor
 import org.yaml.snakeyaml.error.YAMLException
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -23,7 +21,9 @@ import java.util.Date
  * 由 [YamlReader]（单文档）与 [YamlMultiDocumentReader]（多文档）共用：
  * - 使用安全构造器，只还原标准 YAML 标量、集合和映射，不实例化任意 Java 类型；
  * - `!!binary` 由 SnakeYAML 解码为 `byte[]`，这里映射为 [BinaryNode] 以保留原始字节；
- * - `!!timestamp` 等日期值写成 ISO-8601 字符串节点。
+ * - `!!timestamp` 等日期值写成 ISO-8601 字符串节点；
+ * - 开启自定义 tag 支持后，未知 tag 按基础类型还原：标量 -> [StringNode]，
+ *   序列 -> [ArrayNode]，映射 -> [ObjectNode]（见 [YamlConstructor]）。
  */
 internal object YamlNodeMapping {
 
@@ -31,27 +31,26 @@ internal object YamlNodeMapping {
      * 创建安全 YAML 实例。
      *
      * 关闭重复键容忍，重复映射键会作为格式错误上报。
+     *
+     * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
+     * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
+     * @param allowCustomTags 是否允许未知自定义 tag
      */
-    fun createYaml(maxDepth: Int = 0, maxAliases: Int = 0): Yaml {
-        val options = LoaderOptions()
-        options.setAllowDuplicateKeys(false)
-        if (maxDepth > 0) {
-            options.setNestingDepthLimit(maxDepth)
-        }
-        if (maxAliases > 0) {
-            options.setMaxAliasesForCollections(maxAliases)
-        }
-        return Yaml(SafeConstructor(options))
-    }
+    fun createYaml(maxDepth: Int = 0, maxAliases: Int = 0, allowCustomTags: Boolean = false): Yaml = Yaml(
+        YamlConstructors.create(maxDepth, maxAliases, allowCustomTags),
+    )
 
     /**
      * 装载单个文档；输入为空或只含注释时得到 [NullNode]。
      *
      * @param source YAML 文本
+     * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
+     * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
+     * @param allowCustomTags 是否允许未知自定义 tag
      * @throws YamlParseException YAML 格式非法时抛出
      */
-    fun readRoot(source: String, maxDepth: Int = 0, maxAliases: Int = 0): Node = load {
-        toNode(createYaml(maxDepth, maxAliases).load<Any?>(source))
+    fun readRoot(source: String, maxDepth: Int = 0, maxAliases: Int = 0, allowCustomTags: Boolean = false): Node = load {
+        toNode(createYaml(maxDepth, maxAliases, allowCustomTags).load<Any?>(source))
     }
 
     /**
@@ -61,11 +60,14 @@ internal object YamlNodeMapping {
      * 对应 [NullNode]。
      *
      * @param source YAML 文本
+     * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
+     * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
+     * @param allowCustomTags 是否允许未知自定义 tag
      * @throws YamlParseException YAML 格式非法时抛出
      */
-    fun readAll(source: String, maxDepth: Int = 0, maxAliases: Int = 0): List<Node> = load {
+    fun readAll(source: String, maxDepth: Int = 0, maxAliases: Int = 0, allowCustomTags: Boolean = false): List<Node> = load {
         val nodes = ArrayList<Node>()
-        for (document in createYaml(maxDepth, maxAliases).loadAll(source)) {
+        for (document in createYaml(maxDepth, maxAliases, allowCustomTags).loadAll(source)) {
             nodes.add(toNode(document))
         }
         nodes

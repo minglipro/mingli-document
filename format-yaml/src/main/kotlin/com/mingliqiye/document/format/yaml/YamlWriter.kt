@@ -18,6 +18,9 @@ import java.math.BigInteger
  *
  * 由 [toYamlString] 调用；不对外暴露。
  *
+ * 写出只根据 [Node] 类型生成标准 YAML，不保留自定义 tag 信息
+ * （读取侧 [YamlReader] 的 `allowCustomTags` 只影响解析）。
+ *
  * [BinaryNode] 交给 SnakeYAML 的 `byte[]` 表示器写出，因此输出为 `!!binary`
  * Base64 标量（流式格式为双引号标量，块式格式为字面量标量），可被
  * [YamlReader] 还原为 [BinaryNode]。

@@ -436,6 +436,7 @@ gradle :benchmarks:jmh
 | `serialization` | DocumentMapper、Bean 映射、Token |
 | `serialization-kotlin` | Kotlin data class 支持 |
 | `codegen` | KSP 编译期代码生成（不参与常规依赖） |
+| `openapi` | OpenAPI 3.0 文档生成 |
 | `schema` | 格式无关 Schema |
 | `format-*` | 各格式 Mapper |
 | `bom` | Maven BOM：`mingli-document-bom` |
@@ -451,6 +452,7 @@ gradle :benchmarks:jmh
 [serialization](serialization/README.md) ·
 [serialization-kotlin](serialization-kotlin/README.md) ·
 [codegen](codegen/README.md) ·
+[openapi](openapi/README.md) ·
 [json](format-json/README.md) ·
 [yaml](format-yaml/README.md) ·
 [xml](format-xml/README.md) ·

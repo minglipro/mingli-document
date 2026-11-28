@@ -43,7 +43,7 @@
 - [x] CBOR：canonical map key 排序
 - [x] CBOR：可选 tag 保真
 - [x] Ion：timestamp / symbol / clob / blob 类型保真
-- [ ] YAML：自定义 tag、跨文档 anchor
+- [x] YAML：自定义 tag（跨文档 anchor 规范不支持）
 - [ ] TOML：注释保留
 - [x] CSV：嵌套结构 / 多级 Schema
 - [x] Smile：多消息流
@@ -84,7 +84,7 @@
 
 - [x] JSON Schema（常用 draft-07 子集）
 - [ ] Schema Registry 适配
-- [ ] OpenAPI / Swagger 生成
+- [x] OpenAPI 3.0 生成
 - [ ] Bean Validation 集成
 - [ ] 数据库 / ORM 集成
 

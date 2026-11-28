@@ -13,6 +13,8 @@
 - CSV 嵌套结构 / 多级 Schema
 - Protobuf extensions / group / MessageSet / proto3 语义
 - Security baseline 与 SECURITY.md
+- YAML 自定义 tag
+- OpenAPI 3.0 生成模块
 - Maven Central 发布配置
 - 运行期属性访问器生成：`DocumentAccessorCodegen`
 - 编译期源码生成器：`DocumentCodecSourceGenerator`

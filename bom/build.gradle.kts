@@ -18,6 +18,7 @@ dependencies {
         api(project(":serialization"))
         api(project(":serialization-kotlin"))
         api(project(":codegen"))
+        api(project(":openapi"))
 
         api("com.mingliqiye.document.format:json:$version")
         api("com.mingliqiye.document.format:yaml:$version")

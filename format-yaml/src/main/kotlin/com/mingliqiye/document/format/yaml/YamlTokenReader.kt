@@ -4,9 +4,7 @@ import com.mingliqiye.document.format.yaml.exception.YamlParseException
 import com.mingliqiye.document.serialization.DocumentToken
 import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.DocumentTokenType
-import org.yaml.snakeyaml.LoaderOptions
 import org.yaml.snakeyaml.Yaml
-import org.yaml.snakeyaml.constructor.SafeConstructor
 import org.yaml.snakeyaml.error.YAMLException
 import org.yaml.snakeyaml.nodes.AnchorNode
 import org.yaml.snakeyaml.nodes.MappingNode
@@ -34,7 +32,8 @@ import org.yaml.snakeyaml.nodes.Node as YamlNode
  *   归一化（`0x1F`、`1_000` 等输出十进制 raw；NaN/Infinity 拒绝）
  * - `!!binary` -> [DocumentTokenType.BINARY]，Base64 解码为原始字节
  * - `!!timestamp` -> [DocumentTokenType.STRING]，ISO-8601 instant 文本
- * - 其他 tag -> [DocumentTokenType.STRING]
+ * - 未知 tag：默认拒绝（与 [YamlReader] 的 Node 路径一致）；[allowCustomTags]
+ *   开启后标量按 [DocumentTokenType.STRING] 输出，序列/映射按底层集合结构输出
  *
  * mapping 字段名沿用 [YamlNodeMapping] 规则（null -> `"null"`，string/number/boolean
  * -> `toString()`）；merge key 与重复 key 复用 SafeConstructor 的 AST 级校验，
@@ -47,8 +46,7 @@ import org.yaml.snakeyaml.nodes.Node as YamlNode
  *
  * Token 层无法等价实现的语义：
  * - 递归节点（如 `&a {self: *a}`）抛出 [YamlParseException]，不构建环；
- * - 非标准自定义 tag 的标量按 STRING 处理（Node 路径会因缺少构造器报错）；
- * - 显式 `!!set` / `!!omap` / `!!pairs` 集合 tag 按底层 mapping 结构输出
+ * - 显式 `!!set` / `!!omap` / `!!pairs` 集合 tag 按底层 mapping/sequence 结构输出
  *   （Node 路径会构造 Set/List 后得到 ArrayNode）；
  * - 显式 `!!bool` 非法值时与 Node 路径一致，返回 NULL。
  *
@@ -56,15 +54,17 @@ import org.yaml.snakeyaml.nodes.Node as YamlNode
  * @param maxDepth 最大嵌套深度；`0` 使用 SnakeYAML 默认值
  * @param maxAliases 非标量 alias 最大数量；`0` 使用 SnakeYAML 默认值
  * @param maxStringLength 单个字符串最大长度；`0` 表示不限制
+ * @param allowCustomTags 是否允许未知自定义 tag，默认 `false`；开启后与 Node 路径一致
  */
 internal class YamlTokenReader(
     source: String,
     maxDepth: Int = 0,
     maxAliases: Int = 0,
     maxStringLength: Int = 0,
+    allowCustomTags: Boolean = false,
 ) : DocumentTokenReader {
 
-    private val tokens: List<DocumentToken> = buildTokens(source, maxDepth, maxAliases, maxStringLength)
+    private val tokens: List<DocumentToken> = buildTokens(source, maxDepth, maxAliases, maxStringLength, allowCustomTags)
     private var index = -1
     private var current: DocumentToken? = null
 
@@ -98,14 +98,15 @@ internal class YamlTokenReader(
             maxDepth: Int,
             maxAliases: Int,
             maxStringLength: Int,
+            allowCustomTags: Boolean,
         ): List<DocumentToken> = try {
-            val constructor = YamlTokenConstructor(createOptions(maxDepth, maxAliases))
+            val constructor = YamlConstructors.create(maxDepth, maxAliases, allowCustomTags)
             val root = Yaml(constructor).compose(StringReader(source))
             val tokens = ArrayList<DocumentToken>()
             if (root == null) {
                 tokens.add(DocumentToken.nullValue())
             } else {
-                YamlTokenTraversal(constructor, maxStringLength).append(root, tokens)
+                YamlTokenTraversal(constructor, maxStringLength, allowCustomTags).append(root, tokens)
             }
             tokens
         } catch (e: YAMLException) {
@@ -113,38 +114,6 @@ internal class YamlTokenReader(
         } catch (e: IllegalArgumentException) {
             throw YamlParseException("Invalid YAML: ${e.message}", e)
         }
-
-        private fun createOptions(maxDepth: Int, maxAliases: Int): LoaderOptions {
-            val options = LoaderOptions()
-            options.setAllowDuplicateKeys(false)
-            if (maxDepth > 0) {
-                options.setNestingDepthLimit(maxDepth)
-            }
-            if (maxAliases > 0) {
-                options.setMaxAliasesForCollections(maxAliases)
-            }
-            return options
-        }
-    }
-}
-
-/**
- * 暴露 SafeConstructor 的 AST 级校验能力。
- *
- * Token 路径只对单个 Scalar 调用 [constructNodeValue]（复用 SafeConstructor 的
- * tag 构造器），对 Mapping 调用 [flattenMappingNode] 完成重复 key / merge key
- * 处理；不构造完整文档树。
- */
-private class YamlTokenConstructor(
-    options: LoaderOptions,
-) : SafeConstructor(options) {
-
-    /** 按 SnakeYAML tag 构造单个 AST 节点的值（Scalar 用）。 */
-    fun constructNodeValue(node: YamlNode): Any? = constructObject(node)
-
-    /** 执行重复 key 校验与 merge key 展开（Mapping 用，与 Node 路径一致）。 */
-    fun flattenMappingNode(node: MappingNode) {
-        flattenMapping(node)
     }
 }
 
@@ -152,19 +121,25 @@ private class YamlTokenConstructor(
  * YAML AST -> Token 遍历器。
  */
 private class YamlTokenTraversal(
-    private val constructor: YamlTokenConstructor,
+    private val constructor: YamlConstructor,
     private val maxStringLength: Int,
+    private val allowCustomTags: Boolean,
 ) {
 
     private val activeNodes = IdentityHashMap<YamlNode, Boolean>()
 
     fun append(node: YamlNode, tokens: MutableList<DocumentToken>) {
-        when (node) {
-            is AnchorNode -> append(node.realNode, tokens)
-            is MappingNode -> appendMapping(node, tokens)
-            is SequenceNode -> appendSequence(node, tokens)
-            is ScalarNode -> appendScalar(node, tokens)
-            else -> throw YamlParseException("Unsupported YAML node type: ${node.javaClass.name}")
+        val realNode = if (node is AnchorNode) node.realNode else node
+        if (!allowCustomTags && constructor.isUndefinedTag(realNode)) {
+            // Node 路径由 ConstructUndefined 抛出构造器异常；Token 路径不构造值，
+            // 因此在遍历时显式拒绝，保证两条路径对未知 tag 行为一致。
+            throw YamlParseException("Unsupported YAML tag: ${realNode.tag}")
+        }
+        when (realNode) {
+            is MappingNode -> appendMapping(realNode, tokens)
+            is SequenceNode -> appendSequence(realNode, tokens)
+            is ScalarNode -> appendScalar(realNode, tokens)
+            else -> throw YamlParseException("Unsupported YAML node type: ${realNode.javaClass.name}")
         }
     }
 
