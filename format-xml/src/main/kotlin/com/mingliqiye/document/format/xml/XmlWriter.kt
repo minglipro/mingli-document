@@ -71,19 +71,27 @@ internal class XmlWriter(
         ) { "textKey, itemsKey and contentKey must not start with attributePrefix" }
     }
 
-    private val builder = StringBuilder()
+    private var out: Appendable = StringBuilder()
     private val namespacePrefixes = LinkedHashMap<String, String>()
     private var pretty = false
 
     fun write(node: Node, pretty: Boolean): String {
+        val builder = StringBuilder()
+        writeTo(node, pretty, builder)
+        return builder.toString()
+    }
+
+    /**
+     * 直接写出到 [Appendable]（例如 Writer），不先构造完整 String。
+     */
+    fun writeTo(node: Node, pretty: Boolean, target: Appendable) {
         this.pretty = pretty
-        builder.setLength(0)
+        this.out = target
         namespacePrefixes.clear()
         if (namespaceMode == XmlNamespaceMode.CLARK) {
             collectNamespaces(rootName, node)
         }
         writeElement(rootName, node, 0, isRoot = true)
-        return builder.toString()
     }
 
     private fun writeElement(
@@ -108,7 +116,7 @@ internal class XmlWriter(
             is NullNode -> {
                 appendIndent(indent, compact)
                 appendStart(name, isRoot)
-                builder.append(" nil=\"true\"/>")
+                out.append(" nil=\"true\"/>")
             }
 
             is ObjectNode -> writeContainer(name, node, indent, isRoot, compact)
@@ -143,16 +151,16 @@ internal class XmlWriter(
         appendIndent(indent, compact)
         appendStart(name, isRoot)
         if (text is NullNode) {
-            builder.append(" nil=\"true\"")
+            out.append(" nil=\"true\"")
             appendAttributes(attributes)
-            builder.append("/>")
+            out.append("/>")
             return
         }
-        builder.append(" type=\"").append(scalarTypeName(text)).append('"')
+        out.append(" type=\"").append(scalarTypeName(text)).append('"')
         appendAttributes(attributes)
-        builder.append('>')
+        out.append('>')
         appendEscapedText(scalarTextValue(text))
-        builder.append("</").append(name).append('>')
+        out.append("</").append(name).append('>')
     }
 
     /**
@@ -174,17 +182,17 @@ internal class XmlWriter(
         val text = wrapperText(node)
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        builder.append(" type=\"array\"")
+        out.append(" type=\"array\"")
         appendAttributes(attributes)
         if (content != null) {
             writeOrderedBody(content, indent, name, ARRAY_ITEM_NAME)
             return
         }
         if (text == null && items.size == 0) {
-            builder.append("/>")
+            out.append("/>")
             return
         }
-        builder.append('>')
+        out.append('>')
         if (text != null) {
             appendEscapedText(scalarTextValue(text))
         }
@@ -196,7 +204,7 @@ internal class XmlWriter(
             appendNewline()
             appendIndent(indent, compact = false)
         }
-        builder.append("</").append(name).append('>')
+        out.append("</").append(name).append('>')
     }
 
     private fun writeContainer(
@@ -232,17 +240,17 @@ internal class XmlWriter(
         }
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        builder.append(" type=\"object\"")
+        out.append(" type=\"object\"")
         appendAttributes(attributes)
         if (content != null) {
             writeOrderedBody(content, indent, name, expectedElementName = null)
             return
         }
         if (text == null && children.isEmpty()) {
-            builder.append("/>")
+            out.append("/>")
             return
         }
-        builder.append('>')
+        out.append('>')
         if (text != null) {
             appendEscapedText(scalarTextValue(text))
         }
@@ -254,7 +262,7 @@ internal class XmlWriter(
             appendNewline()
             appendIndent(indent, compact = false)
         }
-        builder.append("</").append(name).append('>')
+        out.append("</").append(name).append('>')
     }
 
     /**
@@ -270,10 +278,10 @@ internal class XmlWriter(
         expectedElementName: String?,
     ) {
         if (content.size == 0) {
-            builder.append("/>")
+            out.append("/>")
             return
         }
-        builder.append('>')
+        out.append('>')
         for (entry in content) {
             when (entry) {
                 is StringNode -> appendEscapedText(entry.value)
@@ -298,7 +306,7 @@ internal class XmlWriter(
                 )
             }
         }
-        builder.append("</").append(name).append('>')
+        out.append("</").append(name).append('>')
     }
 
     private fun writeArray(
@@ -310,19 +318,19 @@ internal class XmlWriter(
     ) {
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        builder.append(" type=\"array\"")
+        out.append(" type=\"array\"")
         if (node.size == 0) {
-            builder.append("/>")
+            out.append("/>")
             return
         }
-        builder.append('>')
+        out.append('>')
         for (child in node) {
             appendNewline()
             writeElement(ARRAY_ITEM_NAME, child, indent + 1, isRoot = false)
         }
         appendNewline()
         appendIndent(indent, compact = false)
-        builder.append("</").append(name).append('>')
+        out.append("</").append(name).append('>')
     }
 
     private fun writeScalar(
@@ -335,13 +343,13 @@ internal class XmlWriter(
     ) {
         appendIndent(indent, compact)
         appendStart(name, isRoot)
-        builder.append(" type=\"").append(type).append("\">")
+        out.append(" type=\"").append(type).append("\">")
         appendEscapedText(value)
-        builder.append("</").append(name).append('>')
+        out.append("</").append(name).append('>')
     }
 
     private fun appendStart(name: String, isRoot: Boolean) {
-        builder.append('<').append(name)
+        out.append('<').append(name)
         if (isRoot) {
             appendNamespaceDeclarations()
         }
@@ -349,17 +357,17 @@ internal class XmlWriter(
 
     private fun appendNamespaceDeclarations() {
         for ((uri, prefix) in namespacePrefixes) {
-            builder.append(" xmlns:").append(prefix).append("=\"")
+            out.append(" xmlns:").append(prefix).append("=\"")
             appendEscapedAttribute(uri)
-            builder.append('"')
+            out.append('"')
         }
     }
 
     private fun appendAttributes(attributes: List<Pair<String, String>>) {
         for ((name, value) in attributes) {
-            builder.append(' ').append(name).append("=\"")
+            out.append(' ').append(name).append("=\"")
             appendEscapedAttribute(value)
-            builder.append('"')
+            out.append('"')
         }
     }
 
@@ -557,24 +565,24 @@ internal class XmlWriter(
 
     private fun appendIndent(indent: Int, compact: Boolean) {
         if (pretty && !compact) {
-            repeat(indent) { builder.append("  ") }
+            repeat(indent) { out.append("  ") }
         }
     }
 
     private fun appendNewline() {
         if (pretty) {
-            builder.append('\n')
+            out.append('\n')
         }
     }
 
     private fun appendEscapedText(value: String) {
         for (ch in value) {
             when (ch) {
-                '&' -> builder.append("&amp;")
-                '<' -> builder.append("&lt;")
-                '>' -> builder.append("&gt;")
-                '\r' -> builder.append("&#13;")
-                else -> builder.append(ch)
+                '&' -> out.append("&amp;")
+                '<' -> out.append("&lt;")
+                '>' -> out.append("&gt;")
+                '\r' -> out.append("&#13;")
+                else -> out.append(ch)
             }
         }
     }
@@ -582,14 +590,14 @@ internal class XmlWriter(
     private fun appendEscapedAttribute(value: String) {
         for (ch in value) {
             when (ch) {
-                '&' -> builder.append("&amp;")
-                '<' -> builder.append("&lt;")
-                '>' -> builder.append("&gt;")
-                '"' -> builder.append("&quot;")
-                '\n' -> builder.append("&#10;")
-                '\r' -> builder.append("&#13;")
-                '\t' -> builder.append("&#9;")
-                else -> builder.append(ch)
+                '&' -> out.append("&amp;")
+                '<' -> out.append("&lt;")
+                '>' -> out.append("&gt;")
+                '"' -> out.append("&quot;")
+                '\n' -> out.append("&#10;")
+                '\r' -> out.append("&#13;")
+                '\t' -> out.append("&#9;")
+                else -> out.append(ch)
             }
         }
     }

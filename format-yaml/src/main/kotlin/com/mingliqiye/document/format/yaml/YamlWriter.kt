@@ -10,6 +10,7 @@ import com.mingliqiye.document.core.ObjectNode
 import com.mingliqiye.document.core.StringNode
 import org.yaml.snakeyaml.DumperOptions
 import org.yaml.snakeyaml.Yaml
+import java.io.Writer
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -33,6 +34,17 @@ internal class YamlWriter(
      * 写出单个文档并返回 YAML 文本。
      */
     fun write(node: Node): String = createYaml().dump(toPlain(node)).trimEnd()
+
+    /**
+     * 直接将单个文档写到字符流，不先构造完整 String。
+     *
+     * 与 [write] 一样去掉尾部空白。
+     */
+    fun writeTo(node: Node, out: Writer) {
+        val trim = TrimEndWriter(out)
+        createYaml().dump(toPlain(node), trim)
+        trim.finish()
+    }
 
     /**
      * 写出多个文档并返回 `---` 分隔的 YAML 文本。

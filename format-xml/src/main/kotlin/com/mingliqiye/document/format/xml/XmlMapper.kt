@@ -9,6 +9,8 @@ import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
+import java.io.OutputStream
+import java.io.OutputStreamWriter
 
 /**
  * XML 文档映射器。
@@ -82,9 +84,28 @@ public open class XmlMapper internal constructor(
 
     override fun formatPretty(value: Any?): String = writeXml(value, pretty = true)
 
+    override fun format(value: Any?, output: OutputStream) {
+        val writer = OutputStreamWriter(output, mapperConfig.fileCharset)
+        writeXmlTo(value, pretty = false, writer)
+        writer.flush()
+        output.flush()
+    }
+
+    override fun formatPretty(value: Any?, output: OutputStream) {
+        val writer = OutputStreamWriter(output, mapperConfig.fileCharset)
+        writeXmlTo(value, pretty = true, writer)
+        writer.flush()
+        output.flush()
+    }
+
     private fun writeXml(value: Any?, pretty: Boolean): String {
         val rootName = value?.javaClass?.getAnnotation(DocumentRootName::class.java)?.value
         return XmlWriter.from(xmlConfig, rootName).write(toNode(value), pretty)
+    }
+
+    private fun writeXmlTo(value: Any?, pretty: Boolean, out: Appendable) {
+        val rootName = value?.javaClass?.getAnnotation(DocumentRootName::class.java)?.value
+        XmlWriter.from(xmlConfig, rootName).writeTo(toNode(value), pretty, out)
     }
 
     /**

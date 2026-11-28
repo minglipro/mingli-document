@@ -48,6 +48,17 @@ class YamlWriteIoTest {
     }
 
     @Test
+    fun streamingOutputStreamMatchesFormat() {
+        val output = ByteArrayOutputStream()
+        mapper.format(value, output)
+        assertEquals(mapper.format(value), output.toString(Charsets.UTF_8.name()))
+
+        val pretty = ByteArrayOutputStream()
+        mapper.formatPretty(value, pretty)
+        assertEquals(mapper.formatPretty(value), pretty.toString(Charsets.UTF_8.name()))
+    }
+
+    @Test
     fun prettyOverloads() {
         val expected = mapper.formatPretty(value)
         val directory = Files.createTempDirectory("mingli-yaml-pretty")

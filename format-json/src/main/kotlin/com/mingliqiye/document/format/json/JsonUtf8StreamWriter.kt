@@ -192,10 +192,6 @@ internal class JsonUtf8StreamWriter(
         firstElements[depth++] = true
     }
 
-    private fun pop() {
-        depth--
-    }
-
     private fun appendString(value: String) {
         var needsEscape = false
         for (ch in value) {

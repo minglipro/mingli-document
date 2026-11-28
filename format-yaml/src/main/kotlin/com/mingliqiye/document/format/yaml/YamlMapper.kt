@@ -10,6 +10,8 @@ import com.mingliqiye.document.serialization.DocumentTokenReader
 import com.mingliqiye.document.serialization.NodeTokenReader
 import com.mingliqiye.document.serialization.ObjectInstantiator
 import com.mingliqiye.document.serialization.PropertyMetadataResolver
+import java.io.OutputStream
+import java.io.OutputStreamWriter
 
 /**
  * YAML 文档映射器。
@@ -75,6 +77,20 @@ public open class YamlMapper internal constructor(
         super.formatPretty(value)
     } else {
         super.format(value)
+    }
+
+    override fun format(value: Any?, output: OutputStream) {
+        val writer = OutputStreamWriter(output, mapperConfig.fileCharset)
+        YamlWriter(yamlConfig?.pretty == true).writeTo(toNode(value), writer)
+        writer.flush()
+        output.flush()
+    }
+
+    override fun formatPretty(value: Any?, output: OutputStream) {
+        val writer = OutputStreamWriter(output, mapperConfig.fileCharset)
+        YamlWriter(true).writeTo(toNode(value), writer)
+        writer.flush()
+        output.flush()
     }
 
     /**
